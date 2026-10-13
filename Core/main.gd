@@ -17,7 +17,7 @@ const RESULT_SCREEN_TIME := 4.0
 
 var args := {}
 var match_time := 180.0
-var current_match: Node2D
+var current_match: Node3D
 var menu: CanvasLayer
 
 

@@ -19,9 +19,17 @@ func update(_delta: float) -> void:
 	pass
 
 
-## Hướng di chuyển, độ dài tối đa 1.
+## Hướng di chuyển trên cần analog / WASD, độ dài tối đa 1.
+## x: trái/phải, y: lên/xuống màn hình (y âm = đi tới). Nhân vật tự xoay
+## theo get_aim_yaw() để ra hướng trong thế giới 3D.
 func get_move() -> Vector2:
 	return Vector2.ZERO
+
+
+## Góc xoay camera quanh trục Y (radian). Camera cố định thì luôn 0.
+## Có sẵn trong gói input gửi lên server để sau này xoay camera không phải sửa mạng.
+func get_aim_yaw() -> float:
+	return 0.0
 
 
 func is_pressed(_action: StringName) -> bool:
