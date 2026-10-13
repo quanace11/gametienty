@@ -20,5 +20,5 @@ signal match_ended(winner: GameTypes.Winner, summary: Dictionary)
 
 # --- Nhóm 2: cục bộ ---
 ## Tiếng động cho AI "nghe": bước chân, va chạm, fail QTE...
-signal noise_made(position: Vector2, loudness: float)
-signal qte_failed(safe_id: int, position: Vector2)
+signal noise_made(position: Vector3, loudness: float)
+signal qte_failed(safe_id: int, position: Vector3)

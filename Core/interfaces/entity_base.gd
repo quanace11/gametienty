@@ -1,5 +1,5 @@
 class_name EntityBase
-extends CharacterBody2D
+extends CharacterBody3D
 ## Hợp đồng cho mọi nhân vật trong trận (người và bot, thợ săn và người trốn).
 ## Module Player kế thừa và cài đặt chi tiết. Core chỉ gọi các hàm dưới đây.
 
@@ -11,7 +11,7 @@ var state: GameTypes.PlayerState = GameTypes.PlayerState.IDLE
 
 
 ## Lớp con override thì phải gọi super(...).
-func setup(id: int, p_role: GameTypes.Role, p_name: String, pos: Vector2, local: bool) -> void:
+func setup(id: int, p_role: GameTypes.Role, p_name: String, pos: Vector3, local: bool) -> void:
 	peer_id = id
 	role = p_role
 	display_name = p_name
@@ -28,6 +28,7 @@ func server_move(_input: InputSource, _delta: float) -> void:
 
 
 ## Server gói trạng thái hiển thị gửi xuống client (vị trí, hướng, anim...).
+## Giữ gói nhỏ: gửi 20 lần/giây cho mỗi nhân vật.
 func get_snapshot() -> Variant:
 	return position
 
@@ -53,6 +54,11 @@ func is_hunter() -> bool:
 
 func is_out() -> bool:
 	return GameTypes.is_out(state)
+
+
+## Vị trí trên mặt phẳng sàn (x, z), dùng cho khoảng cách, bot, minimap.
+func flat_position() -> Vector2:
+	return Vector2(global_position.x, global_position.z)
 
 
 func _on_any_state_changed(id: int, _old: GameTypes.PlayerState, new_state: GameTypes.PlayerState) -> void:

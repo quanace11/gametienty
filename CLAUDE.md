@@ -7,7 +7,8 @@ Bối cảnh cho Claude Code và mọi thành viên. Đọc hết trước khi s
 Game rượt đuổi bất đối xứng 1 Thợ săn (Hunter) vs 4 Người trốn (Escapee), kiểu 逃跑吧!少年. Người trốn mở két, đủ két thì cổng thoát mở; thợ săn bắt và nhốt người trốn. Mục tiêu 4 tuần: một trận 1v4 offline trọn vẹn với bot, chọn được vai.
 
 - Engine: **Godot 4.6.x**, ngôn ngữ **GDScript** (không dùng C#).
-- Góc nhìn: **2D top-down** (nhẹ, rẻ, chạy được máy yếu và điện thoại). Renderer `gl_compatibility`.
+- **3D**, camera nhìn chéo từ trên xuống. Đơn vị: 1 = 1 mét, trục Y hướng lên, mặt sàn là (x, z). Renderer `gl_compatibility` (chạy được máy yếu và điện thoại).
+- Giai đoạn hiện tại: **offline** (1 người + 4 bot), nhưng code luôn chạy theo mô hình client-server để lên online không phải viết lại. Đọc [docs/KIEN_TRUC.md](docs/KIEN_TRUC.md) trước khi code.
 - Mạng: multiplayer có sẵn của Godot (ENet). Chưa dùng server trả phí.
 
 ## Kiến trúc: Strict Client-Server (Local Host)
@@ -24,6 +25,8 @@ Cả 3 chạy **cùng một đường code**. Quy tắc:
 - Code luật chạy trên server phải được bọc trong `multiplayer.is_server()` hoặc nằm trong các hàm chỉ server gọi (`server_move`, `interact_tick`).
 - Không tin dữ liệu client: luôn kẹp giá trị (ví dụ `limit_length(1.0)`).
 - Bot là nhân vật có id âm (-1, -2...), chạy trên server, được điều khiển bằng `BotInputSource` thay cho bàn phím.
+- Gameplay **không đọc `Input` trực tiếp**, chỉ đọc `InputSource` được truyền vào. Hiệu ứng/âm thanh/HUD chạy theo tín hiệu `EventBus`.
+- **Không viết `if offline:`** trong code gameplay. Danh sách đầy đủ những thứ cấm: [docs/KIEN_TRUC.md](docs/KIEN_TRUC.md#những-thứ-cấm-sẽ-làm-hỏng-online).
 
 ## Module và quyền sở hữu
 
@@ -66,7 +69,8 @@ Cả 3 chạy **cùng một đường code**. Quy tắc:
 
 Group để tìm nhau (hằng trong `GameTypes`): `entities`, `safes`, `exit_gates`, `prisons`.
 
-Layer va chạm: 1 = tường/vật cản, 2 = nhân vật. Nhân vật không chặn nhau.
+Layer va chạm: 1 = sàn/tường/vật cản, 2 = nhân vật. Nhân vật không chặn nhau.
+Gốc nhân vật đặt dưới chân. `EntityBase.flat_position()` trả vị trí trên mặt sàn (x, z) để tính khoảng cách.
 
 ## Quy ước code
 
@@ -86,7 +90,9 @@ Theo [GDScript style guide](https://docs.godotengine.org/en/stable/tutorials/scr
 Cần Godot 4.6.x. Trong editor: Debug > Customize Run Instances để bật nhiều cửa sổ.
 
 ```bash
-# Test luật (phải qua trước khi mở PR)
+# Kiểm tra toàn bộ: test luật + trận offline + trận online 3 máy (CI chạy y hệt)
+GODOT=/duong/dan/godot tools/smoke_test.sh
+# Từng bước riêng:
 godot --headless --path . -s tests/test_match_rules.gd
 # Một trận offline do bot chơi hết, in kết quả rồi thoát
 godot --headless --path . -- --offline=escapee --bot --time=60 --quit-after-match
@@ -96,7 +102,7 @@ godot --headless --path . -- --join=127.0.0.1 --bot --quit-after-match &
 godot --headless --path . -- --join=127.0.0.1 --bot --quit-after-match
 ```
 
-Trước khi mở PR: chạy test luật, một trận offline và một trận online như trên, không có dòng `SCRIPT ERROR`.
+Trước khi mở PR: `tools/smoke_test.sh` phải qua. GitHub Actions chạy lại trên mỗi push/PR; CI đỏ thì không merge.
 
 ## Git
 

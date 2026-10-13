@@ -1,4 +1,4 @@
-extends Node2D
+extends Node3D
 ## Một trận đấu: dựng bản đồ, tạo nhân vật, chuyển input lên server và
 ## vị trí xuống client. Luật nằm ở GameState/MatchRules và trong các module.
 
@@ -22,7 +22,7 @@ func setup(info: Dictionary) -> void:
 	add_child(map)
 	GameState.begin(info, map.get_safe_count())
 
-	var entities_node := Node2D.new()
+	var entities_node := Node3D.new()
 	entities_node.name = "Entities"
 	add_child(entities_node)
 	var roles: Dictionary = info["roles"]
@@ -39,11 +39,6 @@ func setup(info: Dictionary) -> void:
 		e.setup(id, roles[id], info["names"][id], pos, id == _my_id)
 		entities_node.add_child(e)
 		entities[id] = e
-		if id == _my_id:
-			var cam := Camera2D.new()
-			cam.position_smoothing_enabled = true
-			e.add_child(cam)
-			cam.make_current()
 
 	if entities.has(_my_id):
 		_local_input = load(ModuleRegistry.BOT_INPUT if Net.bot else ModuleRegistry.LOCAL_INPUT).new()
@@ -75,7 +70,7 @@ func _physics_process(delta: float) -> void:
 		_input_timer -= delta
 		if _input_timer <= 0.0:
 			_input_timer = INPUT_INTERVAL
-			_submit_input.rpc_id(1, _local_input.get_move(), _local_input.get_buttons())
+			_submit_input.rpc_id(1, _local_input.get_move(), _local_input.get_buttons(), _local_input.get_aim_yaw())
 
 	if multiplayer.is_server():
 		for id: int in entities:
@@ -100,13 +95,14 @@ func _send_snapshot(delta: float) -> void:
 
 
 @rpc("any_peer", "unreliable_ordered")
-func _submit_input(move: Vector2, buttons: int) -> void:
+func _submit_input(move: Vector2, buttons: int, aim_yaw: float) -> void:
 	if not multiplayer.is_server():
 		return
 	var src = input_sources.get(multiplayer.get_remote_sender_id())
 	if src is NetworkInputSource:
 		src.move = move.limit_length(1.0) # không tin client
 		src.buttons = buttons
+		src.aim_yaw = wrapf(aim_yaw, -PI, PI)
 
 
 @rpc("authority", "unreliable_ordered")

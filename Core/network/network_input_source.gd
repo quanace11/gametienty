@@ -4,10 +4,15 @@ extends InputSource
 
 var move := Vector2.ZERO
 var buttons := 0
+var aim_yaw := 0.0
 
 
 func get_move() -> Vector2:
 	return move
+
+
+func get_aim_yaw() -> float:
+	return aim_yaw
 
 
 func is_pressed(action: StringName) -> bool:

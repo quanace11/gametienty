@@ -1,24 +1,51 @@
 # Game Tiền Tỷ
 
-Game rượt đuổi bất đối xứng 1 Thợ săn vs 4 Người trốn, kiểu 逃跑吧!少年. Godot 4.6, GDScript, 2D top-down.
+Game rượt đuổi bất đối xứng **3D**: 1 Thợ săn vs 4 Người trốn, lấy cảm hứng từ 逃跑吧!少年. Người trốn mở két sắt, đủ két thì cổng thoát mở và chạy ra ngoài. Thợ săn đuổi bắt và nhốt người trốn vào tù.
+
+Làm bằng Godot 4.6 (GDScript), đội 4 người.
 
 ![Trong trận](docs/screenshot.png)
 
+## Dự án đang ở đâu
+
+- **Giai đoạn hiện tại: offline.** Một người chơi với 4 bot, chọn làm Thợ săn hoặc Người trốn. Không tốn tiền server.
+- **Nhưng code đã là client-server từ đầu.** Bản offline chạy đúng đường code của bản online, nên sau này lên online không phải viết lại. Chế độ tạo phòng/vào phòng qua mạng LAN đã chạy được. Lý do và cách làm: [docs/KIEN_TRUC.md](docs/KIEN_TRUC.md).
+- Mục tiêu 4 tuần: một trận 1v4 offline trọn vẹn (đánh ngã, vác vào tù, cứu đồng đội, kỹ năng, bot thông minh).
+
+Đã có: di chuyển 3D, két (đông người mở nhanh hơn), cổng thoát, thợ săn chạm là bắt, thắng/thua, bot đơn giản, offline + host + server riêng, CI tự kiểm tra.
+Hình dạng nhân vật và bản đồ đang là khối tạm, sẽ thay bằng model.
+
 ## Chơi thử
 
-Mở project bằng Godot 4.6 rồi bấm Play.
+Mở thư mục này bằng Godot 4.6 rồi bấm Play.
 
-- **Offline**: bấm "Offline: làm Thợ săn" hoặc "Offline: làm Người trốn", 4 chỗ còn lại là bot.
-- **Nhiều máy / nhiều cửa sổ**: Debug > Customize Run Instances, bật nhiều instance. Một cửa sổ "Tạo phòng", các cửa sổ khác "Vào phòng" (IP `127.0.0.1`, hoặc IP LAN của chủ phòng). Chủ phòng bấm "Bắt đầu trận", tick "Thêm bot" để lấp chỗ trống.
+- **Offline**: bấm "Offline: làm Thợ săn" hoặc "Offline: làm Người trốn".
+- **Nhiều cửa sổ / LAN**: Debug > Customize Run Instances, bật nhiều instance. Một cửa sổ "Tạo phòng", các cửa sổ khác "Vào phòng" (IP `127.0.0.1` hoặc IP LAN của chủ phòng). Chủ phòng bấm "Bắt đầu trận".
 
-Điều khiển: WASD/mũi tên. Người trốn đứng trong két vàng để mở (đông người mở nhanh hơn), mở đủ 3 két thì cổng đỏ bên phải chuyển xanh, chạy vào là thoát. Thợ săn chạm là nhốt. Người trốn thắng nếu ít nhất một nửa thoát được.
+Điều khiển: WASD / mũi tên. Người trốn đứng sát két vàng để mở, mở đủ 3 két thì cổng đỏ chuyển xanh, chạy vào là thoát. Người trốn thắng nếu ít nhất một nửa thoát được.
 
-## Cho đội phát triển
+## Cho người code
 
-Đọc [CLAUDE.md](CLAUDE.md) trước: kiến trúc client-server, ranh giới module, quy ước code, cách test. Mỗi thư mục module có README riêng nói đã có gì và việc tiếp theo.
+1. Đọc [CLAUDE.md](CLAUDE.md): ranh giới module, quy ước code, cách chạy test. Claude Code cũng tự đọc file này.
+2. Đọc [docs/KIEN_TRUC.md](docs/KIEN_TRUC.md): năm luật vàng để code offline lên online không phải sửa.
+3. Đọc README trong thư mục module của mình.
+4. Trước khi mở PR: `GODOT=/duong/dan/godot tools/smoke_test.sh` (CI cũng tự chạy).
 
-## Chi phí server
+| Thư mục | Người phụ trách | Nội dung |
+|---|---|---|
+| `Core/` | A (Lead) | Kiểu dữ liệu, EventBus, trạng thái trận, mạng, interface |
+| `Player/` | B | Điều khiển, di chuyển, đánh/ngã/cứu, camera, anim |
+| `Objects/` | C | Két, cổng, nhà tù, cửa, bẫy, bản đồ |
+| `Items/` | C | Thẻ kỹ năng, vật phẩm |
+| `AI/` | D | Bot, giác quan, NavMesh |
+| `UI/` | | Menu, HUD, theo dõi, minimap |
 
-- Đang phát triển: không cần server (offline, nhiều cửa sổ, LAN).
-- Chơi qua mạng với bạn bè: 1 VPS Linux rẻ chạy `godot --headless -- --server`.
-- Nhiều người chơi: nhiều tiến trình server, mỗi tiến trình một phòng, cộng thêm dịch vụ ghép trận. Làm sau khi gameplay ổn.
+## Lộ trình
+
+| Tuần | Mục tiêu |
+|---|---|
+| 1 | Khung kiến trúc (xong), di chuyển + dash, két tương tác, NavMesh nháp |
+| 2 | Thợ săn đánh ngã, vác vào tù, cứu đồng đội, bot tự mở két |
+| 3 | 3 thẻ kỹ năng, QTE ở két, bot thợ săn tuần tra và đuổi |
+| 4 | Ghép trận 1v4 offline hoàn chỉnh, màn hình kết thúc |
+| Sau đó | Server riêng trên VPS, chơi qua Internet mượt, ghép trận nhiều phòng |

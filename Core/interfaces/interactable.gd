@@ -1,5 +1,5 @@
 class_name Interactable
-extends Area2D
+extends Area3D
 ## Vật thể tương tác (két, cổng, nhà tù...). Luật chạy trên server: mỗi physics
 ## frame khi trận đang chơi, interact_tick() nhận các nhân vật đang đứng trong
 ## vùng và thỏa can_interact(). Lớp con override _ready() thì phải gọi super().
