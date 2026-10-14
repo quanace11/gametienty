@@ -14,17 +14,30 @@ const WALLS := [
 	Rect2(12, 6, 8, 0.8), Rect2(12, 13.2, 8, 0.8),
 	Rect2(24, 2, 0.8, 7), Rect2(24, 11, 0.8, 7),
 ]
-const SAFES := [Vector3(9, 0, 2.6), Vector3(16, 0, 10), Vector3(22, 0, 17.4)]
-const EXIT_GATE := Vector3(31.2, 0, 10)
+## 5 rương, cần mở 3 (MatchConfig.safes_required).
+const SAFES := [
+	Vector3(9, 0, 2.6), Vector3(22, 0, 2.6), Vector3(16, 0, 10), Vector3(9, 0, 17.4), Vector3(22, 0, 17.4),
+]
+## 2 cổng ở hai đầu đối diện.
+const EXIT_GATES := [Vector3(0.8, 0, 10), Vector3(31.2, 0, 10)]
 const PRISONS := [Vector3(16, 0, 2.6), Vector3(16, 0, 17.4)]
-const HUNTER_SPAWN := Vector3(28, 0.05, 10)
+const HUNTER_SPAWN := Vector3(16, 0.05, 8.2)
 const ESCAPEE_SPAWNS: Array[Vector3] = [
-	Vector3(2.4, 0.05, 4), Vector3(2.4, 0.05, 8), Vector3(2.4, 0.05, 12), Vector3(2.4, 0.05, 16),
+	Vector3(3, 0.05, 3), Vector3(3, 0.05, 17), Vector3(29, 0.05, 3), Vector3(29, 0.05, 17),
+]
+## Tiền rải sẵn trên sàn.
+const COIN_SPOTS: Array[Vector3] = [
+	Vector3(3, 0, 7), Vector3(3, 0, 13), Vector3(29, 0, 7), Vector3(29, 0, 13),
+	Vector3(9, 0, 6), Vector3(9, 0, 10), Vector3(9, 0, 14), Vector3(22, 0, 6), Vector3(22, 0, 10), Vector3(22, 0, 14),
+	Vector3(13, 0, 4), Vector3(19, 0, 4), Vector3(13, 0, 16), Vector3(19, 0, 16),
+	Vector3(16, 0, 5.5), Vector3(16, 0, 14.5), Vector3(27, 0, 1.5), Vector3(5, 0, 18.5),
+	Vector3(27, 0, 18.5), Vector3(5, 0, 1.5),
 ]
 
 const SafeScript = preload("res://Objects/safe.gd")
 const ExitGateScript = preload("res://Objects/exit_gate.gd")
 const PrisonScript = preload("res://Objects/prison.gd")
+const CoinScript = preload("res://Objects/coin.gd")
 
 
 func _ready() -> void:
@@ -37,9 +50,16 @@ func _ready() -> void:
 		safe.interactable_id = i
 		safe.position = SAFES[i]
 		add_child(safe)
-	var gate: Interactable = ExitGateScript.new()
-	gate.position = EXIT_GATE
-	add_child(gate)
+	for i in EXIT_GATES.size():
+		var gate: Interactable = ExitGateScript.new()
+		gate.interactable_id = i
+		gate.position = EXIT_GATES[i]
+		add_child(gate)
+	for i in COIN_SPOTS.size():
+		var coin: Interactable = CoinScript.new()
+		coin.interactable_id = i
+		coin.position = COIN_SPOTS[i]
+		add_child(coin)
 	for i in PRISONS.size():
 		var prison: Interactable = PrisonScript.new()
 		prison.interactable_id = i
@@ -93,3 +113,7 @@ func get_escapee_spawns() -> Array[Vector3]:
 
 func get_safe_count() -> int:
 	return SAFES.size()
+
+
+func get_coin_spots() -> Array[Vector3]:
+	return COIN_SPOTS

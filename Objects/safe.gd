@@ -1,16 +1,22 @@
 class_name Safe
 extends Interactable
-## Két sắt: người trốn đứng sát két để mở. Càng đông mở càng nhanh.
-## Chưa có QTE (việc tiếp theo của module Objects).
+## Rương báu (trong code Core gọi là "safe"): người trốn đứng sát rương để
+## cạy, càng đông càng nhanh. Trong lúc cạy, vòng căn hiện ra (UI vẽ), bấm E
+## khi kim vào vùng sáng: vùng đậm mở nhanh thêm + tiền, vùng mờ ít tiền,
+## trượt thì rương nổ, về 0 và báo vị trí cho thợ săn. Mở xong nhả chìa khóa
+## và văng tiền ra sàn. Luật nằm ở MatchRules (channel_chest, resolve_qte).
 
-const UNLOCK_TIME := 4.0 # giây, một người
-const SPEED_BY_COUNT := [0.0, 1.0, 1.5, 2.0] # 0, 1, 2, 3+ người
-const SIZE := Vector3(1.0, 1.2, 1.0)
-const REACH := 0.9 # đứng cách mép két bao xa thì mở được
+const SIZE := Vector3(1.0, 1.0, 0.8)
+const REACH := 0.9 # đứng cách mép rương bao xa thì cạy được
+const COIN_RING := 1.6 # tiền văng ra quanh rương, bán kính (mét)
+const ALERT_TIME := 4.0 # giây cột khói đỏ báo vị trí sau khi nổ
 
-var _progress := 0.0 # chỉ server dùng
+const CoinScript = preload("res://Objects/coin.gd")
+
 var _material: StandardMaterial3D
 var _label: Label3D
+var _alert: MeshInstance3D
+var _alert_left := 0.0
 
 
 func _ready() -> void:
@@ -24,7 +30,7 @@ func _ready() -> void:
 	area_shape.position.y = SIZE.y / 2
 	add_child(area_shape)
 
-	# Thân két chắn đường như tường.
+	# Thân rương chắn đường như tường.
 	var body := StaticBody3D.new()
 	var body_shape := CollisionShape3D.new()
 	var body_box := BoxShape3D.new()
@@ -35,7 +41,7 @@ func _ready() -> void:
 	add_child(body)
 
 	_material = StandardMaterial3D.new()
-	_material.albedo_color = Color(0.85, 0.7, 0.2)
+	_material.albedo_color = Color(0.6, 0.38, 0.15)
 	var mesh := BoxMesh.new()
 	mesh.size = SIZE
 	mesh.material = _material
@@ -50,9 +56,27 @@ func _ready() -> void:
 	_label.font_size = 48
 	add_child(_label)
 
+	_alert = MeshInstance3D.new()
+	var pillar := CylinderMesh.new()
+	pillar.top_radius = 0.5
+	pillar.bottom_radius = 0.8
+	pillar.height = 6.0
+	var alert_mat := StandardMaterial3D.new()
+	alert_mat.albedo_color = Color(0.9, 0.1, 0.1, 0.45)
+	alert_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	alert_mat.emission_enabled = true
+	alert_mat.emission = Color(0.9, 0.1, 0.1)
+	pillar.material = alert_mat
+	_alert.mesh = pillar
+	_alert.position.y = 3.0
+	_alert.visible = false
+	add_child(_alert)
+
 	EventBus.safe_progress_changed.connect(func(id: int, _p: float) -> void:
 		if id == interactable_id:
 			_refresh())
+	EventBus.safe_unlocked.connect(_on_unlocked)
+	EventBus.qte_resolved.connect(_on_qte_resolved)
 	_refresh()
 
 
@@ -61,11 +85,44 @@ func can_interact(entity: EntityBase) -> bool:
 
 
 func interact_tick(users: Array[EntityBase], delta: float) -> void:
-	if users.is_empty() or _progress >= 1.0:
+	var rules := GameState.rules
+	for e in users:
+		GameState.server_channel_chest(e.peer_id, interactable_id, delta)
+		var rec := rules.record(e.peer_id)
+		if rec and rec.qte_chest == interactable_id and e.just_pressed(&"interact"):
+			GameState.server_resolve_qte(e.peer_id)
+
+
+func _process(delta: float) -> void:
+	if _alert_left > 0.0:
+		_alert_left -= delta
+		_alert.visible = _alert_left > 0.0
+		_alert.scale = Vector3.ONE * (1.0 + 0.1 * sin(_alert_left * 12.0))
+
+
+func _on_unlocked(id: int, _unlocked: int, _required: int) -> void:
+	if id != interactable_id:
 		return
-	var speed: float = SPEED_BY_COUNT[mini(users.size(), SPEED_BY_COUNT.size() - 1)]
-	_progress = minf(1.0, _progress + delta / UNLOCK_TIME * speed)
-	GameState.server_set_safe_progress(interactable_id, _progress)
+	_refresh()
+	var ids := GameState.rules.chest_coin_ids(id)
+	for k in ids.size():
+		var coin: Interactable = CoinScript.new()
+		coin.interactable_id = ids[k]
+		var angle := TAU * k / ids.size()
+		coin.position = Vector3(cos(angle), 0, sin(angle)) * COIN_RING
+		add_child(coin)
+
+
+func _on_qte_resolved(_id: int, safe_id: int, result: GameTypes.QteResult) -> void:
+	if safe_id != interactable_id or result != GameTypes.QteResult.FAIL:
+		return
+	# "Đoàng!": khói đỏ báo vị trí cho mọi người, kể cả thợ săn.
+	_alert_left = ALERT_TIME
+	_alert.visible = true
+	EventBus.noise_made.emit(global_position, 1.0)
+	var tween := create_tween()
+	_material.albedo_color = Color(0.1, 0.1, 0.1)
+	tween.tween_property(_material, "albedo_color", Color(0.6, 0.38, 0.15), 0.8)
 
 
 func _refresh() -> void:
@@ -73,7 +130,7 @@ func _refresh() -> void:
 	if GameState.rules:
 		p = GameState.rules.safe_progress.get(interactable_id, 0.0)
 	if p >= 1.0:
-		_material.albedo_color = Color(0.2, 0.75, 0.35)
-		_label.text = "Đã mở"
+		_material.albedo_color = Color(0.95, 0.8, 0.2)
+		_label.text = "Đã mở 🔑"
 	else:
-		_label.text = "Két %d%%" % roundi(p * 100)
+		_label.text = "Rương %d%%" % roundi(p * 100)

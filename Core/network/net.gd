@@ -30,6 +30,18 @@ func is_online() -> bool:
 	return multiplayer.has_multiplayer_peer() and not multiplayer.multiplayer_peer is OfflineMultiplayerPeer
 
 
+## Chỉ server: độ trễ một chiều ước tính tới máy `peer_id` (giây). Bot và
+## người chơi ngay trên server là 0. Dùng để bù trễ khi chấm thời điểm bấm nút.
+func latency_of(peer_id: int) -> float:
+	var enet := multiplayer.multiplayer_peer as ENetMultiplayerPeer
+	if enet == null or peer_id <= 1:
+		return 0.0
+	var packet_peer := enet.get_peer(peer_id)
+	if packet_peer == null:
+		return 0.0
+	return packet_peer.get_statistic(ENetPacketPeer.PEER_ROUND_TRIP_TIME) / 2000.0
+
+
 func host(port: int = PORT, play: bool = true) -> Error:
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_server(port, MAX_PLAYERS)

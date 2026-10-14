@@ -26,14 +26,30 @@ var stunned_left := 0.0
 var attack_seq := 0 ## tăng mỗi lần thợ săn vung đòn, để client phát anim
 var last_attacker_id := 0
 var last_rescuer_id := 0
+var coins := 0 ## tiền đang có, dùng để mua/kích hoạt thẻ
+var coins_earned := 0 ## tổng tiền nhặt được cả trận (tính điểm)
+var chest_work := 0.0 ## tổng phần rương mình đã mở (1.0 = một rương)
+var rescues := 0 ## số lần cứu đồng đội
+var qte_perfect := 0 ## số lần căn trúng vùng sáng đậm
+var qte_chest := -1 ## vòng căn đang hiện cho rương nào (-1 = không có)
+var qte_started := 0.0 ## MatchRules.elapsed lúc vòng căn hiện ra
+var qte_zone := 0.0 ## tâm vùng sáng trên vòng (0..1)
+var qte_seq := 0 ## tăng mỗi lần một vòng căn kết thúc
+var qte_result: GameTypes.QteResult = GameTypes.QteResult.NONE ## kết quả vòng căn gần nhất
+var qte_result_chest := -1
 
 ## Chỉ server dùng, không gửi đi.
 var channel_left := 0.0 ## còn bao lâu thì hết trạng thái RESCUING nếu không cứu tiếp
+var chest_id := -1 ## đang mở rương nào
+var chest_channel_left := 0.0
+var qte_next_left := 0.0 ## còn bao lâu thì vòng căn tiếp theo hiện ra
 
 const _SYNCED := [
 	"role", "state", "hp", "max_hp", "imprison_count", "carrier_id", "carrying_id",
 	"prison_id", "prison_time_left", "rescue_progress", "items", "heal_seq", "invulnerable_left",
 	"attack_cooldown_left", "stunned_left", "attack_seq", "last_attacker_id", "last_rescuer_id",
+	"coins", "coins_earned", "chest_work", "rescues", "qte_perfect",
+	"qte_chest", "qte_started", "qte_zone", "qte_seq", "qte_result", "qte_result_chest",
 ]
 
 
@@ -63,6 +79,28 @@ func apply_dict(d: Dictionary) -> void:
 			set(key, v.duplicate() if v is Dictionary else v)
 
 
+## Gói gửi qua mạng: chỉ các trường đổi so với bản đã gửi, dạng phẳng
+## [chỉ_số_trường, giá_trị, ...] (chỉ số theo _SYNCED) để không lặp tên trường.
+static func diff(old: Dictionary, new: Dictionary) -> Array:
+	var out := []
+	for i in _SYNCED.size():
+		var key: String = _SYNCED[i]
+		if old.is_empty() or old.get(key) != new[key]:
+			out.append(i)
+			out.append(new[key])
+	return out
+
+
+## Dựng bản đầy đủ mới từ bản cũ + gói diff(). Không đổi `base`.
+static func apply_diff(base: Dictionary, changes: Array) -> Dictionary:
+	var d := base.duplicate(true)
+	for k in range(0, changes.size() - 1, 2):
+		var i: int = changes[k]
+		if i >= 0 and i < _SYNCED.size():
+			d[_SYNCED[i]] = changes[k + 1]
+	return d
+
+
 ## Danh sách sự kiện suy ra khi trạng thái đổi từ `old` sang `new` (hai dict
 ## từ to_dict()). Mỗi phần tử: {"signal": tên tín hiệu EventBus, "args": [...]}.
 ## Hàm thuần, không phụ thuộc mạng, có test trong tests/.
@@ -77,6 +115,12 @@ static func events_between(id: int, old: Dictionary, new: Dictionary) -> Array[D
 	var healed: bool = new["heal_seq"] > old["heal_seq"]
 	if healed:
 		out.append({"signal": &"player_healed", "args": [id, new["last_rescuer_id"], new["hp"]]})
+	if new["qte_chest"] >= 0 and (old["qte_chest"] < 0 or new["qte_started"] != old["qte_started"]):
+		out.append({"signal": &"qte_started", "args": [id, new["qte_chest"]]})
+	if new["qte_seq"] > old["qte_seq"]:
+		out.append({"signal": &"qte_resolved", "args": [id, new["qte_result_chest"], new["qte_result"]]})
+	if new["coins_earned"] > old["coins_earned"]:
+		out.append({"signal": &"coins_changed", "args": [id, new["coins"], new["coins_earned"] - old["coins_earned"]]})
 	if new["stunned_left"] > 0.0 and old["stunned_left"] <= 0.0:
 		out.append({"signal": &"player_stunned", "args": [id, new["stunned_left"]]})
 

@@ -17,9 +17,28 @@ func _initialize() -> void:
 	for t: StringName in [
 		&"_test_countdown_then_playing",
 		&"_test_all_imprisoned_hunter_wins",
-		&"_test_half_escape_escapees_win",
-		&"_test_gate_opens_after_required_safes",
-		&"_test_timeout",
+		&"_test_hunter_result_tiers",
+		&"_test_individual_results_and_score",
+		&"_test_timeout_counts_as_caught",
+		&"_test_hunter_left_remaining_escape",
+		&"_test_chest_opens_with_time",
+		&"_test_two_openers_faster",
+		&"_test_gate_opens_after_delay",
+		&"_test_escape_waits_for_gate",
+		&"_test_qte_appears",
+		&"_test_qte_perfect",
+		&"_test_qte_good",
+		&"_test_qte_fail_resets_chest",
+		&"_test_qte_timeout_fails",
+		&"_test_qte_cancel_when_leaving",
+		&"_test_qte_grace_for_late_press",
+		&"_test_qte_rejected",
+		&"_test_chest_coins_spawn",
+		&"_test_take_coin",
+		&"_test_world_roundtrip_and_events",
+		&"_test_events_qte_and_coins",
+		&"_test_player_diff_small",
+		&"_test_world_diff",
 		&"_test_two_hits_down",
 		&"_test_attack_cooldown",
 		&"_test_invulnerable_after_hit",
@@ -70,7 +89,8 @@ func _rules() -> MatchRules:
 	var cfg := MatchConfig.new()
 	cfg.countdown = 0.0
 	var roles := {H: GameTypes.Role.HUNTER, A: GameTypes.Role.ESCAPEE, B: GameTypes.Role.ESCAPEE, C: GameTypes.Role.ESCAPEE, D: GameTypes.Role.ESCAPEE}
-	var r := MatchRules.new(cfg, roles, {}, 3)
+	var r := MatchRules.new(cfg, roles, {}, 3, 2)
+	r.rng.seed = 42
 	r.tick(0.001)
 	return r
 
@@ -87,6 +107,26 @@ func _down(r: MatchRules, id: int) -> void:
 	for i in r.config.max_hp:
 		r.tick(r.config.attack_cooldown + 0.01)
 		r.attack(H, [id])
+
+
+## Mở xong rương ngay (bỏ qua vòng căn).
+func _open_chest(r: MatchRules, safe_id: int) -> void:
+	r.safe_progress[safe_id] = 0.99
+	r._add_chest_progress(safe_id, 0.01)
+
+
+## Cạy rương cho tới khi vòng căn hiện ra.
+func _start_qte(r: MatchRules, id: int, safe_id: int = 0) -> PlayerRecord:
+	for i in 100:
+		r.channel_chest(id, safe_id, 0.05)
+		if r.record(id).qte_chest >= 0:
+			break
+	return r.record(id)
+
+
+## Đặt đồng hồ để kim nằm ở vị trí `needle` trên vòng.
+func _set_needle(r: MatchRules, p: PlayerRecord, needle: float) -> void:
+	r.elapsed = p.qte_started + needle / r.config.qte_speed
 
 
 func _imprison(r: MatchRules, id: int, prison: int = 0) -> void:
@@ -109,40 +149,247 @@ func _test_countdown_then_playing() -> void:
 
 func _test_all_imprisoned_hunter_wins() -> void:
 	var r := _rules()
-	r.config.max_imprisonments = 99
 	for id in [A, B, C]:
 		_imprison(r, id)
-	_check(r.evaluate() == GameTypes.Winner.NONE, "còn 1 người chạy thì chưa hết trận")
+	_check(not r.is_over(), "còn 1 người chạy thì chưa hết trận")
 	_imprison(r, D)
-	_check(r.evaluate() == GameTypes.Winner.HUNTER, "nhốt hết thì thợ săn thắng")
+	_check(r.is_over(), "nhốt hết thì hết trận")
+	_check(r.results()["hunter_result"] == GameTypes.HunterResult.TOTAL, "bắt cả 4: thắng tuyệt đối")
 
 
-func _test_half_escape_escapees_win() -> void:
+func _test_hunter_result_tiers() -> void:
+	var r := _rules()
+	_check(r.hunter_result(0, 4) == GameTypes.HunterResult.LOSE, "bắt 0/4: thua")
+	_check(r.hunter_result(1, 4) == GameTypes.HunterResult.LOSE, "bắt 1/4: thua")
+	_check(r.hunter_result(2, 4) == GameTypes.HunterResult.PARTIAL, "bắt 2/4: thắng một phần")
+	_check(r.hunter_result(3, 4) == GameTypes.HunterResult.PARTIAL, "bắt 3/4: thắng một phần")
+	_check(r.hunter_result(4, 4) == GameTypes.HunterResult.TOTAL, "bắt 4/4: thắng tuyệt đối")
+	_check(r.hunter_result(0, 1) == GameTypes.HunterResult.LOSE and r.hunter_result(1, 1) == GameTypes.HunterResult.TOTAL, "1 người trốn")
+
+
+func _test_individual_results_and_score() -> void:
 	var r := _rules()
 	r.gate_open = true
+	r.record(A).coins_earned = 10
+	r.record(A).rescues = 1
 	r.escape(A)
-	r.escape(B)
+	r.record(B).coins_earned = 10
+	r.record(B).rescues = 1
+	r.players[B].state = S.ELIMINATED
 	r.players[C].state = S.ELIMINATED
-	r.players[D].state = S.ELIMINATED
-	_check(r.evaluate() == GameTypes.Winner.ESCAPEES, "2/4 thoát thì người trốn thắng")
+	r.escape(D)
+	_check(r.is_over(), "không còn ai ở ngoài thì hết trận")
+	var res := r.results()
+	var rows: Dictionary = res["players"]
+	_check(rows[A]["result"] == GameTypes.EscapeeResult.ESCAPED and rows[B]["result"] == GameTypes.EscapeeResult.CAUGHT, "kết quả tính riêng từng người")
+	_check(rows[A]["score"] == rows[B]["score"] + r.config.score_escape, "người thoát có thêm điểm sống sót, còn lại bằng nhau")
+	_check(rows[B]["score"] == 10 * r.config.score_per_coin + r.config.score_rescue, "người bị bắt vẫn có điểm tiền + cứu bạn")
+	_check(res["caught"] == 2 and res["escaped"] == 2, "đếm bắt / thoát")
+	_check(res["hunter_result"] == GameTypes.HunterResult.PARTIAL and rows[H]["result"] == GameTypes.HunterResult.PARTIAL, "bắt 2: thợ săn thắng một phần")
 
 
-func _test_gate_opens_after_required_safes() -> void:
-	var r := _rules()
-	_check(not r.set_safe_progress(0, 0.5), "chưa đủ 100% thì chưa mở két")
-	_check(r.set_safe_progress(0, 1.0), "đủ 100% thì mở két")
-	r.set_safe_progress(1, 1.0)
-	_check(not r.gate_open, "2/3 két thì cổng chưa mở")
-	r.set_safe_progress(2, 1.0)
-	_check(r.gate_open, "3/3 két thì cổng mở")
-
-
-func _test_timeout() -> void:
+func _test_timeout_counts_as_caught() -> void:
 	var r := _rules()
 	r.gate_open = true
 	r.escape(A)
 	r.tick(1000.0)
-	_check(r.evaluate() == GameTypes.Winner.HUNTER, "hết giờ mà mới 1/4 thoát thì thợ săn thắng")
+	_check(r.is_over(), "hết giờ thì hết trận")
+	var res := r.results()
+	_check(res["caught"] == 3, "kẹt lại trong map khi hết giờ tính là bị bắt")
+	_check(res["hunter_result"] == GameTypes.HunterResult.PARTIAL, "bắt 3/4")
+
+
+func _test_hunter_left_remaining_escape() -> void:
+	var r := _rules()
+	_imprison(r, A)
+	r.remove_player(H)
+	_check(r.is_over(), "thợ săn rời trận thì hết trận")
+	var res := r.results()
+	_check(res["caught"] == 1 and res["players"][B]["result"] == GameTypes.EscapeeResult.ESCAPED, "ai chưa bị nhốt coi như thoát")
+
+
+# ---------- Rương, cổng, vòng căn, tiền ----------
+
+func _test_chest_opens_with_time() -> void:
+	var r := _rules()
+	r.config.qte_interval_min = 999.0 # không cho vòng căn hiện
+	r.config.qte_interval_max = 999.0
+	_check(not r.channel_chest(A, 0, r.config.chest_open_time * 0.5), "mở được một nửa")
+	_check(is_equal_approx(r.safe_progress[0], 0.5), "tiến độ 50%")
+	_check(r.channel_chest(A, 0, r.config.chest_open_time * 0.5), "mở xong")
+	_check(r.safes_unlocked() == 1, "có 1 chìa")
+	_check(not r.channel_chest(A, 0, 1.0), "rương đã mở thì thôi")
+	_check(is_equal_approx(r.record(A).chest_work, 1.0), "ghi công mở rương")
+	_check(not r.channel_chest(H, 1, 1.0), "thợ săn không cạy rương")
+	_down(r, B)
+	_check(not r.channel_chest(B, 1, 1.0), "đang gục thì không cạy")
+
+
+func _test_two_openers_faster() -> void:
+	var r := _rules()
+	r.config.qte_interval_min = 999.0
+	r.config.qte_interval_max = 999.0
+	var half := r.config.chest_open_time * 0.5
+	r.channel_chest(A, 0, half)
+	_check(r.channel_chest(B, 0, half), "hai người cùng cạy thì nhanh gấp đôi")
+
+
+func _test_gate_opens_after_delay() -> void:
+	var r := _rules()
+	_open_chest(r, 0)
+	_open_chest(r, 1)
+	_check(r.gate_opening_left == 0.0 and not r.gate_open, "chưa đủ chìa thì cổng im")
+	_open_chest(r, 2)
+	_check(is_equal_approx(r.gate_opening_left, r.config.gate_open_delay) and not r.gate_open, "đủ chìa: cổng rung 3 giây")
+	r.tick(r.config.gate_open_delay - 0.1)
+	_check(not r.gate_open, "chưa hết 3 giây thì chưa mở")
+	r.tick(0.2)
+	_check(r.gate_open, "hết 3 giây thì mở hẳn")
+	r.tick(100.0)
+	_check(r.gate_open, "mở vĩnh viễn")
+
+
+func _test_escape_waits_for_gate() -> void:
+	var r := _rules()
+	for i in 3:
+		_open_chest(r, i)
+	_check(not r.escape(A), "cổng đang rung thì chưa thoát được")
+	r.tick(r.config.gate_open_delay + 0.1)
+	_check(r.escape(A), "cổng mở thì thoát")
+
+
+func _test_qte_appears() -> void:
+	var r := _rules()
+	var p := _start_qte(r, A)
+	_check(p.qte_chest == 0, "cạy một lúc thì vòng căn hiện ra")
+	_check(p.qte_zone >= r.config.qte_zone_min and p.qte_zone <= r.config.qte_zone_max, "vùng sáng nằm trong khoảng cho phép")
+	_check(is_equal_approx(r.qte_needle(A), 0.0) or r.qte_needle(A) >= 0.0, "kim bắt đầu từ đầu vòng")
+	_check(r.qte_needle(B) == -1.0, "người không cạy thì không có vòng")
+
+
+func _test_qte_perfect() -> void:
+	var r := _rules()
+	var p := _start_qte(r, A)
+	var before: float = r.safe_progress[0]
+	_set_needle(r, p, p.qte_zone)
+	_check(r.resolve_qte(A) == GameTypes.QteResult.PERFECT, "kim ở giữa vùng sáng: hoàn hảo")
+	_check(is_equal_approx(r.safe_progress[0], before + r.config.qte_perfect_bonus), "rương mở nhanh thêm một đoạn")
+	_check(p.coins == r.config.qte_perfect_coins and p.qte_perfect == 1, "được tiền, đếm lần căn đẹp")
+	_check(p.qte_chest == -1, "vòng căn biến mất")
+	_check(r.resolve_qte(A) == GameTypes.QteResult.NONE, "bấm thêm khi không có vòng thì không sao")
+
+
+func _test_qte_good() -> void:
+	var r := _rules()
+	var p := _start_qte(r, A)
+	var before: float = r.safe_progress[0]
+	_set_needle(r, p, p.qte_zone - (r.config.qte_perfect_width + r.config.qte_good_width) / 2.0)
+	_check(r.resolve_qte(A) == GameTypes.QteResult.GOOD, "kim ở vùng mờ: được")
+	_check(is_equal_approx(r.safe_progress[0], before), "vùng mờ không tăng tốc")
+	_check(p.coins == r.config.qte_good_coins, "nhưng được ít tiền hơn")
+
+
+func _test_qte_fail_resets_chest() -> void:
+	var r := _rules()
+	var p := _start_qte(r, A)
+	_check(r.safe_progress[0] > 0.0, "đã cạy được một ít")
+	_set_needle(r, p, p.qte_zone - r.config.qte_good_width * 2.0)
+	_check(r.resolve_qte(A) == GameTypes.QteResult.FAIL, "bấm ngoài vùng: hỏng")
+	_check(r.safe_progress[0] == 0.0, "rương về 0, mở lại từ đầu")
+	_check(p.coins == 0 and p.qte_result == GameTypes.QteResult.FAIL and p.qte_result_chest == 0, "không được tiền, ghi kết quả")
+
+
+func _test_qte_timeout_fails() -> void:
+	var r := _rules()
+	var p := _start_qte(r, A)
+	var seq := p.qte_seq
+	for i in 100: # vẫn đứng cạy nhưng không bấm
+		r.channel_chest(A, 0, 0.05)
+		r.tick(0.05)
+		if p.qte_seq > seq:
+			break
+	_check(p.qte_result == GameTypes.QteResult.FAIL and p.qte_chest == -1, "kim chạy hết vòng mà không bấm: hỏng")
+	_check(r.safe_progress[0] == 0.0, "rương về 0")
+
+
+func _test_qte_cancel_when_leaving() -> void:
+	var r := _rules()
+	var p := _start_qte(r, A)
+	var seq := p.qte_seq
+	r.tick(MatchRules.CHEST_CHANNEL_GRACE + 0.05)
+	_check(p.qte_chest == -1 and p.qte_seq == seq, "rời rương: vòng căn biến mất, không tính hỏng")
+	_check(r.safe_progress[0] > 0.0, "tiến độ rương vẫn giữ")
+
+
+func _test_qte_grace_for_late_press() -> void:
+	var r := _rules()
+	var p := _start_qte(r, A)
+	# Người chơi bấm đúng giữa vùng, server nhận sau 0.1 giây.
+	_set_needle(r, p, p.qte_zone + 0.1 * r.config.qte_speed)
+	_check(r.resolve_qte(A, 0.1) == GameTypes.QteResult.PERFECT, "bù đúng độ trễ đo được")
+	p = _start_qte(r, A)
+	_set_needle(r, p, p.qte_zone + 0.5 * r.config.qte_speed)
+	_check(r.resolve_qte(A, 5.0) == GameTypes.QteResult.FAIL, "độ trễ khai quá lớn bị kẹp, không gian lận được")
+
+
+func _test_qte_rejected() -> void:
+	var r := _rules()
+	_check(r.resolve_qte(A) == GameTypes.QteResult.NONE, "không có vòng căn thì không chấm")
+	var p := _start_qte(r, A)
+	r.attack(H, [A])
+	r.tick(r.config.attack_cooldown + 0.01)
+	r.attack(H, [A])
+	r.tick(0.01)
+	_check(p.qte_chest == -1, "bị đánh gục thì vòng căn bị hủy")
+
+
+func _test_chest_coins_spawn() -> void:
+	var r := _rules()
+	var ids := r.chest_coin_ids(1)
+	_check(ids.size() == r.config.chest_coins, "đủ số cọc tiền")
+	_check(not r.coins.has(ids[0]), "chưa mở thì chưa có tiền")
+	_open_chest(r, 1)
+	_check(ids.all(func(c: int) -> bool: return r.coins.has(c)), "mở xong thì tiền văng ra")
+	_check(r.coins.has(0) and r.coins.has(1), "tiền rải sẵn trên sàn")
+
+
+func _test_take_coin() -> void:
+	var r := _rules()
+	_check(r.take_coin(A, 0), "nhặt tiền")
+	_check(r.record(A).coins == r.config.floor_coin_value and r.record(A).coins_earned == r.config.floor_coin_value, "cộng tiền")
+	_check(not r.take_coin(B, 0), "cọc đã nhặt thì thôi")
+	_check(not r.take_coin(H, 1), "thợ săn không nhặt tiền")
+	_check(not r.take_coin(A, 999), "cọc không tồn tại")
+	_check(r.coins_taken[0] == A, "ghi ai nhặt")
+
+
+func _test_world_roundtrip_and_events() -> void:
+	var r := _rules()
+	var w0 := r.world_dict()
+	for i in 3:
+		_open_chest(r, i)
+	r.take_coin(A, 0)
+	var w1 := r.world_dict()
+	var ev := _signals(WorldRecord.events_between(w0, w1, r.safes_required()))
+	_check(ev.count(&"safe_unlocked") == 3 and &"gate_opening" in ev and &"coin_taken" in ev, "sự kiện rương, cổng đang mở, nhặt tiền")
+	_check(not &"gate_opened" in ev, "chưa mở hẳn")
+	var client := _rules()
+	client.apply_world_dict(w1)
+	_check(client.safes_unlocked() == 3 and client.coins.has(r.chest_coin_ids(0)[0]) and not client.coins.has(0), "client dựng lại đúng rương và tiền")
+	r.tick(r.config.gate_open_delay + 0.1)
+	_check(&"gate_opened" in _signals(WorldRecord.events_between(w1, r.world_dict(), 3)), "sự kiện cổng mở hẳn")
+
+
+func _test_events_qte_and_coins() -> void:
+	var r := _rules()
+	var d0 := r.record(A).to_dict()
+	var p := _start_qte(r, A)
+	var d1 := p.to_dict()
+	_check(&"qte_started" in _signals(PlayerRecord.events_between(A, d0, d1)), "sự kiện vòng căn hiện")
+	_set_needle(r, p, p.qte_zone)
+	r.resolve_qte(A)
+	var ev := _signals(PlayerRecord.events_between(A, d1, p.to_dict()))
+	_check(&"qte_resolved" in ev and &"coins_changed" in ev, "sự kiện kết quả căn + tiền")
 
 
 # ---------- Đánh ----------
@@ -533,3 +780,28 @@ func _test_items_copied_not_shared() -> void:
 	copy.apply_dict(d0)
 	d0["items"][GameTypes.ItemType.MEDKIT] = 99
 	_check(copy.items[GameTypes.ItemType.MEDKIT] == r.config.medkits_per_escapee, "apply_dict giữ bản sao riêng")
+
+
+func _test_player_diff_small() -> void:
+	var r := _rules()
+	var d0 := r.record(A).to_dict()
+	r.channel_chest(A, 0, 0.1)
+	var d1 := r.record(A).to_dict()
+	var changes := PlayerRecord.diff(d0, d1)
+	_check(PlayerRecord.apply_diff(d0, changes) == d1, "dựng lại đúng từ diff")
+	_check(changes.size() <= 2, "cạy rương chỉ gửi đúng một trường đổi")
+	_check(var_to_bytes(changes).size() < 40, "gói cập nhật thường xuyên dưới 40 byte")
+	_check(PlayerRecord.diff(d1, d1).is_empty(), "không đổi gì thì không gửi")
+	_check(var_to_bytes(PlayerRecord.diff({}, d1)).size() < var_to_bytes(d1).size(), "gói đầy đủ vẫn nhỏ hơn dict có tên trường")
+
+
+func _test_world_diff() -> void:
+	var r := _rules()
+	var w0 := r.world_dict()
+	r.take_coin(A, 0)
+	_open_chest(r, 1)
+	var w1 := r.world_dict()
+	var changes := WorldRecord.diff(w0, w1)
+	_check(WorldRecord.apply_diff(w0, changes) == w1, "dựng lại đúng thế giới từ diff")
+	_check(changes["safes"].size() == 1 and changes["coins_taken"].size() == 1, "chỉ gửi rương đổi và cọc mới nhặt")
+	_check(WorldRecord.diff(w1, w1).is_empty(), "không đổi gì thì không gửi")

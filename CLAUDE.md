@@ -4,7 +4,7 @@ Bối cảnh cho Claude Code và mọi thành viên. Đọc hết trước khi s
 
 ## Dự án
 
-Game rượt đuổi bất đối xứng 1 Thợ săn (Hunter) vs 4 Người trốn (Escapee), kiểu 逃跑吧!少年. Người trốn mở két, đủ két thì cổng thoát mở; thợ săn bắt và nhốt người trốn. Mục tiêu 4 tuần: một trận 1v4 offline trọn vẹn với bot, chọn được vai.
+Game rượt đuổi bất đối xứng 1 Thợ săn (Hunter) vs 4 Người trốn (Escapee), kiểu 逃跑吧!少年, **cho điện thoại**. Người trốn cạy rương lấy chìa khóa, đủ chìa thì 2 cổng thoát mở; thợ săn đánh gục, kéo vào tù. Mỗi người trốn tính kết quả riêng. Mục tiêu 4 tuần: một trận 1v4 offline trọn vẹn với bot, chọn được vai. Sau đó lên online (sẵn kiến trúc cho 8v2).
 
 - Engine: **Godot 4.6.x**, ngôn ngữ **GDScript** (không dùng C#).
 - **3D**, camera nhìn chéo từ trên xuống. Đơn vị: 1 = 1 mét, trục Y hướng lên, mặt sàn là (x, z). Renderer `gl_compatibility` (chạy được máy yếu và điện thoại).
@@ -56,22 +56,55 @@ Cả 3 chạy **cùng một đường code**. Quy tắc:
 
 | Thứ | File | Dùng để |
 |---|---|---|
-| `GameTypes` | `Core/types/game_types.gd` | Enum `Role`, `PlayerState`, `MatchState`, `Winner`, `ItemType`; tên group |
+| `GameTypes` | `Core/types/game_types.gd` | Enum `Role`, `PlayerState`, `MatchState`, `HunterResult`, `EscapeeResult`, `QteResult`, `ItemType`; tên group |
 | `ItemData`, `MatchConfig` | `Core/types/` | Dữ liệu vật phẩm, thông số trận |
 | `EventBus` (autoload) | `Core/event_bus.gd` | Tín hiệu chung |
-| `GameState` (autoload) | `Core/game_state.gd` | `rules` (đọc), lệnh `server_attack/pick_up/drop/imprison/channel_rescue/use_medkit/stun/escape/set_safe_progress`, `my_role()`. Chi tiết: [docs/CHU_TRINH_BAT.md](docs/CHU_TRINH_BAT.md) |
+| `GameState` (autoload) | `Core/game_state.gd` | `rules` (đọc), lệnh `server_attack/pick_up/drop/imprison/channel_rescue/use_medkit/stun/escape/channel_chest/resolve_qte/take_coin`, `my_role()`. Chi tiết: [docs/CHU_TRINH_BAT.md](docs/CHU_TRINH_BAT.md), [docs/LUAT_TRAN.md](docs/LUAT_TRAN.md) |
 | `MatchRules` | `Core/match/match_rules.gd` | Luật thuần logic, đọc qua `GameState.rules` (`record()`, `can_move()`, `speed_factor()`, `can_attack()`...) |
-| `PlayerRecord` | `Core/match/player_record.gd` | Dữ liệu gameplay của một người chơi (máu, bị kéo, tù, tiến độ cứu, vật phẩm...) |
+| `PlayerRecord` | `Core/match/player_record.gd` | Dữ liệu gameplay của một người chơi (máu, bị kéo, tù, tiến độ cứu, vật phẩm, tiền, vòng căn...) |
+| `WorldRecord` | `Core/match/world_record.gd` | Sinh sự kiện khi rương / cổng / tiền trên sàn đổi |
 | `Net` (autoload) | `Core/network/net.gd` | Tạo/vào phòng, offline, bắt đầu trận |
-| `EntityBase` | `Core/interfaces/entity_base.gd` | Lớp cha của mọi nhân vật |
+| `EntityBase` | `Core/interfaces/entity_base.gd` | Lớp cha của mọi nhân vật; `is_holding()`/`just_pressed()` cho vật thể biết người chơi bấm gì (chỉ server) |
 | `InputSource` | `Core/interfaces/input_source.gd` | Nguồn điều khiển (bàn phím, mạng, bot) |
 | `Interactable` | `Core/interfaces/interactable.gd` | Lớp cha của két, cổng, nhà tù... |
 | `MapBase` | `Core/interfaces/map_base.gd` | Lớp cha của bản đồ |
 
-Group để tìm nhau (hằng trong `GameTypes`): `entities`, `safes`, `exit_gates`, `prisons`.
+Group để tìm nhau (hằng trong `GameTypes`): `entities`, `safes` (rương), `exit_gates`, `prisons`, `coins`.
 
 Layer va chạm: 1 = sàn/tường/vật cản, 2 = nhân vật. Nhân vật không chặn nhau.
 Gốc nhân vật đặt dưới chân. `EntityBase.flat_position()` trả vị trí trên mặt sàn (x, z) để tính khoảng cách.
+
+## Hiệu năng: bắt buộc, khắt khe
+
+Game chạy trên **điện thoại yếu** và sau này **online nhiều phòng trên một server rẻ**. Lag hoặc sập server là lỗi nặng ngang bug luật. Mục tiêu:
+
+| Thứ | Mức tối thiểu |
+|---|---|
+| Điện thoại | 60 FPS trên máy tầm thấp (RAM 3 GB, GPU cỡ Mali-G52 / Adreno 610), không nóng máy sau 3 trận |
+| Bộ nhớ | Cả trận dưới 400 MB RAM |
+| Mạng | Dưới 8 KB/s mỗi người chơi mỗi chiều; chơi được với ping 150 ms |
+| Server | Một trận 5 người dưới 2% một nhân CPU, để 1 VPS 5 USD chạy được hàng chục phòng |
+
+**Vẽ (client):**
+- Chỉ `gl_compatibility`. Không SSAO, SSR, glow, SDFGI, volumetric fog, bóng mềm. Bóng chỉ từ 1 `DirectionalLight3D`; vật nhỏ (tiền, hạt) tắt `cast_shadow`.
+- Model nhân vật dưới 5k tam giác, cả màn hình dưới 60k. Texture nén (ETC2/ASTC), tối đa 1024 px. Âm thanh `.ogg`.
+- Vật giống nhau dùng chung `Mesh`/`Material` (`static var`), không tạo material mới cho từng cái.
+- Không tạo và xóa node liên tục: đạn, khói, tiền, hiệu ứng lặp lại thì dùng pool.
+- Không làm việc nặng trong `_process`/`_physics_process` khi không cần: tắt bằng `set_process(false)`, chỉ cập nhật chữ (`Label`) khi nội dung đổi, việc theo giây thì chạy thưa (ví dụ 10 frame một lần).
+
+**Luật (server):**
+- Mỗi frame chỉ làm việc tỉ lệ với số người chơi. Không `get_nodes_in_group()` trong vòng lặp lồng nhau, không tạo `Array`/`Dictionary` mới cho từng người mỗi frame nếu tránh được.
+- Bot quyết định 10 lần/giây (`BotInputSource.THINK_INTERVAL`), không phải mỗi frame; chỉ việc cần chính xác (vòng căn) mới chạy từng frame.
+- Va chạm: raycast / query vật lý chỉ khi cần (lúc bắn, lúc ném), không quét liên tục.
+- Server riêng chạy `--headless`, không tạo node hiển thị nào có chi phí.
+
+**Mạng:**
+- Gửi **trạng thái khi đổi**, không gửi mỗi frame. Thay đổi quan trọng gửi ngay (reliable); số đổi liên tục gộp 10 lần/giây; vị trí 20 lần/giây (unreliable).
+- Chỉ gửi số và id (`int`, `float`, enum), không gửi chuỗi dài, node, tài nguyên.
+- Tính năng nào cần thời điểm bấm nút (vòng căn, bắn) thì server **tự đo độ trễ** (`Net.latency_of()`) để bù, kẹp tối đa, không tin thời gian client gửi lên.
+- PR thêm dữ liệu đồng bộ phải ghi trong mô tả: gửi gì, bao nhiêu lần/giây, ước tính bao nhiêu byte.
+
+PR làm tụt FPS, tăng bộ nhớ hoặc băng thông đáng kể mà không có lý do ghi rõ thì không merge.
 
 ## Quy ước code
 

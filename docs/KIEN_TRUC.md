@@ -61,7 +61,7 @@ Bot luôn chạy trên server, giống hệt người chơi, chỉ khác nguồn
 
 ## 4. Ví dụ cho từng loại tính năng
 
-**Két có QTE (Objects):** server quyết định lúc nào QTE xuất hiện và gửi xuống người đang mở két. Vòng tròn QTE là UI ở client. Người chơi bấm thì gửi nút `interact` lên như input bình thường. Server so thời điểm bấm với cửa sổ QTE (cho phép trễ khoảng 150 ms vì mạng), quyết định đúng/sai rồi phát `qte_failed`. Bot bấm QTE cũng đi qua `InputSource` như vậy.
+**Rương có vòng căn (Objects, đã làm):** server quyết định lúc nào vòng hiện ra và vùng sáng ở đâu, gửi xuống trong `PlayerRecord`. Vòng là UI ở client. Người chơi bấm thì gửi nút `interact` lên như input bình thường. Server lùi kim lại đúng độ trễ đo được của máy đó (kẹp tối đa), chấm đúng/sai rồi phát `qte_resolved`. Bot bấm cũng đi qua `InputSource`. Chi tiết: [LUAT_TRAN.md](LUAT_TRAN.md).
 
 **Hóa trang (Items):** người chơi bấm `skill_1`, server kiểm tra cooldown, đổi trạng thái hóa trang, gửi xuống. Client nhận và đổi model thành cái thùng. Không client nào tự đổi model của mình trước khi server đồng ý.
 

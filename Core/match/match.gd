@@ -20,7 +20,7 @@ func setup(info: Dictionary) -> void:
 	map = load(ModuleRegistry.MAP).new()
 	map.name = "Map"
 	add_child(map)
-	GameState.begin(info, map.get_safe_count())
+	GameState.begin(info, map.get_safe_count(), map.get_coin_spots().size())
 
 	var entities_node := Node3D.new()
 	entities_node.name = "Entities"
@@ -76,6 +76,7 @@ func _physics_process(delta: float) -> void:
 		for id: int in entities:
 			var src: InputSource = input_sources[id]
 			src.update(delta)
+			entities[id].server_read_input(src)
 			entities[id].server_move(src, delta)
 		GameState.flush(delta)
 		_send_snapshot(delta)

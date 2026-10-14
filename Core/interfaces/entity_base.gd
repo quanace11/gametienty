@@ -9,6 +9,9 @@ var display_name := ""
 var is_local := false ## nhân vật của người đang ngồi máy này
 var state: GameTypes.PlayerState = GameTypes.PlayerState.IDLE
 
+var _held_buttons := 0 # chỉ server: nút đang giữ (bit theo InputSource.ACTIONS)
+var _pressed_buttons := 0 # chỉ server: nút vừa bấm xuống trong frame này
+
 
 ## Lớp con override thì phải gọi super(...).
 func setup(id: int, p_role: GameTypes.Role, p_name: String, pos: Vector3, local: bool) -> void:
@@ -25,6 +28,28 @@ func setup(id: int, p_role: GameTypes.Role, p_name: String, pos: Vector3, local:
 ## Chỉ chạy trên server, mỗi physics frame khi trận đang chơi.
 func server_move(_input: InputSource, _delta: float) -> void:
 	pass
+
+
+## Core gọi trên server mỗi physics frame, trước server_move().
+func server_read_input(input: InputSource) -> void:
+	var b := input.get_buttons()
+	_pressed_buttons = b & ~_held_buttons
+	_held_buttons = b
+
+
+## Chỉ server: nút `action` đang được giữ. Dùng cho vật thể (két, cổng...) cần biết người chơi bấm gì.
+func is_holding(action: StringName) -> bool:
+	return _held_buttons & _action_bit(action) != 0
+
+
+## Chỉ server: nút `action` vừa được bấm xuống trong frame này (không tính giữ).
+func just_pressed(action: StringName) -> bool:
+	return _pressed_buttons & _action_bit(action) != 0
+
+
+func _action_bit(action: StringName) -> int:
+	var i := InputSource.ACTIONS.find(action)
+	return 1 << i if i >= 0 else 0
 
 
 ## Server gói trạng thái hiển thị gửi xuống client (vị trí, hướng, anim...).

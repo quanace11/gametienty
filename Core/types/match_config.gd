@@ -5,8 +5,25 @@ extends Resource
 @export_group("Trận")
 @export var duration := 180.0 # giây
 @export var countdown := 3.0
-@export var safes_required := 3 # số két phải mở để cổng mở
-@export var escapees_to_win := 0 # 0 = một nửa số người trốn (làm tròn lên)
+@export var safes_required := 3 # số rương (chìa khóa) phải mở để cổng mở
+@export var gate_open_delay := 3.0 # đủ chìa thì cổng rung 3 giây rồi mới mở
+
+@export_group("Rương và vòng căn")
+@export var chest_open_time := 8.0 # giây mở xong một rương khi một người mở, không tính vòng căn
+@export var qte_interval_min := 1.5 # giây giữa hai lần vòng căn hiện ra
+@export var qte_interval_max := 3.5
+@export var qte_speed := 0.8 # vòng/giây kim chạy
+@export var qte_zone_min := 0.3 # vị trí vùng sáng trên vòng (0..1), random trong khoảng này
+@export var qte_zone_max := 0.85
+@export var qte_perfect_width := 0.035 # nửa bề rộng vùng sáng đậm (phần vòng)
+@export var qte_good_width := 0.1 # nửa bề rộng vùng mờ bên ngoài
+@export var qte_grace := 0.2 # giây bù độ trễ mạng tối đa khi chấm điểm (server tự đo trễ từng máy)
+@export var qte_perfect_bonus := 0.15 # căn trúng vùng đậm: rương mở thêm chừng này
+@export var qte_perfect_coins := 6
+@export var qte_good_coins := 2 # vùng mờ: được ít tiền, không tăng tốc
+@export var chest_coins := 6 # số cọc tiền văng ra khi mở xong rương
+@export var chest_coin_value := 5
+@export var floor_coin_value := 2
 
 @export_group("Đánh")
 @export var max_hp := 2 # số đòn để người trốn ngã
@@ -30,3 +47,11 @@ extends Resource
 @export var downed_speed := 0.3 # bò
 @export var carrying_speed := 0.85 # thợ săn đang kéo người
 @export var rescuing_speed := 0.0 # đứng yên khi đang cứu
+
+@export_group("Điểm cuối trận")
+@export var score_escape := 100 # chỉ người thoát được mới có
+@export var score_chest := 40 # mỗi rương góp công (tính theo phần đã mở)
+@export var score_rescue := 30 # mỗi lần cứu đồng đội
+@export var score_perfect_qte := 5
+@export var score_per_coin := 1 # theo tổng tiền nhặt được
+@export var score_hunter_catch := 100 # thợ săn: mỗi người bắt được
