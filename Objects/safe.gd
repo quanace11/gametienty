@@ -57,7 +57,7 @@ func _ready() -> void:
 
 
 func can_interact(entity: EntityBase) -> bool:
-	return not entity.is_hunter()
+	return not entity.is_hunter() and GameTypes.is_active(entity.state)
 
 
 func interact_tick(users: Array[EntityBase], delta: float) -> void:

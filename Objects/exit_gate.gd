@@ -30,9 +30,9 @@ func _ready() -> void:
 
 
 func can_interact(entity: EntityBase) -> bool:
-	return not entity.is_hunter() and GameState.rules.gate_open
+	return not entity.is_hunter() and GameState.rules.gate_open and GameTypes.is_active(entity.state)
 
 
 func interact_tick(users: Array[EntityBase], _delta: float) -> void:
 	for e in users:
-		GameState.server_set_player_state(e.peer_id, GameTypes.PlayerState.ESCAPED)
+		GameState.server_escape(e.peer_id)

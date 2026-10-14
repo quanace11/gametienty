@@ -16,6 +16,7 @@ const WALLS := [
 ]
 const SAFES := [Vector3(9, 0, 2.6), Vector3(16, 0, 10), Vector3(22, 0, 17.4)]
 const EXIT_GATE := Vector3(31.2, 0, 10)
+const PRISONS := [Vector3(16, 0, 2.6), Vector3(16, 0, 17.4)]
 const HUNTER_SPAWN := Vector3(28, 0.05, 10)
 const ESCAPEE_SPAWNS: Array[Vector3] = [
 	Vector3(2.4, 0.05, 4), Vector3(2.4, 0.05, 8), Vector3(2.4, 0.05, 12), Vector3(2.4, 0.05, 16),
@@ -23,6 +24,7 @@ const ESCAPEE_SPAWNS: Array[Vector3] = [
 
 const SafeScript = preload("res://Objects/safe.gd")
 const ExitGateScript = preload("res://Objects/exit_gate.gd")
+const PrisonScript = preload("res://Objects/prison.gd")
 
 
 func _ready() -> void:
@@ -38,6 +40,11 @@ func _ready() -> void:
 	var gate: Interactable = ExitGateScript.new()
 	gate.position = EXIT_GATE
 	add_child(gate)
+	for i in PRISONS.size():
+		var prison: Interactable = PrisonScript.new()
+		prison.interactable_id = i
+		prison.position = PRISONS[i]
+		add_child(prison)
 	_add_lighting()
 
 

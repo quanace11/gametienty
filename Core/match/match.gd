@@ -77,6 +77,7 @@ func _physics_process(delta: float) -> void:
 			var src: InputSource = input_sources[id]
 			src.update(delta)
 			entities[id].server_move(src, delta)
+		GameState.flush(delta)
 		_send_snapshot(delta)
 	else:
 		for e: EntityBase in entities.values():

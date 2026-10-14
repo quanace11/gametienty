@@ -21,7 +21,7 @@ Luôn có một **server có thẩm quyền** (peer id 1). Server có thể là:
 Cả 3 chạy **cùng một đường code**. Quy tắc:
 - **Chỉ server quyết định luật**: di chuyển thật, bắt người, mở két, thoát, thắng thua.
 - Client chỉ gửi **input** (`InputSource`: hướng + nút bấm) và vẽ lại những gì server gửi xuống.
-- Đổi trạng thái trận **chỉ qua `GameState.server_*()`**. GameState gửi xuống mọi máy rồi phát `EventBus`. Không tự emit tín hiệu nhóm 1 của EventBus.
+- Đổi trạng thái trận **chỉ qua lệnh `GameState.server_*()`**; lệnh sai lúc tự bị từ chối. GameState gửi xuống mọi máy rồi phát `EventBus`. Không tự emit tín hiệu nhóm 1 của EventBus.
 - Code luật chạy trên server phải được bọc trong `multiplayer.is_server()` hoặc nằm trong các hàm chỉ server gọi (`server_move`, `interact_tick`).
 - Không tin dữ liệu client: luôn kẹp giá trị (ví dụ `limit_length(1.0)`).
 - Bot là nhân vật có id âm (-1, -2...), chạy trên server, được điều khiển bằng `BotInputSource` thay cho bàn phím.
@@ -59,8 +59,9 @@ Cả 3 chạy **cùng một đường code**. Quy tắc:
 | `GameTypes` | `Core/types/game_types.gd` | Enum `Role`, `PlayerState`, `MatchState`, `Winner`, `ItemType`; tên group |
 | `ItemData`, `MatchConfig` | `Core/types/` | Dữ liệu vật phẩm, thông số trận |
 | `EventBus` (autoload) | `Core/event_bus.gd` | Tín hiệu chung |
-| `GameState` (autoload) | `Core/game_state.gd` | `rules` (đọc), `server_set_player_state()`, `server_set_safe_progress()`, `my_role()` |
-| `MatchRules` | `Core/match/match_rules.gd` | Luật thuần logic, đọc qua `GameState.rules` |
+| `GameState` (autoload) | `Core/game_state.gd` | `rules` (đọc), lệnh `server_attack/pick_up/drop/imprison/channel_rescue/add_struggle/stun/escape/set_safe_progress`, `my_role()`. Chi tiết: [docs/CHU_TRINH_BAT.md](docs/CHU_TRINH_BAT.md) |
+| `MatchRules` | `Core/match/match_rules.gd` | Luật thuần logic, đọc qua `GameState.rules` (`record()`, `can_move()`, `speed_factor()`, `can_attack()`...) |
+| `PlayerRecord` | `Core/match/player_record.gd` | Dữ liệu gameplay của một người chơi (máu, vác, tù, tiến độ cứu...) |
 | `Net` (autoload) | `Core/network/net.gd` | Tạo/vào phòng, offline, bắt đầu trận |
 | `EntityBase` | `Core/interfaces/entity_base.gd` | Lớp cha của mọi nhân vật |
 | `InputSource` | `Core/interfaces/input_source.gd` | Nguồn điều khiển (bàn phím, mạng, bot) |
