@@ -20,6 +20,7 @@ const SAFES := [
 ]
 ## 2 cổng ở hai đầu đối diện.
 const EXIT_GATES := [Vector3(0.8, 0, 10), Vector3(31.2, 0, 10)]
+## Nhà tù tường cao 3 m, chỉ đệm lò xo bay qua được.
 const PRISONS := [Vector3(16, 0, 2.6), Vector3(16, 0, 17.4)]
 const HUNTER_SPAWN := Vector3(16, 0.05, 8.2)
 const ESCAPEE_SPAWNS: Array[Vector3] = [
@@ -61,9 +62,10 @@ func _ready() -> void:
 		coin.position = COIN_SPOTS[i]
 		add_child(coin)
 	for i in PRISONS.size():
-		var prison: Interactable = PrisonScript.new()
+		var prison: Prison = PrisonScript.new()
 		prison.interactable_id = i
 		prison.position = PRISONS[i]
+		prison.exit_side = Vector3(0, 0, signf(SIZE.y / 2 - PRISONS[i].z)) # đệm trong tù bắn người về giữa bản đồ
 		add_child(prison)
 	_add_lighting()
 

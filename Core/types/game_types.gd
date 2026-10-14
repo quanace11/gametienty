@@ -48,6 +48,7 @@ const GROUP_SAFES := &"safes"
 const GROUP_EXIT_GATES := &"exit_gates"
 const GROUP_PRISONS := &"prisons"
 const GROUP_COINS := &"coins"
+const GROUP_JUMP_PADS := &"jump_pads" ## Node3D đệm lò xo (trong nhà tù, đặt từ bộ bài): bot tìm đường thoát
 
 ## Bot dùng id âm (-1, -2, ...), người thật dùng peer id của Godot (luôn dương).
 static func is_bot_id(id: int) -> bool:
