@@ -11,7 +11,9 @@ extends EntityBase
 ## Nút thẻ đạo cụ (skill_1..4) do Core + Items xử lý, file này chỉ lo bị hất
 ## tung (server_launch) khi giẫm đệm lò xo.
 ## Mọi quyết định đúng/sai nằm ở GameState; file này chỉ chọn điểm ngắm và vị trí.
-## Hình dạng tạm là khối capsule; thay bằng model + AnimationTree sau.
+## Hình: nhân vật chibi KayKit Adventurers (CC0, Player/models/), thợ săn là
+## Rogue trùm đầu cầm nỏ (vòng đỏ dưới chân), người trốn là hiệp sĩ Knight.
+## Animation chọn trên mọi máy theo trạng thái + tốc độ, không gửi qua mạng.
 
 const HUNTER_SPEED := 4.8 # m/s
 const ESCAPEE_SPEED := 4.2
@@ -30,14 +32,22 @@ const SNAP_DIST := 6.0 # mét, lệch hơn chừng này (dịch chuyển) thì �
 const AIM_MIN := 0.2 # độ dài hướng ngắm tối thiểu để bắn theo tay, ngắn hơn thì tự nhắm
 const BEAM_HEIGHT := 1.1 # ngang nòng súng (GameState.SHOT_HEIGHT), để raycast luồng ngắm
 
-const HUNTER_COLOR := Color(0.9, 0.25, 0.25)
-const ESCAPEE_COLOR := Color(0.3, 0.6, 1.0)
-const OUT_COLOR := Color(0.45, 0.45, 0.45)
+const HUNTER_MODEL := "res://Player/models/rogue_hooded.glb"
+const ESCAPEE_MODEL := "res://Player/models/knight.glb"
+const HUNTER_PROP := "1H_Crossbow" # đồ cầm tay duy nhất được giữ lại (nỏ của thợ săn)
+const MODEL_SCALE := 0.72 # model KayKit cao ~2.4 m, thu về ~1.75 m
+const LOOP_ANIMS := ["Idle", "Running_A", "Lie_Idle", "Sit_Floor_Idle", "Jump_Idle"]
+const RUN_SPEED_MIN := 0.6 # m/s, chậm hơn thì đứng yên
+const BLEND := 0.15
 
 var _target_pos := Vector3.ZERO
 var _target_yaw := 0.0
-var _body_mesh: MeshInstance3D
-var _material: StandardMaterial3D
+var _anim: AnimationPlayer
+var _anim_name := ""
+var _oneshot_left := 0.0 # đang phát anim một lần (bắn, bị trúng, ném)
+var _last_pos := Vector3.ZERO
+var _speed := 0.0 # m/s trên mặt sàn, đo từ vị trí (client không có velocity thật)
+var _concealed := false # máy này không được thấy (đứng trong bụi cây phe kia)
 var _air_velocity := Vector3.ZERO # chỉ server: đang bay vì đệm lò xo
 var _flying := false
 
@@ -50,6 +60,7 @@ var _beam_mesh: MeshInstance3D
 static var _rifle_mesh: SphereMesh
 static var _bullet_mesh: SphereMesh
 static var _beam_box: BoxMesh
+static var _hunter_ring: TorusMesh
 
 
 func setup(id: int, p_role: GameTypes.Role, p_name: String, pos: Vector3, local: bool) -> void:
@@ -63,7 +74,9 @@ func setup(id: int, p_role: GameTypes.Role, p_name: String, pos: Vector3, local:
 	EventBus.shot_fired.connect(_on_shot_fired)
 	if local:
 		add_child(load("res://Player/follow_camera.gd").new())
-	set_process(local and is_hunter()) # chỉ để vẽ luồng ngắm
+	EventBus.item_used.connect(_on_item_used)
+	_last_pos = global_position if is_inside_tree() else pos
+	set_process(_anim != null or (local and is_hunter())) # animation, luồng ngắm
 
 
 func _build_body() -> void:
@@ -75,25 +88,8 @@ func _build_body() -> void:
 	shape.position.y = HEIGHT / 2.0 # gốc nhân vật ở dưới chân
 	add_child(shape)
 
-	_material = StandardMaterial3D.new()
-	_material.albedo_color = HUNTER_COLOR if is_hunter() else ESCAPEE_COLOR
-	var mesh := CapsuleMesh.new()
-	mesh.radius = _radius()
-	mesh.height = HEIGHT
-	mesh.material = _material
-	_body_mesh = MeshInstance3D.new()
-	_body_mesh.mesh = mesh
-	_body_mesh.position.y = HEIGHT / 2.0
-	add_child(_body_mesh)
-
-	# Mũi nhỏ phía trước để thấy hướng nhìn.
-	var nose := MeshInstance3D.new()
-	var nose_mesh := BoxMesh.new()
-	nose_mesh.size = Vector3(0.15, 0.15, 0.3)
-	nose_mesh.material = _material
-	nose.mesh = nose_mesh
-	nose.position = Vector3(0, HEIGHT * 0.25, -_radius())
-	_body_mesh.add_child(nose)
+	if DisplayServer.get_name() != "headless": # server riêng không cần hình
+		_build_model()
 
 	var label := Label3D.new()
 	label.text = ("▼ " if is_local else "") + display_name
@@ -102,6 +98,88 @@ func _build_body() -> void:
 	label.font_size = 48
 	label.modulate = Color(1, 0.9, 0.3) if is_local else Color.WHITE
 	add_child(label)
+
+
+func _build_model() -> void:
+	var path := HUNTER_MODEL if is_hunter() else ESCAPEE_MODEL
+	var model: Node3D = (load(path) as PackedScene).instantiate()
+	model.scale = Vector3.ONE * MODEL_SCALE * (1.1 if is_hunter() else 1.0)
+	model.rotation.y = PI # model nhìn về +Z, nhân vật nhìn về -Z
+	add_child(model)
+	for node in model.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		# Vũ khí gắn ở tay (handslot_l/r): ẩn hết, trừ nỏ của thợ săn.
+		if mi.get_parent().name.begins_with("handslot") and not (is_hunter() and mi.name == HUNTER_PROP):
+			mi.visible = false
+	if is_hunter(): # vòng đỏ dưới chân để nhận ra thợ săn từ xa
+		if _hunter_ring == null:
+			var m := StandardMaterial3D.new()
+			m.albedo_color = Color(1, 0.2, 0.15, 0.8)
+			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			_hunter_ring = TorusMesh.new()
+			_hunter_ring.inner_radius = 0.5
+			_hunter_ring.outer_radius = 0.6
+			_hunter_ring.rings = 24
+			_hunter_ring.ring_segments = 4
+			_hunter_ring.material = m
+		var ring := MeshInstance3D.new()
+		ring.mesh = _hunter_ring
+		ring.scale = Vector3(1, 0.1, 1)
+		ring.position.y = 0.05
+		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(ring)
+	var players := model.find_children("*", "AnimationPlayer", true, false)
+	if players.is_empty():
+		return
+	_anim = players[0] as AnimationPlayer
+	for anim_name: String in LOOP_ANIMS:
+		if _anim.has_animation(anim_name):
+			_anim.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR
+	_play("Idle")
+
+
+func _play(anim_name: String, speed := 1.0) -> void:
+	if _anim == null or not _anim.has_animation(anim_name):
+		return
+	_anim.speed_scale = speed
+	if anim_name != _anim_name:
+		_anim_name = anim_name
+		_anim.play(anim_name, BLEND)
+
+
+## Phát anim một lần (bắn, bị trúng, ném) rồi quay lại anim theo trạng thái.
+func _play_once(anim_name: String, seconds: float) -> void:
+	if _anim == null or not _anim.has_animation(anim_name):
+		return
+	_oneshot_left = seconds
+	_anim_name = ""
+	_play(anim_name)
+
+
+## Mọi máy: chọn anim theo trạng thái và tốc độ đo được.
+func _update_anim(delta: float) -> void:
+	var flat := global_position - _last_pos
+	flat.y = 0.0
+	_last_pos = global_position
+	if delta > 0.0:
+		_speed = lerpf(_speed, flat.length() / delta, minf(1.0, delta * 10.0))
+	if _oneshot_left > 0.0:
+		_oneshot_left -= delta
+		return
+	match state:
+		GameTypes.PlayerState.DOWNED, GameTypes.PlayerState.CARRIED:
+			_play("Lie_Idle")
+			return
+		GameTypes.PlayerState.IMPRISONED:
+			_play("Sit_Floor_Idle")
+			return
+	if _flying or global_position.y > 0.4:
+		_play("Jump_Idle")
+	elif _speed > RUN_SPEED_MIN:
+		_play("Running_A", clampf(_speed / ESCAPEE_SPEED, 0.6, 1.6))
+	else:
+		_play("Idle")
 
 
 func server_move(input: InputSource, delta: float) -> void:
@@ -167,7 +245,7 @@ func _hunter_shoot(aim_dir: Vector2) -> void:
 	var best_d := cfg.rifle_range
 	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
 		var e := node as EntityBase
-		if e == self or not rules.is_hittable(e.peer_id):
+		if e == self or not rules.is_hittable(e.peer_id) or not GameState.can_see(peer_id, e.peer_id):
 			continue
 		var to := e.global_position - global_position
 		to.y = 0.0
@@ -197,7 +275,11 @@ func _escapee_interact(delta: float) -> void:
 
 ## Máy người chơi (thợ săn): đang kéo cần ngắm thì hiện luồng xanh từ chân tới
 ## hết tầm, dừng ở tường. Một raycast mỗi frame, chỉ lúc đang ngắm.
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	if _anim:
+		_update_anim(delta)
+	if not (is_local and is_hunter()):
+		return
 	var dir := Vector2.ZERO
 	if aim_input is LocalInputSource and GameTypes.is_active(state):
 		dir = (aim_input as LocalInputSource).aiming_direction().rotated(-aim_input.get_aim_yaw())
@@ -305,29 +387,34 @@ func client_update(delta: float) -> void:
 	rotation.y = lerp_angle(rotation.y, _target_yaw, t)
 
 
-func _on_state_changed(new_state: GameTypes.PlayerState) -> void:
-	visible = new_state != GameTypes.PlayerState.ESCAPED and new_state != GameTypes.PlayerState.ELIMINATED
-	var lying := new_state == GameTypes.PlayerState.DOWNED or new_state == GameTypes.PlayerState.CARRIED
-	_body_mesh.rotation.x = -PI / 2.0 if lying else 0.0
-	_body_mesh.position.y = _radius() if lying else HEIGHT / 2.0
-	_material.albedo_color = OUT_COLOR if new_state == GameTypes.PlayerState.IMPRISONED else _base_color()
+func _on_state_changed(_new_state: GameTypes.PlayerState) -> void:
+	_refresh_visible()
+	_oneshot_left = 0.0 # đổi trạng thái (gục, bị nhốt...) thì bỏ anim đang phát dở
+
+
+func set_concealed(concealed: bool) -> void:
+	if concealed != _concealed:
+		_concealed = concealed
+		_refresh_visible()
+
+
+func _refresh_visible() -> void:
+	visible = not _concealed and state != GameTypes.PlayerState.ESCAPED and state != GameTypes.PlayerState.ELIMINATED
 
 
 func _on_hit(id: int, _attacker_id: int, _hp_left: int) -> void:
-	if id != peer_id:
-		return
-	_material.albedo_color = Color.WHITE
-	get_tree().create_timer(0.15).timeout.connect(func() -> void:
-		if is_instance_valid(self) and state != GameTypes.PlayerState.IMPRISONED:
-			_material.albedo_color = _base_color())
+	if id == peer_id and state == GameTypes.PlayerState.IDLE:
+		_play_once("Hit_A", 0.4)
 
 
 func _on_attacked(attacker_id: int) -> void:
-	if attacker_id != peer_id:
-		return
-	var tween := create_tween()
-	tween.tween_property(_body_mesh, "scale", Vector3(1.25, 1.0, 1.25), 0.08)
-	tween.tween_property(_body_mesh, "scale", Vector3.ONE, 0.12)
+	if attacker_id == peer_id:
+		_play_once("1H_Ranged_Shoot", 0.45)
+
+
+func _on_item_used(id: int, _type: GameTypes.ItemType, _target_id: int, _target_pos: Vector3) -> void:
+	if id == peer_id and state == GameTypes.PlayerState.IDLE:
+		_play_once("Throw", 0.5)
 
 
 ## Vẽ đạn của chính nhân vật này: viên đạn bay thẳng từ nòng tới điểm cuối
@@ -364,10 +451,6 @@ static func _shot_mesh(radius: float, color: Color) -> SphereMesh:
 	mesh.rings = 3
 	mesh.material = m
 	return mesh
-
-
-func _base_color() -> Color:
-	return HUNTER_COLOR if is_hunter() else ESCAPEE_COLOR
 
 
 func _radius() -> float:

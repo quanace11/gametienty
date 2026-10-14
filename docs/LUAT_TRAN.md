@@ -101,3 +101,12 @@ Bộ bài của thợ săn (0 xu): **Radar dấu chân** (hồi 15 giây) và **
 
 - Server ghi vị trí người trốn mỗi `footprint_interval` (0.5 giây), giữ `footprint_history` (6 giây). Bật radar thì server gửi các dấu chân đó **chỉ tới máy thợ săn** (`EventBus.footprints_revealed`), hiện chấm đỏ mờ dần trên minimap trong `radar_time` (4 giây). Máy khác không nhận gì.
 - Dịch chuyển: thợ săn chạm minimap để chọn điểm (`GameState.set_aim_point`, server kẹp trong bản đồ), rồi bấm thẻ. Chưa chọn thì tới cạnh rương đang mở nhiều nhất. Server tìm chỗ đứng được gần điểm đó (tránh tường, tránh nhà tù), thợ săn đứng yên tụ lực `teleport_charge` (1.75 giây) rồi mới tới. Lúc tụ lực có cột tím ở cả chỗ đứng và chỗ tới, người trốn được báo. Bị choáng thì hủy; đang kéo người thì không dùng được.
+
+## 10. Bụi cây
+
+- Bản đồ khai báo bụi cây qua `MapBase.get_bushes()`: `Vector3(x, z, bán kính)`.
+- Mỗi frame server ghi mỗi người đang đứng trong bụi nào (`GameState.bush_at()`).
+- `GameState.can_see(người nhìn, người bị nhìn)`: người đứng trong bụi thì **phe kia** không thấy, trừ khi người nhìn đứng cùng bụi đó. Đồng đội luôn thấy nhau.
+- Server gửi gói vị trí riêng cho từng máy (`Match._send_snapshot`): người máy đó không được thấy thì gửi `null`, nên không lộ vị trí. Máy nhận gọi `EntityBase.set_concealed(true)` để ẩn hình. Máy chủ phòng / offline tự ẩn theo `can_see` mỗi frame.
+- Bot, súng tự nhắm của thợ săn, súng lục và lựu đạn tự nhắm cũng dùng `can_see`, nên không nhắm được người đang nấp. Bắn mù vào bụi vẫn trúng nếu đạn đi qua người.
+- Radar dấu chân của thợ săn vẫn thấy dấu chân người nấp (đó là tác dụng của radar).

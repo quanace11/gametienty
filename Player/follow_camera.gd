@@ -3,7 +3,7 @@ extends Camera3D
 ## Không xoay theo nhân vật (top_level). Muốn camera xoay thì trả góc qua
 ## LocalInputSource.get_aim_yaw() để server tính hướng đi cho đúng.
 
-const OFFSET := Vector3(0, 11, 7)
+const OFFSET := Vector3(0, 7.5, 6.5) # gần hơn để thấy rõ nhân vật chibi
 const FOLLOW_SPEED := 8.0
 
 

@@ -12,7 +12,7 @@ func plan(user: EntityBase) -> Dictionary:
 	for node in user.get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
 		var e := node as EntityBase
 		var d := user.flat_position().distance_to(e.flat_position())
-		if e.is_hunter() and d <= best_d:
+		if e.is_hunter() and d <= best_d and GameState.can_see(user.peer_id, e.peer_id): # nấp trong bụi thì không tự nhắm được
 			best_d = d
 			best = e
 	if best == null:

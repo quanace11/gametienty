@@ -81,6 +81,12 @@ func client_update(_delta: float) -> void:
 	pass
 
 
+## Mọi máy: máy này không được thấy nhân vật này (đứng trong bụi cây phe kia).
+## Lớp con ẩn hình; Match gọi khi gói vị trí của nhân vật này không được gửi tới.
+func set_concealed(_concealed: bool) -> void:
+	pass
+
+
 ## Gọi trên mọi máy khi GameState đổi trạng thái nhân vật này.
 func _on_state_changed(_new_state: GameTypes.PlayerState) -> void:
 	pass

@@ -81,6 +81,9 @@ func _physics_process(delta: float) -> void:
 			entities[id].server_move(src, delta)
 			_server_use_items(entities[id])
 		GameState.server_after_move(entities.values())
+		if entities.has(_my_id): # chủ phòng / offline: tự ẩn người mình không được thấy
+			for id: int in entities:
+				entities[id].set_concealed(not GameState.can_see(_my_id, id))
 		GameState.flush(delta)
 		_send_snapshot(delta)
 	else:
@@ -103,7 +106,15 @@ func _send_snapshot(delta: float) -> void:
 	var snap := {}
 	for id: int in entities:
 		snap[id] = entities[id].get_snapshot()
-	_snapshot.rpc(snap)
+	# Mỗi máy một gói: người máy đó không được thấy (trong bụi cây) gửi null, không lộ vị trí.
+	for peer in multiplayer.get_peers():
+		var mine := snap
+		for id: int in entities:
+			if not GameState.can_see(peer, id):
+				if mine == snap:
+					mine = snap.duplicate()
+				mine[id] = null
+		_snapshot.rpc_id(peer, mine)
 
 
 @rpc("any_peer", "unreliable_ordered")
@@ -122,4 +133,6 @@ func _submit_input(move: Vector2, buttons: int, aim_yaw: float, aim: Vector2) ->
 func _snapshot(snap: Dictionary) -> void:
 	for id: int in snap:
 		if entities.has(id):
-			entities[id].apply_snapshot(snap[id])
+			entities[id].set_concealed(snap[id] == null)
+			if snap[id] != null:
+				entities[id].apply_snapshot(snap[id])

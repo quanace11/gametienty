@@ -18,6 +18,8 @@ var _label: Label3D
 var _alert: MeshInstance3D
 var _alert_left := 0.0
 
+static var _band_mesh: BoxMesh # đai vàng dùng chung cho mọi rương
+
 
 func _ready() -> void:
 	super()
@@ -40,15 +42,38 @@ func _ready() -> void:
 	body.add_child(body_shape)
 	add_child(body)
 
+	# Rương chibi: thân gỗ (đổi màu theo tiến độ), nắp tròn, đai vàng.
 	_material = StandardMaterial3D.new()
 	_material.albedo_color = Color(0.6, 0.38, 0.15)
-	var mesh := BoxMesh.new()
-	mesh.size = SIZE
-	mesh.material = _material
+	var base := BoxMesh.new()
+	base.size = Vector3(SIZE.x, SIZE.y * 0.6, SIZE.z)
+	base.material = _material
 	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
-	mi.position.y = SIZE.y / 2
+	mi.mesh = base
+	mi.position.y = SIZE.y * 0.3
 	add_child(mi)
+	var lid := CylinderMesh.new()
+	lid.top_radius = SIZE.z / 2
+	lid.bottom_radius = SIZE.z / 2
+	lid.height = SIZE.x
+	lid.radial_segments = 10
+	lid.material = _material
+	var lid_mi := MeshInstance3D.new()
+	lid_mi.mesh = lid
+	lid_mi.rotation.z = PI / 2
+	lid_mi.position.y = SIZE.y * 0.6
+	add_child(lid_mi)
+	if _band_mesh == null:
+		_band_mesh = BoxMesh.new()
+		_band_mesh.size = Vector3(0.14, SIZE.y * 0.62 + SIZE.z / 2, SIZE.z + 0.04)
+		var gold := StandardMaterial3D.new()
+		gold.albedo_color = Color(1.0, 0.8, 0.25)
+		_band_mesh.material = gold
+	for x: float in [-SIZE.x * 0.3, SIZE.x * 0.3]:
+		var b := MeshInstance3D.new()
+		b.mesh = _band_mesh
+		b.position = Vector3(x, _band_mesh.size.y / 2, 0)
+		add_child(b)
 
 	_label = Label3D.new()
 	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED

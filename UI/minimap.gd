@@ -13,9 +13,11 @@ const ALLY := Color(0.35, 0.65, 1.0)
 const ALLY_OUT := Color(0.5, 0.5, 0.5)
 const PRISON := Color(0.6, 0.45, 0.9)
 const STEP := Color(1, 0.3, 0.3)
+const BUSH := Color(0.3, 0.68, 0.3, 0.7)
 
 var _bounds := Rect2()
 var _walls: Array[Rect2] = []
+var _bushes: Array[Vector3] = []
 var _scale := 1.0
 var _redraw_left := 0.0
 var _footprints := PackedVector3Array() # x, z: vị trí; y: tuổi (giây) lúc nhận
@@ -44,6 +46,7 @@ func _process(delta: float) -> void:
 			return
 		_bounds = map.get_bounds()
 		_walls = map.get_walls()
+		_bushes = map.get_bushes()
 		_scale = WIDTH / _bounds.size.x
 		custom_minimum_size = _bounds.size * _scale
 		size = custom_minimum_size
@@ -58,6 +61,8 @@ func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), BG)
 	for w in _walls:
 		draw_rect(Rect2(_to_map(w.position), w.size * _scale), WALL)
+	for b in _bushes:
+		draw_circle(_to_map(Vector2(b.x, b.y)), b.z * _scale, BUSH)
 	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_PRISONS):
 		draw_rect(Rect2(_at(node) - Vector2(6, 6), Vector2(12, 12)), PRISON, false, 2.0)
 	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_SAFES):

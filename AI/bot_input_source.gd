@@ -235,8 +235,10 @@ func _near_coins(me: Vector2) -> Array:
 		func(c: Node3D) -> Vector2: return _flat(c.global_position))
 
 
+## Nhân vật bot này thấy được (người phe kia nấp trong bụi cây thì không thấy).
 func _entities() -> Array:
-	return entity.get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES)
+	return entity.get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES).filter(
+		func(e: EntityBase) -> bool: return GameState.can_see(entity.peer_id, e.peer_id))
 
 
 func _escapees_where(filter: Callable) -> Array:

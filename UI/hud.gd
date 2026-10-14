@@ -16,6 +16,8 @@ func _ready() -> void:
 	_label = Label.new()
 	_label.position = Vector2(16, 12)
 	_label.add_theme_font_size_override("font_size", 20)
+	_label.add_theme_constant_override("outline_size", 6) # viền đen cho dễ đọc trên nền cỏ sáng
+	_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.8))
 	add_child(_label)
 	add_child(QteRing.new())
 	add_child(TouchControls.new())
