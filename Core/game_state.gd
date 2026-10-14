@@ -13,6 +13,7 @@ extends Node
 
 const TIME_SYNC_INTERVAL := 0.5
 const INPUT_SEND_HALF_INTERVAL := 1.0 / 60.0 ## client gửi input 30 lần/giây: trung bình trễ thêm nửa nhịp
+const HIT_PADDING := 0.3 ## mét, cộng vào bán kính đạn cho bằng thân người
 const PROGRESS_SYNC_INTERVAL := 0.1 ## tiến độ cứu, máu trong tù chỉ gửi 10 lần/giây
 ## Các trường đổi liên tục; chỉ đổi những trường này thì gửi thưa hơn.
 const _CONTINUOUS_KEYS := ["rescue_progress", "prison_time_left", "invulnerable_left", "attack_cooldown_left", "stunned_left", "chest_work",
@@ -139,6 +140,37 @@ func server_attack(attacker_id: int, target_ids: Array) -> bool:
 	return _can_mutate() and rules.attack(attacker_id, target_ids)
 
 
+## Thợ săn bắn cối về phía `target` (module Player tự chọn điểm ngắm).
+## Tầm bắn do luật kẹp. Trả về id viên đạn, 0 nếu chưa bắn được (hồi chiêu...).
+func server_fire_mortar(hunter: EntityBase, target: Vector3) -> int:
+	if not _can_mutate():
+		return 0
+	return rules.fire_mortar(hunter.peer_id, hunter.global_position + Vector3.UP * 1.2, target)
+
+
+## Người trốn bắn súng lục (Items gọi sau khi thẻ đã trả tiền).
+func server_shoot_bullet(shooter: EntityBase, target: Vector3) -> int:
+	if not _can_mutate():
+		return 0
+	return rules.shoot_bullet(shooter.peer_id, shooter.global_position + Vector3.UP * 1.1, target)
+
+
+## Match gọi mỗi physics frame trên server sau khi mọi nhân vật đã di chuyển:
+## đạn tới nơi thì xét ai đứng trong vùng trúng (theo mặt sàn).
+func server_land_shots(entities: Array) -> void:
+	if not _can_mutate():
+		return
+	for shot_id: int in rules.due_shots():
+		var s: Dictionary = rules.shots[shot_id]
+		var at := Vector2(s["to"].x, s["to"].z)
+		var r := rules.shot_radius(s["kind"]) + HIT_PADDING
+		var hits := []
+		for e: EntityBase in entities:
+			if e.peer_id != s["owner"] and e.flat_position().distance_squared_to(at) <= r * r:
+				hits.append(e.peer_id)
+		rules.land_shot(shot_id, hits)
+
+
 func server_pick_up(hunter_id: int, target_id: int) -> bool:
 	return _can_mutate() and rules.pick_up(hunter_id, target_id)
 
@@ -238,11 +270,12 @@ func _is_significant(old: Dictionary, new: Dictionary) -> bool:
 	return new["rescue_progress"] != old["rescue_progress"] and (new["rescue_progress"] == 0.0 or new["rescue_progress"] >= 1.0)
 
 
-## Rương xong, về 0, cổng, tiền: gửi ngay; tiến độ rương bình thường gửi 10 lần/giây.
+## Rương xong, về 0, cổng, tiền, vật đặt, đạn: gửi ngay; tiến độ rương bình thường gửi 10 lần/giây.
 func _world_significant(old: Dictionary, new: Dictionary) -> bool:
 	if old.is_empty() or old["gate_open"] != new["gate_open"] or old["gate_opening"] != new["gate_opening"]:
 		return true
-	if old["coins_taken"].size() != new["coins_taken"].size() or old["placed"].size() != new["placed"].size():
+	if old["coins_taken"].size() != new["coins_taken"].size() or old["placed"].size() != new["placed"].size() \
+			or old["shots"].keys() != new["shots"].keys():
 		return true
 	for safe_id: int in new["safes"]:
 		var a: float = old["safes"].get(safe_id, 0.0)

@@ -6,12 +6,13 @@ extends InputSource
 ## Bot chỉ chọn hướng đi và nút bấm; đúng/sai do GameState quyết như người thật.
 ##
 ## Thợ săn: kéo người thì mang về nhà tù gần nhất; thấy người gục thì tới túm;
-## còn lại đuổi người gần nhất và đánh khi đủ gần.
+## còn lại đuổi người gần nhất, vào tầm thì bắn cối (nhân vật tự ngắm đón đầu).
 ## Người trốn: bị kéo thì chịu (bị khóa); cổng mở thì chạy ra cổng; đồng đội
 ## gục mà thợ săn ở xa thì tới đỡ; còn túi máu và có người bị kéo / bị nhốt
 ## thì tới gần để ném; tiền gần mà thợ săn xa thì nhặt; còn lại đi cạy rương
 ## và căn vòng (không phải lúc nào cũng trúng). Thợ săn lại gần thì né. Ai cần
-## cứu lọt vào tầm ném thì ném luôn.
+## cứu lọt vào tầm ném thì ném luôn. Thợ săn đang kéo người hoặc đuổi sát
+## thì bắn súng lục.
 
 const FLEE_DIST := 3.6 # mét
 const SAFE_TO_RESCUE_DIST := 6.0 # thợ săn xa hơn chừng này mới đi cứu
@@ -21,6 +22,7 @@ const STUCK_CHECK := 0.5
 const DETOUR_TIME := 0.8
 const THINK_INTERVAL := 0.1 # bot nghĩ 10 lần/giây (đỡ tốn CPU server), giữa hai lần giữ nguyên nút
 const COIN_GRAB_DIST := 5.0 # tiền trong bán kính này thì ghé nhặt
+const SHOOT_DIST := 8.0 # thợ săn bắn cối khi người trốn gần hơn chừng này
 ## Tỉ lệ bot căn vòng: trúng vùng đậm / vùng mờ, còn lại trượt.
 const QTE_PERFECT_CHANCE := 0.65
 const QTE_GOOD_CHANCE := 0.25
@@ -89,6 +91,10 @@ func _think(rules: MatchRules, rec: PlayerRecord, delta: float) -> void:
 				return GameTypes.is_active(e.state))
 			target = _nearest(victims.map(func(e: EntityBase) -> Vector2: return e.flat_position()), me)
 			act = not victims.is_empty()
+			var runners := _escapees_where(func(e: EntityBase) -> bool: return rules.is_hittable(e.peer_id))
+			var prey := _nearest(runners.map(func(e: EntityBase) -> Vector2: return e.flat_position()), me + Vector2(1000, 0))
+			if rules.can_attack(entity.peer_id) and me.distance_to(prey) <= SHOOT_DIST:
+				_interact = true # bắn cối; người gục trong tầm túm thì nhân vật ưu tiên túm
 	else:
 		var hunter_dist := _hunter_distance(me)
 		var downed := _escapees_in(GameTypes.PlayerState.DOWNED).filter(func(e: EntityBase) -> bool: return e != entity)
@@ -142,7 +148,8 @@ func _think(rules: MatchRules, rec: PlayerRecord, delta: float) -> void:
 
 
 ## Chọn thẻ để bấm: túi máu khi có người cần cứu trong tầm; lựu đạn khi thợ
-## săn đang kéo người hoặc sát mình; ván trượt khi bị đuổi sát.
+## săn đang kéo người hoặc sát mình; súng khi thợ săn đang kéo người hoặc đuổi
+## gần; ván trượt khi bị đuổi sát.
 func _use_items(rules: MatchRules, rec: PlayerRecord, ally_needs_medkit: bool, hunter_dist: float) -> void:
 	var hunter := _hunter_record(rules)
 	var wants := []
@@ -150,6 +157,10 @@ func _use_items(rules: MatchRules, rec: PlayerRecord, ally_needs_medkit: bool, h
 		wants.append(GameTypes.ItemType.MEDKIT)
 	if hunter and ((hunter.carrying_id != 0 and hunter_dist < 7.0) or hunter_dist < FLEE_DIST * 0.8):
 		wants.append(GameTypes.ItemType.STUN_GRENADE)
+	var hunter_up := hunter != null and hunter.stunned_left <= 0.0 and hunter.hp > 0
+	if hunter_up and hunter_dist < rules.config.bullet_range * 0.9 \
+			and (hunter.carrying_id != 0 or hunter_dist < FLEE_DIST * 1.5):
+		wants.append(GameTypes.ItemType.PISTOL)
 	if hunter_dist < FLEE_DIST:
 		wants.append(GameTypes.ItemType.SPEED_BOOST)
 	if rec.hp < rec.max_hp and hunter_dist > SAFE_TO_RESCUE_DIST:

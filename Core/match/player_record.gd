@@ -30,13 +30,14 @@ var heal_seq := 0 ## tăng mỗi lần được dùng túi máu, để phân bi�
 var invulnerable_left := 0.0
 var attack_cooldown_left := 0.0
 var stunned_left := 0.0
-var attack_seq := 0 ## tăng mỗi lần thợ săn vung đòn, để client phát anim
+var attack_seq := 0 ## tăng mỗi lần thợ săn vung đòn / bắn cối, để client phát anim
 var last_attacker_id := 0
 var last_rescuer_id := 0
 var coins := 0 ## tiền đang có, dùng để mua/kích hoạt thẻ
 var coins_earned := 0 ## tổng tiền nhặt được cả trận (tính điểm)
 var chest_work := 0.0 ## tổng phần rương mình đã mở (1.0 = một rương)
 var rescues := 0 ## số lần cứu đồng đội
+var damage_dealt := 0 ## người trốn: số máu đã bắn mất của thợ săn
 var qte_perfect := 0 ## số lần căn trúng vùng sáng đậm
 var qte_chest := -1 ## vòng căn đang hiện cho rương nào (-1 = không có)
 var qte_started := 0.0 ## MatchRules.elapsed lúc vòng căn hiện ra
@@ -55,7 +56,7 @@ const _SYNCED := [
 	"role", "state", "hp", "max_hp", "imprison_count", "carrier_id", "carrying_id",
 	"prison_id", "prison_time_left", "rescue_progress", "heal_seq", "invulnerable_left",
 	"attack_cooldown_left", "stunned_left", "attack_seq", "last_attacker_id", "last_rescuer_id",
-	"coins", "coins_earned", "chest_work", "rescues", "qte_perfect",
+	"coins", "coins_earned", "chest_work", "rescues", "damage_dealt", "qte_perfect",
 	"qte_chest", "qte_started", "qte_zone", "qte_seq", "qte_result", "qte_result_chest",
 	"deck", "item_cooldowns", "item_seq", "item_last_type", "item_target_id", "item_target_pos",
 	"speed_boost_left", "speed_boost_factor",
