@@ -4,6 +4,13 @@ extends RefCounted
 
 enum Role { HUNTER, ESCAPEE }
 
+## Bảng chuyển trạng thái của người trốn (chỉ MatchRules được đổi):
+##   IDLE/RESCUING --đánh hết máu--> DOWNED --nhấc lên--> CARRIED --vào tù--> IMPRISONED
+##   CARRIED --vùng thoát / thợ săn bị choáng--> IDLE        CARRIED --bị thả--> DOWNED
+##   DOWNED --đồng đội cứu--> IDLE                           IMPRISONED --đồng đội phá khóa--> IDLE
+##   IMPRISONED --hết giờ / bị nhốt quá số lần--> ELIMINATED
+##   IDLE/RESCUING --vào cổng đã mở--> ESCAPED
+## Thợ săn luôn IDLE. RUNNING để dành cho anim, luật không dùng.
 enum PlayerState {
 	IDLE,
 	RUNNING,
@@ -12,6 +19,7 @@ enum PlayerState {
 	IMPRISONED, # trong nhà tù
 	RESCUING, # đang cứu đồng đội
 	ESCAPED, # đã thoát qua cổng
+	ELIMINATED, # bị loại hẳn
 }
 
 enum MatchState { LOBBY, COUNTDOWN, PLAYING, ENDED }
@@ -31,9 +39,14 @@ static func is_bot_id(id: int) -> bool:
 	return id < 0
 
 
-## Người đã bị nhốt hoặc đã thoát thì không còn tham gia di chuyển.
+## Không còn chạy ngoài bản đồ (bị nhốt, đã thoát, bị loại). Dùng để xét hết trận.
 static func is_out(state: PlayerState) -> bool:
-	return state == PlayerState.IMPRISONED or state == PlayerState.ESCAPED
+	return state == PlayerState.IMPRISONED or state == PlayerState.ESCAPED or state == PlayerState.ELIMINATED
+
+
+## Đứng trên hai chân, tự hành động được (mở két, cứu người, bị đánh).
+static func is_active(state: PlayerState) -> bool:
+	return state == PlayerState.IDLE or state == PlayerState.RUNNING or state == PlayerState.RESCUING
 
 
 static func role_name(role: Role) -> String:
