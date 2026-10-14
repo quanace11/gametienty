@@ -4,8 +4,8 @@ extends RefCounted
 ## Nhân vật chỉ đọc InputSource, không biết ai đang điều khiển mình.
 
 ## Các nút hành động, theo thứ tự bit khi gửi qua mạng.
-const ACTIONS := [&"interact", &"dash", &"skill_1", &"skill_2", &"skill_3", &"skill_4"]
-const SKILL_ACTIONS := [&"skill_1", &"skill_2", &"skill_3", &"skill_4"] ## nút ô thẻ 1..4 trong bộ bài
+const ACTIONS := [&"interact", &"dash", &"skill_1", &"skill_2", &"skill_3", &"skill_4", &"skill_5"]
+const SKILL_ACTIONS := [&"skill_1", &"skill_2", &"skill_3", &"skill_4", &"skill_5"] ## nút ô thẻ 1..5 trong bộ bài
 
 ## Nhân vật đang được điều khiển (Match gán khi tạo).
 var entity: EntityBase

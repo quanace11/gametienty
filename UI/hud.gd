@@ -68,7 +68,7 @@ func _my_status(me: PlayerRecord) -> String:
 			return "Bị choáng %.1f giây" % me.stunned_left
 		if me.carrying_id != 0:
 			return "Đang kéo người: mang tới nhà tù"
-		return "E / Space: đánh, hoặc túm người đang gục"
+		return "Máu: %d/%d   E / Space: bắn cối, hoặc túm người đang gục" % [me.hp, me.max_hp]
 	match me.state:
 		GameTypes.PlayerState.DOWNED:
 			return "Bạn bị gục! Chờ đồng đội đỡ (%d%%) hoặc ném túi máu" % roundi(me.rescue_progress * 100)

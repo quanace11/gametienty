@@ -1,11 +1,11 @@
 class_name WorldRecord
 extends RefCounted
-## Sinh sự kiện EventBus khi trạng thái thế giới (rương, cổng, tiền trên sàn)
+## Sinh sự kiện EventBus khi trạng thái thế giới (rương, cổng, tiền trên sàn, vật đặt, đạn bay)
 ## đổi từ `old` sang `new` (hai dict từ MatchRules.world_dict()). Giống
 ## PlayerRecord.events_between: hàm thuần, mọi máy ra cùng sự kiện.
 
 
-## Gói gửi qua mạng: chỉ phần đổi (rương đổi, cọc tiền mới bị nhặt, cổng).
+## Gói gửi qua mạng: chỉ phần đổi (rương đổi, cọc tiền mới bị nhặt, cổng, vật đặt, đạn).
 static func diff(old: Dictionary, new: Dictionary) -> Dictionary:
 	var out := {}
 	if old.is_empty():
@@ -27,19 +27,25 @@ static func diff(old: Dictionary, new: Dictionary) -> Dictionary:
 			taken[coin_id] = new["coins_taken"][coin_id]
 	if not taken.is_empty():
 		out["coins_taken"] = taken
-	var added := {}
-	for obj_id: int in new["placed"]:
-		if not old["placed"].has(obj_id):
-			added[obj_id] = new["placed"][obj_id]
-	var removed := []
-	for obj_id: int in old["placed"]:
-		if not new["placed"].has(obj_id):
-			removed.append(obj_id)
-	if not added.is_empty():
-		out["placed_add"] = added
-	if not removed.is_empty():
-		out["placed_remove"] = removed
+	_diff_keys(old["placed"], new["placed"], out, "placed_add", "placed_remove")
+	_diff_keys(old["shots"], new["shots"], out, "shot_add", "shot_remove")
 	return out
+
+
+## Phần tử mới gửi nguyên thông tin; phần tử đã mất chỉ gửi id.
+static func _diff_keys(old: Dictionary, new: Dictionary, out: Dictionary, add_key: String, remove_key: String) -> void:
+	var added := {}
+	for k: int in new:
+		if not old.has(k):
+			added[k] = new[k]
+	var removed := []
+	for k: int in old:
+		if not new.has(k):
+			removed.append(k)
+	if not added.is_empty():
+		out[add_key] = added
+	if not removed.is_empty():
+		out[remove_key] = removed
 
 
 ## Dựng bản đầy đủ mới từ bản cũ + gói diff(). Không đổi `base`.
@@ -56,6 +62,10 @@ static func apply_diff(base: Dictionary, changes: Dictionary) -> Dictionary:
 		d["placed"][obj_id] = changes["placed_add"][obj_id]
 	for obj_id: int in changes.get("placed_remove", []):
 		d["placed"].erase(obj_id)
+	for shot_id: int in changes.get("shot_add", {}):
+		d["shots"][shot_id] = changes["shot_add"][shot_id]
+	for shot_id: int in changes.get("shot_remove", []):
+		d["shots"].erase(shot_id)
 	return d
 
 
@@ -89,4 +99,12 @@ static func events_between(old: Dictionary, new: Dictionary, required: int) -> A
 	for obj_id: int in old["placed"]:
 		if not new["placed"].has(obj_id):
 			out.append({"signal": &"object_removed", "args": [obj_id]})
+	for shot_id: int in new["shots"]:
+		if not old["shots"].has(shot_id):
+			var s: Dictionary = new["shots"][shot_id]
+			out.append({"signal": &"shot_fired", "args": [shot_id, s["kind"], s["owner"], s["from"], s["to"], s["lands"] - s["fired"]]})
+	for shot_id: int in old["shots"]:
+		if not new["shots"].has(shot_id):
+			var s: Dictionary = old["shots"][shot_id]
+			out.append({"signal": &"shot_landed", "args": [shot_id, s["kind"], s["to"]]})
 	return out

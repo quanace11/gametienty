@@ -30,7 +30,8 @@ Tất cả trả về `true` nếu lệnh hợp lệ và đã thực hiện. G�
 
 | Lệnh | Ai gọi | Khi nào |
 |---|---|---|
-| `GameState.server_attack(hunter_id, target_ids)` | Player | Thợ săn bấm đánh. `target_ids` là người trong hitbox (module tự tính). Core lo hồi chiêu, bất tử sau khi trúng, trừ máu |
+| `GameState.server_fire_mortar(hunter, target)` | Player | Thợ săn bắn cối về điểm `target` (module tự ngắm). Core kẹp tầm, lo hồi chiêu, đạn rơi thì trừ máu người trong vùng nổ. Xem [LUAT_TRAN.md](LUAT_TRAN.md#8-bắn-cối-của-thợ-săn-súng-của-người-trốn) |
+| `GameState.server_attack(hunter_id, target_ids)` | (dành cho cận chiến) | Đòn trúng ngay `target_ids`. Core lo hồi chiêu, bất tử sau khi trúng, trừ máu |
 | `GameState.server_pick_up(hunter_id, target_id)` | Player | Thợ săn bấm gần người đang gục: túm lấy để kéo |
 | `GameState.server_drop(hunter_id)` | Player | Thợ săn thả người đang kéo |
 | `GameState.server_imprison(hunter_id, prison_id)` | Objects (nhà tù) | Thợ săn đang kéo người bước vào nhà tù |

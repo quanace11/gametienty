@@ -15,15 +15,16 @@ static func all() -> Dictionary:
 		ItemData.new(T.JUMP_PAD, "Đệm lò xo", 6, 8.0, "res://Items/effects/jump_pad.gd"),
 		ItemData.new(T.TRAP, "Bẫy kẹp", 6, 10.0, "res://Items/effects/trap.gd"),
 		ItemData.new(T.CRATE, "Hộp gỗ", 5, 10.0, "res://Items/effects/crate.gd"),
+		ItemData.new(T.PISTOL, "Súng lục", 4, 1.5, "res://Items/effects/pistol.gd"),
 	]:
 		items[it.type] = it
 	return items
 
 
-## Bộ bài mặc định khi người chơi chưa chọn (thứ tự = ô 1, 2, 3, 4).
+## Bộ bài mặc định khi người chơi chưa chọn (thứ tự = ô 1, 2, 3, 4, 5).
 static func default_deck(role: GameTypes.Role) -> Array:
 	if role == GameTypes.Role.ESCAPEE:
-		return [T.MEDKIT, T.STUN_GRENADE, T.SPEED_BOOST, T.JUMP_PAD]
+		return [T.MEDKIT, T.STUN_GRENADE, T.PISTOL, T.SPEED_BOOST, T.JUMP_PAD]
 	return [] # thợ săn: dịch chuyển, radar (làm sau)
 
 

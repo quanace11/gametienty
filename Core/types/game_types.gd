@@ -10,7 +10,7 @@ enum Role { HUNTER, ESCAPEE }
 ##   CARRIED --túi máu / thợ săn bị choáng--> IDLE           IMPRISONED --túi máu--> IDLE
 ##   IMPRISONED --bị đốt hết giờ (prison_time)--> ELIMINATED
 ##   IDLE/RESCUING --vào cổng đã mở--> ESCAPED
-## Thợ săn luôn IDLE. RUNNING để dành cho anim, luật không dùng.
+## Thợ săn luôn IDLE; hết máu (bị bắn) thì bị choáng hunter_knockout_stun giây rồi hồi đầy máu. RUNNING để dành cho anim, luật không dùng.
 enum PlayerState {
 	IDLE,
 	RUNNING,
@@ -36,6 +36,11 @@ enum QteResult { NONE, PERFECT, GOOD, FAIL }
 
 ## Thẻ đạo cụ trong bộ bài. Cũng dùng làm loại vật thể đặt xuống đất (TRAP, JUMP_PAD, CRATE).
 enum ItemType { MEDKIT, STUN_GRENADE, TRAP, JUMP_PAD, CRATE, SPEED_BOOST, PISTOL, DISGUISE }
+
+## Loại đạn bay. Server tính đường bay và điểm rơi, client chỉ vẽ lại.
+## MORTAR: đạn cối của thợ săn, rơi theo đường cong, nổ trúng người trốn trong vùng.
+## BULLET: đạn súng lục của người trốn, bay thẳng, trúng thì thợ săn mất máu.
+enum ShotKind { MORTAR, BULLET }
 
 ## Group mà các module dùng để tìm nhau mà không cần biết class cụ thể.
 const GROUP_ENTITIES := &"entities"

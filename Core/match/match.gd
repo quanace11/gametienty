@@ -80,6 +80,7 @@ func _physics_process(delta: float) -> void:
 			entities[id].server_read_input(src)
 			entities[id].server_move(src, delta)
 			_server_use_items(entities[id])
+		GameState.server_land_shots(entities.values())
 		GameState.flush(delta)
 		_send_snapshot(delta)
 	else:

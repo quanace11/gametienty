@@ -7,4 +7,6 @@ Thẻ đạo cụ trong bộ bài. Luật chung (giá, hồi chiêu, khi nào d�
 - `placed/*.gd`: vật thể đặt xuống đất (bẫy kẹp, đệm lò xo, hộp gỗ), phần luật chạy trên server trong chính node
 - `item_visuals.gd`: hiệu ứng ném trên mọi máy, dựng / xóa vật thể theo `EventBus`
 
-Tiếp theo: súng của người trốn (cần khung bắn đạn ở Core), hóa trang, màn chọn bộ bài, đạn bay thật cho túi máu (có thể ném trượt), pool hiệu ứng.
+Súng lục (`effects/pistol.gd`) dùng khung đạn bay của Core (`GameState.server_shoot_bullet`), đường bay do nhân vật vẽ theo `shot_fired`.
+
+Tiếp theo: hóa trang, màn chọn bộ bài, đạn bay thật cho túi máu (có thể ném trượt), pool hiệu ứng.

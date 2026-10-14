@@ -25,10 +25,20 @@ extends Resource
 @export var chest_coin_value := 5
 @export var floor_coin_value := 2
 
-@export_group("Đánh")
+@export_group("Đánh và bắn")
 @export var max_hp := 2 # số đòn để người trốn ngã
-@export var attack_cooldown := 1.2 # giây giữa hai đòn của thợ săn
+@export var attack_cooldown := 1.2 # giây giữa hai phát cối của thợ săn
 @export var hit_invulnerable_time := 1.0 # sau khi trúng đòn/được cứu, không bị đánh tiếp
+@export var hunter_max_hp := 6 # máu thợ săn (số viên súng lục)
+@export var hunter_knockout_stun := 3.0 # thợ săn hết máu: choáng chừng này giây (buông người đang kéo) rồi hồi đầy
+@export var mortar_range := 10.0 # mét, tầm cối xa nhất
+@export var mortar_speed := 14.0 # m/s theo mặt sàn; bay = mortar_min_flight + khoảng cách / tốc độ
+@export var mortar_min_flight := 0.3
+@export var mortar_radius := 1.3 # mét, bán kính nổ
+@export var bullet_range := 10.0 # mét, tầm súng lục
+@export var bullet_speed := 30.0
+@export var bullet_radius := 0.8
+@export var bullet_damage := 1
 
 @export_group("Kéo và nhà tù")
 @export var prison_time := 45.0 # gục trong tù chừng này giây mà không được cứu thì bị đốt chết
@@ -40,7 +50,7 @@ extends Resource
 
 @export_group("Thẻ đạo cụ")
 @export var start_coins := 12 # tiền lúc vào trận, đủ dùng một thẻ rẻ
-@export var deck_size := 4 # số ô thẻ (nút skill_1..skill_4)
+@export var deck_size := 5 # số ô thẻ (nút skill_1..skill_5)
 @export var medkit_heal := 1 # máu hồi; người đang gục/bị kéo/bị nhốt thì đứng dậy ngay
 @export var medkit_range := 8.0 # mét, tầm ném (Items kiểm tra khoảng cách)
 
@@ -55,4 +65,5 @@ extends Resource
 @export var score_rescue := 30 # mỗi lần cứu đồng đội
 @export var score_perfect_qte := 5
 @export var score_per_coin := 1 # theo tổng tiền nhặt được
+@export var score_damage := 10 # mỗi máu bắn mất của thợ săn
 @export var score_hunter_catch := 100 # thợ săn: mỗi người bắt được
