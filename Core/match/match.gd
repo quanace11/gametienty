@@ -71,7 +71,7 @@ func _physics_process(delta: float) -> void:
 		_input_timer -= delta
 		if _input_timer <= 0.0:
 			_input_timer = INPUT_INTERVAL
-			_submit_input.rpc_id(1, _local_input.get_move(), _local_input.get_buttons(), _local_input.get_aim_yaw())
+			_submit_input.rpc_id(1, _local_input.get_move(), _local_input.get_buttons(), _local_input.get_aim_yaw(), _local_input.get_aim())
 
 	if multiplayer.is_server():
 		for id: int in entities:
@@ -107,7 +107,7 @@ func _send_snapshot(delta: float) -> void:
 
 
 @rpc("any_peer", "unreliable_ordered")
-func _submit_input(move: Vector2, buttons: int, aim_yaw: float) -> void:
+func _submit_input(move: Vector2, buttons: int, aim_yaw: float, aim: Vector2) -> void:
 	if not multiplayer.is_server():
 		return
 	var src = input_sources.get(multiplayer.get_remote_sender_id())
@@ -115,6 +115,7 @@ func _submit_input(move: Vector2, buttons: int, aim_yaw: float) -> void:
 		src.move = move.limit_length(1.0) # không tin client
 		src.buttons = buttons
 		src.aim_yaw = wrapf(aim_yaw, -PI, PI)
+		src.aim = aim.limit_length(1.0) if aim.is_finite() else Vector2.ZERO
 
 
 @rpc("authority", "unreliable_ordered")

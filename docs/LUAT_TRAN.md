@@ -55,7 +55,7 @@ Mỗi người có bộ bài 5 ô (`MatchConfig.deck_size`), bấm nút `skill_1
 
 | Thẻ | Giá | Hồi | Tác dụng |
 |---|---|---|---|
-| Túi cứu thương | 10 | 6 s | Ném cho đồng đội đang bị kéo / bị nhốt / gục gần nhất trong 8 m (đứng dậy ngay), không có ai thì tự hồi máu |
+| Túi cứu thương | 10 | 6 s | Ném về đồng đội đang bị kéo / bị nhốt / gục gần nhất trong 8 m, không có ai thì ném dưới chân nếu mất máu. Rơi thành vùng tròn xanh bán kính 2 m: người được nhắm và mọi người trốn trong vùng (cả người ném) được cứu / hồi máu |
 | Lựu đạn làm chậm | 10 | 12 s | Tự nhắm thợ săn gần nhất trong 8 m, nổ bán kính 2.5 m, thợ săn chạy chậm một nửa trong 2 giây (không choáng, không buông người) |
 | Súng lục | 4 | 1.5 s | Tự nhắm thợ săn trong 10 m, ngắm đón đầu; trúng thì thợ săn mất 1 máu (xem mục 8). Không có thợ săn trong tầm thì không bắn, không mất tiền |
 | Ván trượt | 5 | 12 s | Chạy nhanh x1.7 trong 3.5 giây |
@@ -79,7 +79,8 @@ Thêm thẻ mới: thêm giá trị vào `GameTypes.ItemType` (Lead), viết `It
 
 Thợ săn không đánh cận chiến. Bấm E / Space (không có người gục để túm) là **bắn súng**:
 
-- Tự nhắm người trốn gần nhất trong tầm `rifle_range` (12 m) ở phía trước (góc 150°), ngắm đón đầu theo hướng chạy. Không có ai thì bắn thẳng về phía trước.
+- Ngắm tay: kéo cần ngắm (hoặc giữ chuột phải), máy mình hiện luồng xanh chỉ hướng và tầm bắn (dừng ở tường), thả tay thì client gửi nút `shoot` kèm hướng ngắm (`InputSource.get_aim()`), server bắn theo hướng đó hết tầm. Kéo về giữa hoặc vào nút Hủy rồi thả thì không bắn.
+- Tự nhắm (E / chạm nhanh nút BẮN): người trốn gần nhất trong tầm `rifle_range` (12 m) ở phía trước (góc 150°), ngắm đón đầu theo hướng chạy. Không có ai thì bắn thẳng về phía trước.
 - Đạn bay **đường thẳng** ngang tầm ngực, tốc độ `rifle_speed` (25 m/s, 10 m mất 0.4 giây). Server raycast một lần lúc bắn: gặp tường / vật cản (layer 1, kể cả hộp gỗ) thì đạn dừng ở đó.
 - Đạn tới nơi thì xét cả đoạn bay: người trốn đầu tiên nằm trong `rifle_radius` (0.5 m, cộng thân người) tính từ nòng súng bị trúng, mất 1 máu (2 lần là gục). Một viên chỉ trúng một người. Hồi chiêu `attack_cooldown`.
 - Bắn xong thì người bắn khựng lại `shoot_flinch_time` (0.25 giây, đi chậm còn `flinch_speed` = 20%); người trốn trúng đạn khựng `hit_flinch_time` (0.35 giây). Súng lục cũng làm người bắn khựng, nhưng thợ săn trúng đạn thì không khựng. Khựng chỉ tính trên server (di chuyển do server quyết), không gửi thêm dữ liệu.
