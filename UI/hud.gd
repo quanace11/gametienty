@@ -2,10 +2,11 @@ extends CanvasLayer
 ## HUD trong trận: chỉ đọc GameState.rules và nghe EventBus, không đổi gì.
 
 const QteRing = preload("res://UI/qte_ring.gd")
+const Minimap = preload("res://UI/minimap.gd")
+const ResultsScreen = preload("res://UI/results_screen.gd")
 const ALERT_TIME := 3.0
 
 var _label: Label
-var _result := ""
 var _alert := ""
 var _alert_left := 0.0
 var _item_names := {} # ItemType -> tên thẻ (đọc một lần)
@@ -21,7 +22,12 @@ func _ready() -> void:
 	ring.position = Vector2(-ring.custom_minimum_size.x / 2, -ring.custom_minimum_size.y - 40)
 	ring.size = ring.custom_minimum_size
 	add_child(ring)
+	add_child(Minimap.new())
 	EventBus.match_ended.connect(_on_match_ended)
+	EventBus.teleport_started.connect(func(id: int, _t: Vector3, s: float) -> void:
+		if id != multiplayer.get_unique_id() and GameState.my_role() == GameTypes.Role.ESCAPEE:
+			_show_alert("Thợ săn đang dịch chuyển (cột tím) sau %.1f giây!" % s))
+	EventBus.footprints_revealed.connect(func(_p: PackedVector3Array, _s: float) -> void: _show_alert("Radar: dấu chân đỏ trên bản đồ"))
 	EventBus.qte_resolved.connect(func(_id: int, safe_id: int, result: GameTypes.QteResult) -> void:
 		if result == GameTypes.QteResult.FAIL:
 			_show_alert("Rương %d vừa nổ! (khói đỏ)" % safe_id))
@@ -36,7 +42,7 @@ func _process(delta: float) -> void:
 	var lines: PackedStringArray = []
 	match GameState.my_role():
 		GameTypes.Role.HUNTER:
-			lines.append("Bạn là THỢ SĂN: đánh gục, kéo vào tù")
+			lines.append("Bạn là THỢ SĂN: bắn gục, kéo vào tù. Chạm bản đồ góc phải để chọn chỗ dịch chuyển")
 		GameTypes.Role.ESCAPEE:
 			lines.append("Bạn là NGƯỜI TRỐN: cạy rương lấy chìa (E khi kim vào vùng sáng), đủ chìa thì chạy ra 1 trong 2 cổng")
 		_:
@@ -54,9 +60,6 @@ func _process(delta: float) -> void:
 		lines.append(_my_status(me))
 	if _alert_left > 0.0:
 		lines.append(">> " + _alert)
-	if _result != "":
-		lines.append("")
-		lines.append(_result)
 	var text := "\n".join(lines)
 	if _label.text != text: # đổi chữ mới dựng lại layout
 		_label.text = text
@@ -68,7 +71,9 @@ func _my_status(me: PlayerRecord) -> String:
 			return "Bị choáng %.1f giây" % me.stunned_left
 		if me.carrying_id != 0:
 			return "Đang kéo người: mang tới nhà tù"
-		return "Máu: %d/%d   E / Space: bắn cối, hoặc túm người đang gục" % [me.hp, me.max_hp]
+		if me.teleport_left > 0.0:
+			return "Đang tụ lực dịch chuyển %.1f giây" % me.teleport_left
+		return "Máu: %d/%d   E / Space: bắn cối, hoặc túm người đang gục\n%s" % [me.hp, me.max_hp, _deck_line(me)]
 	match me.state:
 		GameTypes.PlayerState.DOWNED:
 			return "Bạn bị gục! Chờ đồng đội đỡ (%d%%) hoặc ném túi máu" % roundi(me.rescue_progress * 100)
@@ -103,24 +108,9 @@ func _show_alert(text: String) -> void:
 	_alert_left = ALERT_TIME
 
 
-const HUNTER_TEXT := {
-	GameTypes.HunterResult.LOSE: "THUA",
-	GameTypes.HunterResult.PARTIAL: "THẮNG MỘT PHẦN",
-	GameTypes.HunterResult.TOTAL: "CHIẾN THẮNG TUYỆT ĐỐI",
-}
-
-
-## Bảng kết quả: mỗi người trốn tính riêng, thợ săn theo số người bắt được.
+## Bảng kết quả từng người (thợ săn theo số người bắt được, người trốn tính riêng).
 func _on_match_ended(res: Dictionary) -> void:
-	var lines: PackedStringArray = ["===== KẾT QUẢ =====",
-		"Thợ săn %s (bắt %d/%d)" % [HUNTER_TEXT[res["hunter_result"]], res["caught"], res["escapees"]]]
-	var me := multiplayer.get_unique_id()
-	var players: Dictionary = res["players"]
-	for id: int in players:
-		var row: Dictionary = players[id]
-		if row["role"] == GameTypes.Role.HUNTER:
-			continue
-		var status := "THOÁT HIỂM THÀNH CÔNG" if row["result"] == GameTypes.EscapeeResult.ESCAPED else "BỊ BẮT / THẤT BẠI"
-		lines.append("%s%s: %s   %d điểm (tiền %d, cứu %d, căn đẹp %d)" % [
-			"▶ " if id == me else "", row["name"], status, row["score"], row["coins"], row["rescues"], row["qte_perfect"]])
-	_result = "\n".join(lines)
+	var panel := ResultsScreen.new()
+	add_child(panel)
+	panel.show_result(res, multiplayer.get_unique_id())
+	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER, Control.PRESET_MODE_MINSIZE)

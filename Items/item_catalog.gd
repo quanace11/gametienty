@@ -16,6 +16,8 @@ static func all() -> Dictionary:
 		ItemData.new(T.TRAP, "Bẫy kẹp", 6, 10.0, "res://Items/effects/trap.gd"),
 		ItemData.new(T.CRATE, "Hộp gỗ", 5, 10.0, "res://Items/effects/crate.gd"),
 		ItemData.new(T.PISTOL, "Súng lục", 4, 1.5, "res://Items/effects/pistol.gd"),
+		_hunter(ItemData.new(T.RADAR, "Radar dấu chân", 0, 15.0, "res://Items/effects/radar.gd")),
+		_hunter(ItemData.new(T.TELEPORT, "Dịch chuyển", 0, 30.0, "res://Items/effects/teleport.gd")),
 	]:
 		items[it.type] = it
 	return items
@@ -25,7 +27,21 @@ static func all() -> Dictionary:
 static func default_deck(role: GameTypes.Role) -> Array:
 	if role == GameTypes.Role.ESCAPEE:
 		return [T.MEDKIT, T.STUN_GRENADE, T.PISTOL, T.SPEED_BOOST, T.JUMP_PAD]
-	return [] # thợ săn: dịch chuyển, radar (làm sau)
+	return [T.RADAR, T.TELEPORT]
+
+
+## Thẻ chọn được cho bộ bài của vai `role` (màn chọn bài dùng).
+static func choices(role: GameTypes.Role) -> Array:
+	var out := []
+	for it: ItemData in all().values():
+		if role in it.allowed_roles:
+			out.append(it.type)
+	return out
+
+
+static func _hunter(it: ItemData) -> ItemData:
+	it.allowed_roles = [GameTypes.Role.HUNTER]
+	return it
 
 
 static func display_name(type: int) -> String:

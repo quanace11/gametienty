@@ -24,6 +24,8 @@ var item_seq := 0 ## tăng mỗi lần dùng thẻ, để mọi máy phát item_
 var item_last_type := -1
 var item_target_id := 0
 var item_target_pos := Vector3.ZERO
+var teleport_left := 0.0 ## thợ săn đang tụ lực dịch chuyển (> 0: đứng yên)
+var teleport_pos := Vector3.ZERO ## điểm sẽ tới
 var speed_boost_left := 0.0
 var speed_boost_factor := 1.0
 var heal_seq := 0 ## tăng mỗi lần được dùng túi máu, để phân biệt "được cứu" với "được buông"
@@ -59,7 +61,7 @@ const _SYNCED := [
 	"coins", "coins_earned", "chest_work", "rescues", "damage_dealt", "qte_perfect",
 	"qte_chest", "qte_started", "qte_zone", "qte_seq", "qte_result", "qte_result_chest",
 	"deck", "item_cooldowns", "item_seq", "item_last_type", "item_target_id", "item_target_pos",
-	"speed_boost_left", "speed_boost_factor",
+	"speed_boost_left", "speed_boost_factor", "teleport_left", "teleport_pos",
 ]
 
 
@@ -133,6 +135,8 @@ static func events_between(id: int, old: Dictionary, new: Dictionary) -> Array[D
 		out.append({"signal": &"item_used", "args": [id, new["item_last_type"], new["item_target_id"], new["item_target_pos"]]})
 	if new["coins"] != old["coins"]:
 		out.append({"signal": &"coins_changed", "args": [id, new["coins"], new["coins"] - old["coins"]]})
+	if new["teleport_left"] > 0.0 and old["teleport_left"] <= 0.0:
+		out.append({"signal": &"teleport_started", "args": [id, new["teleport_pos"], new["teleport_left"]]})
 	if new["stunned_left"] > 0.0 and old["stunned_left"] <= 0.0:
 		out.append({"signal": &"player_stunned", "args": [id, new["stunned_left"]]})
 

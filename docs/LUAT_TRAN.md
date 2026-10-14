@@ -63,7 +63,7 @@ Mỗi người có bộ bài 5 ô (`MatchConfig.deck_size`), bấm nút `skill_1
 | Bẫy kẹp | 6 | 10 s | Đặt dưới chân, thợ săn dẫm vào bị kẹp 2.5 giây; thợ săn thấy mờ |
 | Hộp gỗ | 5 | 10 s | Vật cản chắn đường, chắn đạn trong 15 giây |
 
-Bộ bài mặc định của người trốn: túi cứu thương, lựu đạn, súng lục, ván trượt, đệm lò xo. Màn chọn bộ bài làm ở UI sau; Core đã nhận `info["decks"]`.
+Bộ bài mặc định của người trốn: túi cứu thương, lựu đạn, súng lục, ván trượt, đệm lò xo. Người chơi chọn bộ bài ở menu (thứ tự chọn = ô 1..5), gửi lên server khi vào phòng, đi kèm `info["decks"]`. Luật tự lọc: bỏ thẻ không có, thẻ không dành cho vai mình (`allowed_roles`), thẻ trùng, quá 5 ô; lọc xong rỗng thì dùng bộ mặc định. Thợ săn luôn dùng bộ của thợ săn (mục 9).
 
 Cách chạy (server): Core (Match) thấy nút thẻ vừa bấm thì gọi `GameState.server_use_item(user, slot)`:
 
@@ -92,3 +92,10 @@ Cách chạy (server):
 3. Đạn đồng bộ như vật đặt: bắn thì gửi một lần (điểm đầu, điểm rơi, giờ bắn, giờ rơi), rơi thì chỉ gửi id. Mọi máy phát `shot_fired` / `shot_landed`; ai trúng thì có `player_hit` riêng. Client tự vẽ đường bay, không gửi vị trí đạn từng frame.
 
 `MatchRules.attack(hunter, targets)` (đòn trúng ngay) vẫn giữ cho vũ khí cận chiến sau này.
+
+## 9. Thợ săn: radar dấu chân, dịch chuyển
+
+Bộ bài của thợ săn (0 xu): **Radar dấu chân** (hồi 15 giây) và **Dịch chuyển** (hồi 30 giây), phím 1 và 2.
+
+- Server ghi vị trí người trốn mỗi `footprint_interval` (0.5 giây), giữ `footprint_history` (6 giây). Bật radar thì server gửi các dấu chân đó **chỉ tới máy thợ săn** (`EventBus.footprints_revealed`), hiện chấm đỏ mờ dần trên minimap trong `radar_time` (4 giây). Máy khác không nhận gì.
+- Dịch chuyển: thợ săn chạm minimap để chọn điểm (`GameState.set_aim_point`, server kẹp trong bản đồ), rồi bấm thẻ. Chưa chọn thì tới cạnh rương đang mở nhiều nhất. Server tìm chỗ đứng được gần điểm đó (tránh tường, tránh nhà tù), thợ săn đứng yên tụ lực `teleport_charge` (1.75 giây) rồi mới tới. Lúc tụ lực có cột tím ở cả chỗ đứng và chỗ tới, người trốn được báo. Bị choáng thì hủy; đang kéo người thì không dùng được.

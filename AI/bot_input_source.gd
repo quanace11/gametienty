@@ -6,7 +6,8 @@ extends InputSource
 ## Bot chỉ chọn hướng đi và nút bấm; đúng/sai do GameState quyết như người thật.
 ##
 ## Thợ săn: kéo người thì mang về nhà tù gần nhất; thấy người gục thì tới túm;
-## còn lại đuổi người gần nhất, vào tầm thì bắn cối (nhân vật tự ngắm đón đầu).
+## còn lại đuổi người gần nhất, vào tầm thì bắn cối (nhân vật tự ngắm đón đầu);
+## người gần nhất còn xa thì dịch chuyển tới (chọn điểm như chạm minimap), bật radar.
 ## Người trốn: bị kéo thì chịu (bị khóa); cổng mở thì chạy ra cổng; đồng đội
 ## gục mà thợ săn ở xa thì tới đỡ; còn túi máu và có người bị kéo / bị nhốt
 ## thì tới gần để ném; tiền gần mà thợ săn xa thì nhặt; còn lại đi cạy rương
@@ -25,6 +26,7 @@ const THINK_INTERVAL := 0.1 # bot nghĩ 10 lần/giây (đỡ tốn CPU server),
 const COIN_GRAB_DIST := 5.0 # tiền trong bán kính này thì ghé nhặt
 const SHOOT_DIST := 8.0 # thợ săn bắn cối khi người trốn gần hơn chừng này
 const PRISON_INSIDE := 1.7 # mét từ giữa nhà tù: đang kẹt trong tường
+const TELEPORT_DIST := 14.0 # thợ săn: người trốn gần nhất xa hơn chừng này thì dịch chuyển tới
 ## Tỉ lệ bot căn vòng: trúng vùng đậm / vùng mờ, còn lại trượt.
 const QTE_PERFECT_CHANCE := 0.65
 const QTE_GOOD_CHANCE := 0.25
@@ -98,6 +100,11 @@ func _think(rules: MatchRules, rec: PlayerRecord, delta: float) -> void:
 			var prey := _nearest(runners.map(func(e: EntityBase) -> Vector2: return e.flat_position()), me + Vector2(1000, 0))
 			if rules.can_attack(entity.peer_id) and me.distance_to(prey) <= SHOOT_DIST:
 				_interact = true # bắn cối; người gục trong tầm túm thì nhân vật ưu tiên túm
+			elif not runners.is_empty() and me.distance_to(prey) > TELEPORT_DIST:
+				_use_slot_of(rules, rec, GameTypes.ItemType.TELEPORT, func() -> void:
+					GameState.server_set_aim_point(entity.peer_id, Vector3(prey.x, 0, prey.y)))
+			elif runners.is_empty() or me.distance_to(prey) > SHOOT_DIST * 1.5:
+				_use_slot_of(rules, rec, GameTypes.ItemType.RADAR, Callable())
 	else:
 		var hunter_dist := _hunter_distance(me)
 		var downed := _reachable_downed().filter(func(e: EntityBase) -> bool: return e != entity)
@@ -176,6 +183,15 @@ func _use_items(rules: MatchRules, rec: PlayerRecord, ally_needs_medkit: bool, h
 		if slot >= 0 and rules.can_use_item(entity.peer_id, slot):
 			_skill_slot = slot
 			return
+
+
+## Bấm ô có thẻ `type` nếu dùng được; `before` chạy ngay trước khi bấm (chọn điểm...).
+func _use_slot_of(rules: MatchRules, rec: PlayerRecord, type: GameTypes.ItemType, before: Callable) -> void:
+	var slot := rec.deck.find(type)
+	if slot >= 0 and rules.can_use_item(entity.peer_id, slot):
+		if before.is_valid():
+			before.call()
+		_skill_slot = slot
 
 
 func _hunter_record(rules: MatchRules) -> PlayerRecord:
