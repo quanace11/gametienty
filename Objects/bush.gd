@@ -19,6 +19,9 @@ static var _faded: StandardMaterial3D
 
 
 func _ready() -> void:
+	if DisplayServer.get_name() == "headless": # server riêng: luật bụi cây nằm ở GameState, không cần hình
+		set_process(false)
+		return
 	_build_shared()
 	# Một cầu giữa + một vòng cầu quanh, cao thấp khác nhau cho giống bụi.
 	var count := 6
@@ -60,6 +63,9 @@ func _process(delta: float) -> void:
 		return
 	_check_left = CHECK_INTERVAL
 	var me := _my_node()
+	if me == null and GameState.rules != null and GameState.rules.is_playing():
+		set_process(false) # máy này không có nhân vật (server không chơi): khỏi tìm mãi
+		return
 	var inside := me != null and GameState.bush_at(me.global_position) == index
 	if inside == _see_through:
 		return
@@ -76,4 +82,5 @@ func _my_node() -> Node3D:
 	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
 		if (node as EntityBase).peer_id == my_id:
 			_me = node as Node3D
+			break
 	return _me

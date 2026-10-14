@@ -28,6 +28,10 @@ func _ready() -> void:
 	name = "ItemVisuals"
 	EventBus.object_placed.connect(_on_placed)
 	EventBus.object_removed.connect(_on_removed)
+	# Vật đặt xuống có luật chạy trên server nên luôn dựng; còn hiệu ứng ném,
+	# cột sáng chỉ để nhìn: server riêng (headless) bỏ qua.
+	if DisplayServer.get_name() == "headless":
+		return
 	EventBus.item_used.connect(_on_item_used)
 	EventBus.teleport_started.connect(_on_teleport_started)
 	_build_meshes()

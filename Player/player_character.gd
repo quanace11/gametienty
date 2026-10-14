@@ -50,6 +50,9 @@ var _speed := 0.0 # m/s trên mặt sàn, đo từ vị trí (client không có 
 var _concealed := false # máy này không được thấy (đứng trong bụi cây phe kia)
 var _air_velocity := Vector3.ZERO # chỉ server: đang bay vì đệm lò xo
 var _flying := false
+var _carrier: EntityBase # chỉ server: người đang kéo mình (nhớ lại, khỏi tìm mỗi frame)
+var _prison: Node3D # chỉ server: nhà tù đang bị nhốt
+var _prison_id := -1
 
 ## Chỉ máy người chơi: nguồn input của nhân vật này (LocalInputSource tự gán), để vẽ luồng ngắm.
 var aim_input: InputSource
@@ -89,8 +92,9 @@ func _build_body() -> void:
 	shape.position.y = HEIGHT / 2.0 # gốc nhân vật ở dưới chân
 	add_child(shape)
 
-	if DisplayServer.get_name() != "headless": # server riêng không cần hình
-		_build_model()
+	if DisplayServer.get_name() == "headless": # server riêng không cần hình, chữ
+		return
+	_build_model()
 
 	var label := Label3D.new()
 	label.text = ("▼ " if is_local else "") + display_name
@@ -342,20 +346,28 @@ func _fly(delta: float) -> void:
 
 func _follow_carrier(me: PlayerRecord) -> void:
 	velocity = Vector3.ZERO
-	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
-		var e := node as EntityBase
-		if e.peer_id == me.carrier_id:
-			global_position = e.global_position + e.global_transform.basis.z * DRAG_DISTANCE
-			rotation.y = e.rotation.y
-			return
+	if not is_instance_valid(_carrier) or _carrier.peer_id != me.carrier_id:
+		_carrier = null
+		for node in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
+			if (node as EntityBase).peer_id == me.carrier_id:
+				_carrier = node as EntityBase
+				break
+	if _carrier:
+		global_position = _carrier.global_position + _carrier.global_transform.basis.z * DRAG_DISTANCE
+		rotation.y = _carrier.rotation.y
 
 
 func _stay_in_prison(prison_id: int) -> void:
 	velocity = Vector3.ZERO
-	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_PRISONS):
-		if node is Interactable and node.interactable_id == prison_id:
-			global_position = node.global_position
-			return
+	if not is_instance_valid(_prison) or _prison_id != prison_id:
+		_prison = null
+		_prison_id = prison_id
+		for node in get_tree().get_nodes_in_group(GameTypes.GROUP_PRISONS):
+			if node is Interactable and node.interactable_id == prison_id:
+				_prison = node as Node3D
+				break
+	if _prison:
+		global_position = _prison.global_position
 
 
 func _nearest_entity(max_dist: float, filter: Callable) -> EntityBase:

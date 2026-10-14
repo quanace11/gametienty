@@ -20,6 +20,12 @@ func _ready() -> void:
 	shape.shape = sphere
 	shape.position.y = 0.4
 	add_child(shape)
+	EventBus.coin_taken.connect(func(coin_id: int, _by: int) -> void:
+		if coin_id == interactable_id:
+			queue_free())
+	if DisplayServer.get_name() == "headless": # server riêng: không hình, không quay
+		set_process(false)
+		return
 
 	if _shared_mesh == null:
 		var mat := StandardMaterial3D.new()
@@ -37,18 +43,10 @@ func _ready() -> void:
 	_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_mesh.position.y = 0.3
 	add_child(_mesh)
-	EventBus.coin_taken.connect(func(coin_id: int, _by: int) -> void:
-		if coin_id == interactable_id:
-			queue_free())
 
 
 func _process(delta: float) -> void:
 	_mesh.rotate_y(delta * 2.5)
-
-
-## Còn trên sàn (chưa ai nhặt).
-func is_available() -> bool:
-	return GameState.rules != null and GameState.rules.coins.has(interactable_id)
 
 
 func can_interact(entity: EntityBase) -> bool:

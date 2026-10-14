@@ -42,8 +42,3 @@ static func choices(role: GameTypes.Role) -> Array:
 static func _hunter(it: ItemData) -> ItemData:
 	it.allowed_roles = [GameTypes.Role.HUNTER]
 	return it
-
-
-static func display_name(type: int) -> String:
-	var it: ItemData = all().get(type)
-	return it.display_name if it else "?"

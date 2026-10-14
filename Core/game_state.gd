@@ -18,9 +18,9 @@ const SHOT_HEIGHT := 1.1 ## mét, đạn bay ngang tầm ngực
 const TELEPORT_CLEARANCE := 0.45 ## mét, bán kính khoảng trống cần có ở điểm dịch chuyển tới
 const PRISON_KEEP_OUT := 2.8 ## mét từ giữa nhà tù: không dịch chuyển vào trong tường
 const PROGRESS_SYNC_INTERVAL := 0.1 ## tiến độ cứu, máu trong tù chỉ gửi 10 lần/giây
-## Các trường đổi liên tục; chỉ đổi những trường này thì gửi thưa hơn.
-const _CONTINUOUS_KEYS := ["rescue_progress", "prison_time_left", "invulnerable_left", "attack_cooldown_left", "stunned_left", "chest_work",
-	"item_cooldowns", "speed_boost_left"]
+## Các trường đổi liên tục; chỉ đổi những trường này thì gửi thưa hơn (Dictionary để tra O(1)).
+const _CONTINUOUS_KEYS := {"rescue_progress": true, "prison_time_left": true, "invulnerable_left": true, "attack_cooldown_left": true,
+	"stunned_left": true, "chest_work": true, "item_cooldowns": true, "speed_boost_left": true}
 
 var rules: MatchRules = null
 
@@ -161,7 +161,7 @@ func server_attack(attacker_id: int, target_ids: Array) -> bool:
 ## bay thẳng. Tầm bắn do luật kẹp, tường chặn đạn. Trả về id viên đạn, 0 nếu
 ## chưa bắn được (hồi chiêu...).
 func server_fire_rifle(hunter: EntityBase, target: Vector3) -> int:
-	if not _can_mutate() or not rules.can_attack(hunter.peer_id):
+	if not _can_mutate() or not target.is_finite() or not rules.can_attack(hunter.peer_id):
 		return 0
 	var from := hunter.global_position + Vector3.UP * SHOT_HEIGHT
 	return rules.fire_rifle(hunter.peer_id, from, _until_wall(hunter, from, target, rules.config.rifle_range))
@@ -169,7 +169,7 @@ func server_fire_rifle(hunter: EntityBase, target: Vector3) -> int:
 
 ## Người trốn bắn súng lục (Items gọi sau khi thẻ đã trả tiền). Tường chặn đạn.
 func server_shoot_bullet(shooter: EntityBase, target: Vector3) -> int:
-	if not _can_mutate():
+	if not _can_mutate() or not target.is_finite():
 		return 0
 	var from := shooter.global_position + Vector3.UP * SHOT_HEIGHT
 	return rules.shoot_bullet(shooter.peer_id, from, _until_wall(shooter, from, target, rules.config.bullet_range))
@@ -303,7 +303,7 @@ func server_use_item(user: EntityBase, slot: int) -> bool:
 ## Thợ săn bắt đầu tụ lực dịch chuyển (Items gọi). Điểm tới được kẹp trong
 ## bản đồ, tránh tường và nhà tù; không tìm được chỗ đứng thì không dịch chuyển.
 func server_start_teleport(id: int, target: Vector3) -> bool:
-	if not _can_mutate():
+	if not _can_mutate() or not target.is_finite():
 		return false
 	var spot: Variant = find_standing_spot(target)
 	return spot != null and rules.start_teleport(id, spot)
@@ -321,13 +321,14 @@ func find_standing_spot(target: Vector3) -> Variant:
 	shape.radius = TELEPORT_CLEARANCE
 	query.shape = shape
 	query.collision_mask = 1 # tường, vật cản
+	var prisons := _prison_points()
 	for ring in 7: # thử chính điểm đó rồi các vòng 0.5 m, 1 m... ra xa dần
 		var steps := 1 if ring == 0 else 8
 		for k in steps:
 			var off := Vector2(ring * 0.5, 0).rotated(TAU * k / steps)
 			var p := Vector2(clampf(target.x + off.x, bounds.position.x, bounds.end.x),
 				clampf(target.z + off.y, bounds.position.y, bounds.end.y))
-			if _near_prison(p):
+			if _near_prison(p, prisons):
 				continue
 			query.transform = Transform3D(Basis(), Vector3(p.x, 1.0, p.y))
 			if space.intersect_shape(query, 1).is_empty():
@@ -335,10 +336,18 @@ func find_standing_spot(target: Vector3) -> Variant:
 	return null
 
 
-func _near_prison(p: Vector2) -> bool:
+## Vị trí (x, z) các nhà tù, lấy một lần cho mỗi lần tìm chỗ đứng.
+func _prison_points() -> PackedVector2Array:
+	var points := PackedVector2Array()
 	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_PRISONS):
 		var c := (node as Node3D).global_position
-		if p.distance_to(Vector2(c.x, c.z)) < PRISON_KEEP_OUT:
+		points.append(Vector2(c.x, c.z))
+	return points
+
+
+func _near_prison(p: Vector2, prisons: PackedVector2Array) -> bool:
+	for c in prisons:
+		if p.distance_to(c) < PRISON_KEEP_OUT:
 			return true
 	return false
 
@@ -357,7 +366,7 @@ func set_aim_point(point: Vector3) -> void:
 
 
 func server_set_aim_point(id: int, point: Vector3) -> void:
-	if rules == null or not rules.players.has(id) or not multiplayer.is_server():
+	if rules == null or not rules.players.has(id) or not multiplayer.is_server() or not point.is_finite():
 		return
 	var map := get_tree().get_first_node_in_group(GameTypes.GROUP_MAP) as MapBase
 	var b := map.get_bounds() if map else Rect2(-500, -500, 1000, 1000)
@@ -417,7 +426,7 @@ func server_speed_boost(id: int, seconds: float, factor: float) -> bool:
 
 ## Đặt bẫy / đệm lò xo / hộp gỗ. Trả về id vật thể (0 = không đặt được).
 func server_place(type: GameTypes.ItemType, pos: Vector3, yaw: float, owner_id: int, lifetime: float) -> int:
-	if not _can_mutate():
+	if not _can_mutate() or not pos.is_finite() or not is_finite(yaw):
 		return 0
 	return rules.place(type, pos, yaw, owner_id, lifetime)
 
@@ -443,8 +452,9 @@ func server_channel_chest(id: int, safe_id: int, delta: float) -> bool:
 func server_resolve_qte(id: int) -> GameTypes.QteResult:
 	if not _can_mutate():
 		return GameTypes.QteResult.NONE
-	# Nút đi từ client lên mất một chiều trễ + nửa nhịp gửi input.
-	var lag := Net.latency_of(id)
+	# Kim trên máy client vẽ chậm một chiều trễ (gói đồng bộ giờ đã cũ), rồi nút
+	# đi từ client lên mất thêm một chiều trễ + nửa nhịp gửi input. Luật kẹp tối đa qte_grace.
+	var lag := 2.0 * Net.latency_of(id)
 	if lag > 0.0:
 		lag += INPUT_SEND_HALF_INTERVAL
 	return rules.resolve_qte(id, lag)
@@ -462,7 +472,7 @@ func _is_significant(old: Dictionary, new: Dictionary) -> bool:
 	if old.is_empty():
 		return true
 	for key: String in new:
-		if key in _CONTINUOUS_KEYS:
+		if _CONTINUOUS_KEYS.has(key):
 			continue
 		if old.get(key) != new[key]:
 			return true
