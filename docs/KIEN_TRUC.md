@@ -69,7 +69,7 @@ Bot luôn chạy trên server, giống hệt người chơi, chỉ khác nguồn
 
 **Bot (AI):** bot là `InputSource`. Nó đọc thế giới (vị trí, két, `GameState.rules`) và trả về hướng đi + nút bấm. Nó không bao giờ tự dịch chuyển nhân vật hay đổi trạng thái.
 
-**Anim (Player):** server đưa thông tin anim vào `get_snapshot()` (tốc độ, đang bò, đang vác...). Client dựng anim từ đó trong `apply_snapshot()` / `client_update()`.
+**Anim (Player):** server đưa thông tin anim vào `get_snapshot()` (tốc độ, đang bò, đang kéo người...). Client dựng anim từ đó trong `apply_snapshot()` / `client_update()`.
 
 ## 5. Lộ trình lên online và phần nào phải sửa
 

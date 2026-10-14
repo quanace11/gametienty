@@ -11,10 +11,10 @@ extends Node
 ## Gọi server_*() trên client sẽ bị bỏ qua (trả về false), nên module cứ gọi.
 
 const TIME_SYNC_INTERVAL := 0.5
-const PROGRESS_SYNC_INTERVAL := 0.1 ## tiến độ cứu/vùng vẫy chỉ gửi 10 lần/giây
+const PROGRESS_SYNC_INTERVAL := 0.1 ## tiến độ cứu, máu trong tù chỉ gửi 10 lần/giây
 const SAFE_PROGRESS_STEP := 0.05 ## chỉ gửi tiến độ két khi đổi ít nhất 5%
 ## Các trường đổi liên tục; chỉ đổi những trường này thì gửi thưa hơn.
-const _CONTINUOUS_KEYS := ["rescue_progress", "struggle", "prison_time_left", "invulnerable_left", "attack_cooldown_left", "stunned_left"]
+const _CONTINUOUS_KEYS := ["rescue_progress", "prison_time_left", "invulnerable_left", "attack_cooldown_left", "stunned_left"]
 
 var rules: MatchRules = null
 
@@ -115,14 +115,14 @@ func server_imprison(hunter_id: int, prison_id: int) -> bool:
 	return _can_mutate() and rules.imprison(hunter_id, prison_id)
 
 
-## Gọi mỗi physics frame khi `rescuer_id` đang cứu `target_id` (đỡ dậy hoặc phá khóa).
+## Gọi mỗi physics frame khi `rescuer_id` đang giữ E đỡ `target_id` đang gục.
 func server_channel_rescue(rescuer_id: int, target_id: int, delta: float) -> bool:
 	return _can_mutate() and rules.channel_rescue(rescuer_id, target_id, delta)
 
 
-func server_add_struggle(target_id: int, amount: float) -> void:
-	if _can_mutate():
-		rules.add_struggle(target_id, amount)
+## `thrower_id` ném/dùng một túi máu cho `target_id` (module kiểm tra tầm ném).
+func server_use_medkit(thrower_id: int, target_id: int) -> bool:
+	return _can_mutate() and rules.use_medkit(thrower_id, target_id)
 
 
 func server_stun(id: int, seconds: float) -> bool:

@@ -27,16 +27,23 @@ func _initialize() -> void:
 		&"_test_pick_up_and_imprison",
 		&"_test_pick_up_requires_downed_and_free_hands",
 		&"_test_drop",
-		&"_test_struggle_free_stuns_hunter",
-		&"_test_add_struggle",
+		&"_test_carried_cannot_escape_alone",
 		&"_test_stun_hunter_releases_carried",
 		&"_test_revive",
 		&"_test_two_rescuers_twice_as_fast",
 		&"_test_rescuing_state_times_out",
 		&"_test_hit_interrupts_rescue",
-		&"_test_prison_rescue",
+		&"_test_prison_cannot_rescue_by_hand",
 		&"_test_prison_timeout_eliminates",
-		&"_test_second_imprisonment_eliminates",
+		&"_test_no_imprison_limit_by_default",
+		&"_test_imprison_limit_when_set",
+		&"_test_medkit_starting_count",
+		&"_test_medkit_revives_downed",
+		&"_test_medkit_frees_carried",
+		&"_test_medkit_frees_inmate",
+		&"_test_medkit_heals_standing",
+		&"_test_medkit_rejected",
+		&"_test_medkit_runs_out",
 		&"_test_escape_requires_open_gate",
 		&"_test_hunter_disconnect",
 		&"_test_carried_disconnect_frees_hunter",
@@ -47,6 +54,9 @@ func _initialize() -> void:
 		&"_test_events_down",
 		&"_test_events_pickup_imprison_rescue",
 		&"_test_events_batched_changes",
+		&"_test_events_medkit",
+		&"_test_events_stun_release",
+		&"_test_items_copied_not_shared",
 	]:
 		call(t)
 	if _failed:
@@ -180,13 +190,13 @@ func _test_pick_up_and_imprison() -> void:
 	var r := _rules()
 	_down(r, A)
 	_check(r.pick_up(H, A), "nhấc người đang ngã")
-	_check(r.state_of(A) == S.CARRIED and r.record(A).carrier_id == H and r.record(H).carrying_id == A, "liên kết vác hai chiều")
-	_check(not r.can_attack(H), "đang vác thì không đánh")
+	_check(r.state_of(A) == S.CARRIED and r.record(A).carrier_id == H and r.record(H).carrying_id == A, "liên kết kéo hai chiều")
+	_check(not r.can_attack(H), "đang kéo thì không đánh")
 	_check(r.imprison(H, 1), "đưa vào tù")
 	_check(r.state_of(A) == S.IMPRISONED and r.record(A).prison_id == 1, "ở tù số 1")
-	_check(r.record(H).carrying_id == 0 and r.record(A).carrier_id == 0, "gỡ liên kết vác")
+	_check(r.record(H).carrying_id == 0 and r.record(A).carrier_id == 0, "gỡ liên kết kéo")
 	_check(r.record(A).imprison_count == 1, "đếm số lần bị nhốt")
-	_check(not r.imprison(H, 1), "không vác ai thì không nhốt được")
+	_check(not r.imprison(H, 1), "không kéo ai thì không nhốt được")
 
 
 func _test_pick_up_requires_downed_and_free_hands() -> void:
@@ -195,7 +205,7 @@ func _test_pick_up_requires_downed_and_free_hands() -> void:
 	_down(r, A)
 	_down(r, B)
 	r.pick_up(H, A)
-	_check(not r.pick_up(H, B), "đang vác thì không nhấc thêm")
+	_check(not r.pick_up(H, B), "đang kéo thì không nhấc thêm")
 	_check(not r.pick_up(A, B), "người trốn không nhấc được")
 
 
@@ -205,34 +215,26 @@ func _test_drop() -> void:
 	r.pick_up(H, A)
 	_check(r.drop(H), "thả xuống")
 	_check(r.state_of(A) == S.DOWNED and r.record(H).carrying_id == 0, "thả xuống thì vẫn nằm ngã")
-	_check(not r.drop(H), "không vác thì không thả")
+	_check(not r.drop(H), "không kéo thì không thả")
 
 
-func _test_struggle_free_stuns_hunter() -> void:
+func _test_carried_cannot_escape_alone() -> void:
 	var r := _rules()
 	_down(r, A)
 	r.pick_up(H, A)
-	r.tick(r.config.carry_escape_time + 0.1)
-	_check(r.state_of(A) == S.IDLE and r.record(A).hp == r.config.revive_hp, "bị vác quá lâu thì vùng thoát, đứng dậy")
-	_check(r.record(H).carrying_id == 0 and r.record(H).stunned_left > 0.0, "thợ săn bị choáng")
-	_check(not r.can_move(H) and not r.can_attack(H), "đang choáng thì không đi, không đánh")
-
-
-func _test_add_struggle() -> void:
-	var r := _rules()
-	_down(r, A)
-	r.pick_up(H, A)
-	r.add_struggle(A, 0.99)
-	r.tick(0.5)
-	_check(r.state_of(A) == S.IDLE, "vùng vẫy nhiều thì thoát sớm")
-
+	r.tick(100.0)
+	_check(r.state_of(A) == S.CARRIED and r.record(H).carrying_id == A, "bị kéo bao lâu cũng không tự thoát")
+	_check(not r.channel_rescue(B, A, 100.0), "không đỡ tay được người đang bị kéo")
+	_check(not r.can_move(A), "bị kéo thì không tự đi")
 
 func _test_stun_hunter_releases_carried() -> void:
 	var r := _rules()
 	_down(r, A)
 	r.pick_up(H, A)
 	_check(r.stun(H, 2.0), "choáng thợ săn")
-	_check(r.state_of(A) == S.IDLE and r.record(H).carrying_id == 0, "thợ săn choáng thì người bị vác thoát")
+	_check(r.state_of(A) == S.IDLE and r.record(H).carrying_id == 0, "thợ săn choáng thì người bị kéo thoát")
+	_check(r.record(A).hp == r.config.revive_hp, "thoát ra với máu hồi")
+	_check(not r.can_move(H) and not r.can_attack(H), "đang choáng thì không đi, không đánh")
 
 
 # ---------- Cứu ----------
@@ -277,28 +279,114 @@ func _test_hit_interrupts_rescue() -> void:
 	_check(r.state_of(B) == S.IDLE and r.record(B).hp == 1, "bị đánh thì ngừng cứu")
 
 
-func _test_prison_rescue() -> void:
+func _test_prison_cannot_rescue_by_hand() -> void:
 	var r := _rules()
 	_imprison(r, A)
-	_check(r.channel_rescue(B, A, r.config.prison_rescue_time), "phá khóa nhà tù")
-	_check(r.state_of(A) == S.IDLE and r.record(A).hp == r.config.max_hp and r.record(A).prison_id == -1, "ra tù đầy máu")
+	_check(not r.channel_rescue(B, A, 100.0), "không đỡ tay được người trong tù")
+	_check(r.state_of(A) == S.IMPRISONED, "vẫn trong tù")
 
 
 func _test_prison_timeout_eliminates() -> void:
 	var r := _rules()
 	_imprison(r, A)
-	r.tick(r.config.prison_time + 0.1)
-	_check(r.state_of(A) == S.ELIMINATED, "ở tù quá lâu thì bị loại")
-	_check(not r.channel_rescue(B, A, 100.0), "bị loại thì không cứu được")
+	_check(is_equal_approx(r.record(A).prison_time_left, 45.0), "vào tù có 45 giây")
+	r.tick(r.config.prison_time - 1.0)
+	_check(r.state_of(A) == S.IMPRISONED and r.record(A).prison_time_left > 0.0, "chưa hết giờ thì vẫn sống")
+	r.tick(1.1)
+	_check(r.state_of(A) == S.ELIMINATED, "hết giờ mà không ai cứu thì bị đốt chết")
+	_check(not r.use_medkit(B, A), "chết rồi thì túi máu không cứu được")
 
 
-func _test_second_imprisonment_eliminates() -> void:
+func _test_no_imprison_limit_by_default() -> void:
 	var r := _rules()
+	for i in 3:
+		_imprison(r, A)
+		_check(r.state_of(A) == S.IMPRISONED, "bị nhốt lần %d vẫn còn cơ hội" % (i + 1))
+		r.record(B).items[GameTypes.ItemType.MEDKIT] = 1
+		r.use_medkit(B, A)
+		r.tick(r.config.hit_invulnerable_time + 0.1)
+
+
+func _test_imprison_limit_when_set() -> void:
+	var r := _rules()
+	r.config.max_imprisonments = 2
 	_imprison(r, A)
-	r.channel_rescue(B, A, r.config.prison_rescue_time)
+	r.use_medkit(B, A)
 	r.tick(r.config.hit_invulnerable_time + 0.1)
 	_imprison(r, A)
-	_check(r.state_of(A) == S.ELIMINATED, "bị nhốt lần 2 thì bị loại")
+	_check(r.state_of(A) == S.ELIMINATED, "đặt giới hạn 2 thì bị nhốt lần 2 là bị loại")
+
+
+# ---------- Túi máu ----------
+
+func _test_medkit_starting_count() -> void:
+	var r := _rules()
+	_check(r.item_count(A, GameTypes.ItemType.MEDKIT) == r.config.medkits_per_escapee, "người trốn có túi máu đầu trận")
+	_check(r.item_count(H, GameTypes.ItemType.MEDKIT) == 0, "thợ săn không có túi máu")
+
+
+func _test_medkit_revives_downed() -> void:
+	var r := _rules()
+	_down(r, A)
+	_check(r.use_medkit(B, A), "ném túi máu cho người gục")
+	_check(r.state_of(A) == S.IDLE and r.record(A).hp == r.config.medkit_heal, "đứng dậy ngay với máu hồi")
+	_check(r.record(A).invulnerable_left > 0.0, "vừa được cứu thì bất tử một lúc")
+	_check(r.item_count(B, GameTypes.ItemType.MEDKIT) == r.config.medkits_per_escapee - 1, "mất một túi")
+	_check(r.record(A).last_rescuer_id == B, "ghi lại người cứu")
+
+
+func _test_medkit_frees_carried() -> void:
+	var r := _rules()
+	_down(r, A)
+	r.pick_up(H, A)
+	_check(r.use_medkit(B, A), "ném túi máu cho người đang bị kéo")
+	_check(r.state_of(A) == S.IDLE and r.record(A).carrier_id == 0, "bung khỏi tay thợ săn")
+	r.tick(r.config.attack_cooldown + 0.01)
+	_check(r.record(H).carrying_id == 0 and r.can_attack(H), "thợ săn hết kéo, đánh tiếp được")
+
+
+func _test_medkit_frees_inmate() -> void:
+	var r := _rules()
+	_imprison(r, A, 1)
+	r.tick(10.0)
+	_check(r.use_medkit(B, A), "ném túi máu vào tù")
+	_check(r.state_of(A) == S.IDLE and r.record(A).prison_id == -1, "người trong tù sống lại")
+	r.tick(100.0)
+	_check(r.state_of(A) == S.IDLE, "sống rồi thì không bị đốt nữa")
+
+
+func _test_medkit_heals_standing() -> void:
+	var r := _rules()
+	r.attack(H, [A])
+	_check(r.use_medkit(A, A), "tự dùng túi máu khi mất máu")
+	_check(r.record(A).hp == r.config.max_hp, "hồi máu")
+	_check(not r.use_medkit(A, A), "đầy máu thì không dùng, không mất túi")
+	_check(r.item_count(A, GameTypes.ItemType.MEDKIT) == r.config.medkits_per_escapee - 1, "chỉ mất một túi")
+
+
+func _test_medkit_rejected() -> void:
+	var r := _rules()
+	_down(r, A)
+	_down(r, B)
+	_check(not r.use_medkit(A, B), "đang gục thì không ném được")
+	_check(not r.use_medkit(H, A), "thợ săn không dùng túi máu")
+	_check(not r.use_medkit(C, H), "không hồi máu cho thợ săn")
+	r.stun(C, 1.0)
+	_check(not r.use_medkit(C, A), "đang choáng thì không ném được")
+	r.take_dirty()
+	_check(not r.use_medkit(C, A) and r.take_dirty().is_empty(), "bị từ chối thì không đổi gì")
+
+
+func _test_medkit_runs_out() -> void:
+	var r := _rules()
+	for i in r.config.medkits_per_escapee:
+		r.tick(r.config.attack_cooldown + 0.01)
+		_down(r, A)
+		_check(r.use_medkit(B, A), "dùng túi thứ %d" % (i + 1))
+		r.tick(r.config.hit_invulnerable_time + 0.1)
+	_down(r, A)
+	_check(not r.use_medkit(B, A), "hết túi thì không dùng được")
+	_check(r.item_count(B, GameTypes.ItemType.MEDKIT) == 0, "số túi không âm")
 
 
 func _test_escape_requires_open_gate() -> void:
@@ -317,7 +405,7 @@ func _test_hunter_disconnect() -> void:
 	_down(r, A)
 	r.pick_up(H, A)
 	_check(r.remove_player(H), "thợ săn rời trận thì báo")
-	_check(r.state_of(A) == S.IDLE, "người đang bị vác được thả ra")
+	_check(r.state_of(A) == S.IDLE, "người đang bị kéo được thả ra")
 
 
 func _test_carried_disconnect_frees_hunter() -> void:
@@ -325,7 +413,7 @@ func _test_carried_disconnect_frees_hunter() -> void:
 	_down(r, A)
 	r.pick_up(H, A)
 	_check(not r.remove_player(A), "người trốn rời trận")
-	_check(r.state_of(A) == S.ELIMINATED and r.record(H).carrying_id == 0, "thợ săn hết vác, người rời bị loại")
+	_check(r.state_of(A) == S.ELIMINATED and r.record(H).carrying_id == 0, "thợ săn hết kéo, người rời bị loại")
 
 
 # ---------- Hỗ trợ module ----------
@@ -336,8 +424,8 @@ func _test_speed_factor() -> void:
 	_down(r, A)
 	_check(is_equal_approx(r.speed_factor(A), r.config.downed_speed), "đang ngã thì bò")
 	r.pick_up(H, A)
-	_check(r.speed_factor(A) == 0.0, "bị vác thì không tự đi")
-	_check(is_equal_approx(r.speed_factor(H), r.config.carrying_speed), "đang vác thì chậm hơn")
+	_check(r.speed_factor(A) == 0.0, "bị kéo thì không tự đi")
+	_check(is_equal_approx(r.speed_factor(H), r.config.carrying_speed), "đang kéo người thì chậm hơn")
 
 
 func _test_client_tick_never_changes_state() -> void:
@@ -398,7 +486,7 @@ func _test_events_pickup_imprison_rescue() -> void:
 	r.imprison(H, 0)
 	var d2 := r.record(A).to_dict()
 	_check(&"player_imprisoned" in _signals(PlayerRecord.events_between(A, d1, d2)), "sự kiện vào tù")
-	r.channel_rescue(B, A, 100.0)
+	r.use_medkit(B, A)
 	var d3 := r.record(A).to_dict()
 	_check(&"player_rescued" in _signals(PlayerRecord.events_between(A, d2, d3)), "sự kiện được cứu")
 
@@ -412,3 +500,36 @@ func _test_events_batched_changes() -> void:
 	var ev := _signals(PlayerRecord.events_between(A, d0, r.record(A).to_dict()))
 	_check(&"player_picked_up" in ev and &"player_hit" in ev, "gộp nhiều bước vẫn ra sự kiện trạng thái cuối")
 	_check(PlayerRecord.events_between(A, {}, d0).is_empty(), "lần đầu (chưa có bản cũ) không sinh sự kiện")
+
+
+func _test_events_medkit() -> void:
+	var r := _rules()
+	_down(r, A)
+	r.pick_up(H, A)
+	var d0 := r.record(A).to_dict()
+	r.use_medkit(B, A)
+	var ev := _signals(PlayerRecord.events_between(A, d0, r.record(A).to_dict()))
+	_check(&"player_healed" in ev and &"player_rescued" in ev, "túi máu cứu người bị kéo: healed + rescued")
+	_check(not &"player_released" in ev, "không nhầm thành bị buông")
+
+
+func _test_events_stun_release() -> void:
+	var r := _rules()
+	_down(r, A)
+	r.pick_up(H, A)
+	var d0 := r.record(A).to_dict()
+	r.stun(H, 1.0)
+	var ev := _signals(PlayerRecord.events_between(A, d0, r.record(A).to_dict()))
+	_check(&"player_released" in ev and not &"player_healed" in ev, "thợ săn choáng thì sinh player_released")
+
+
+func _test_items_copied_not_shared() -> void:
+	var r := _rules()
+	var d0 := r.record(A).to_dict()
+	r.attack(H, [A])
+	r.use_medkit(A, A)
+	_check(d0["items"][GameTypes.ItemType.MEDKIT] == r.config.medkits_per_escapee, "bản cũ không bị đổi theo")
+	var copy := PlayerRecord.new()
+	copy.apply_dict(d0)
+	d0["items"][GameTypes.ItemType.MEDKIT] = 99
+	_check(copy.items[GameTypes.ItemType.MEDKIT] == r.config.medkits_per_escapee, "apply_dict giữ bản sao riêng")

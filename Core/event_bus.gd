@@ -21,9 +21,10 @@ signal player_hit(id: int, attacker_id: int, hp_left: int)
 signal player_downed(id: int, attacker_id: int)
 signal player_picked_up(id: int, carrier_id: int)
 signal player_dropped(id: int)
-signal player_released(id: int) ## thoát khỏi vai thợ săn (vùng vẫy hoặc thợ săn bị choáng)
+signal player_released(id: int) ## thợ săn bị choáng nên buông người đang kéo
 signal player_imprisoned(id: int, prison_id: int)
-signal player_rescued(id: int, rescuer_id: int) ## được đỡ dậy hoặc được phá khóa nhà tù
+signal player_rescued(id: int, rescuer_id: int) ## được đỡ dậy (giữ E) hoặc được túi máu cứu khi đang gục / bị kéo / bị nhốt
+signal player_healed(id: int, healer_id: int, hp: int) ## trúng túi máu (phát trước player_rescued nếu có)
 signal player_eliminated(id: int)
 signal player_escaped(id: int)
 signal player_stunned(id: int, seconds: float)

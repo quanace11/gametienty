@@ -20,7 +20,7 @@ func _process(_delta: float) -> void:
 	var lines: PackedStringArray = []
 	match GameState.my_role():
 		GameTypes.Role.HUNTER:
-			lines.append("Bạn là THỢ SĂN: đánh ngã, vác vào tù")
+			lines.append("Bạn là THỢ SĂN: đánh gục, kéo vào tù")
 		GameTypes.Role.ESCAPEE:
 			lines.append("Bạn là NGƯỜI TRỐN: đứng trong két vàng để mở, đủ két thì chạy ra cổng")
 		_:
@@ -46,20 +46,21 @@ func _my_status(me: PlayerRecord) -> String:
 		if me.stunned_left > 0.0:
 			return "Bị choáng %.1f giây" % me.stunned_left
 		if me.carrying_id != 0:
-			return "Đang vác người: mang tới nhà tù"
-		return "E / Space: đánh, hoặc nhấc người đang ngã"
+			return "Đang kéo người: mang tới nhà tù"
+		return "E / Space: đánh, hoặc túm người đang gục"
 	match me.state:
 		GameTypes.PlayerState.DOWNED:
-			return "Bạn bị ngã! Chờ đồng đội đỡ (%d%%)" % roundi(me.rescue_progress * 100)
+			return "Bạn bị gục! Chờ đồng đội đỡ (%d%%) hoặc ném túi máu" % roundi(me.rescue_progress * 100)
 		GameTypes.PlayerState.CARRIED:
-			return "Bị vác! Bấm E liên tục để vùng thoát (%d%%)" % roundi(me.struggle * 100)
+			return "Bị thợ săn kéo đi! Chờ đồng đội ném túi máu hoặc làm choáng thợ săn"
 		GameTypes.PlayerState.IMPRISONED:
-			return "Trong tù, còn %d giây (lần %d/%d)" % [ceili(me.prison_time_left), me.imprison_count, GameState.rules.config.max_imprisonments]
+			return "Trong tù, bị đốt chết sau %d giây! Chờ túi máu" % ceili(me.prison_time_left)
 		GameTypes.PlayerState.ELIMINATED:
 			return "Bạn đã bị loại"
 		GameTypes.PlayerState.ESCAPED:
 			return "Bạn đã thoát!"
-	return "Máu: %d/%d   Giữ E gần đồng đội ngã để đỡ dậy" % [me.hp, me.max_hp]
+	return "Máu: %d/%d   Túi máu: %d (Q)   Giữ E gần đồng đội gục để đỡ dậy" % [
+		me.hp, me.max_hp, me.items.get(GameTypes.ItemType.MEDKIT, 0)]
 
 
 func _on_match_ended(winner: GameTypes.Winner, _summary: Dictionary) -> void:
