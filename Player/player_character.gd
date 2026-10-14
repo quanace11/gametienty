@@ -56,9 +56,10 @@ var aim_input: InputSource
 var _beam: Node3D
 var _beam_mesh: MeshInstance3D
 
-# Hình đạn dùng chung cho mọi nhân vật (đỡ tốn bộ nhớ, đỡ draw call trên điện thoại).
-static var _rifle_mesh: SphereMesh
-static var _bullet_mesh: SphereMesh
+const ShotFx = preload("res://Player/shot_fx.gd")
+
+# Hình dùng chung cho mọi nhân vật (đỡ tốn bộ nhớ, đỡ draw call trên điện thoại).
+static var _shot_fx: ShotFx # tên lửa, đạn, vụ nổ (pool), một node cho cả trận
 static var _beam_box: BoxMesh
 static var _hunter_ring: TorusMesh
 
@@ -417,40 +418,16 @@ func _on_item_used(id: int, _type: GameTypes.ItemType, _target_id: int, _target_
 		_play_once("Throw", 0.5)
 
 
-## Vẽ đạn của chính nhân vật này: viên đạn bay thẳng từ nòng tới điểm cuối
-## (súng thợ săn màu cam to hơn, súng lục màu vàng).
+## Vẽ đạn của chính nhân vật này: súng thợ săn bắn tên lửa có lửa đuôi, chạm
+## thì nổ; súng lục bắn viên đạn vàng. Hình và pool nằm ở Player/shot_fx.gd,
+## dùng chung một node cho cả trận. Server riêng không vẽ gì.
 func _on_shot_fired(_shot_id: int, kind: GameTypes.ShotKind, owner_id: int, from: Vector3, to: Vector3, flight: float) -> void:
-	if owner_id != peer_id:
+	if owner_id != peer_id or DisplayServer.get_name() == "headless":
 		return
-	_build_shot_meshes()
-	var shot := MeshInstance3D.new()
-	shot.mesh = _rifle_mesh if kind == GameTypes.ShotKind.RIFLE else _bullet_mesh
-	shot.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	get_parent().add_child(shot)
-	shot.global_position = from
-	var tween := shot.create_tween()
-	tween.tween_property(shot, "global_position", to, flight)
-	tween.tween_callback(shot.queue_free)
-
-
-static func _build_shot_meshes() -> void:
-	if _rifle_mesh:
-		return
-	_rifle_mesh = _shot_mesh(0.12, Color(1, 0.4, 0.1))
-	_bullet_mesh = _shot_mesh(0.08, Color(1, 0.95, 0.4))
-
-
-static func _shot_mesh(radius: float, color: Color) -> SphereMesh:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = color
-	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	var mesh := SphereMesh.new()
-	mesh.radius = radius
-	mesh.height = radius * 2.0
-	mesh.radial_segments = 6
-	mesh.rings = 3
-	mesh.material = m
-	return mesh
+	if not is_instance_valid(_shot_fx):
+		_shot_fx = ShotFx.new()
+		get_parent().add_child(_shot_fx)
+	_shot_fx.fire(kind, owner_id, from, to, flight)
 
 
 func _radius() -> float:
