@@ -48,3 +48,28 @@ Trận hết khi không còn người trốn nào ở ngoài, hết giờ, hoặ
 ## 6. Đồng bộ
 
 Rương, cổng, tiền trên sàn là "thế giới" (`MatchRules.world_dict()`), đồng bộ như người chơi: server chỉ gửi phần đổi (`WorldRecord.diff`), mỗi máy dựng lại rồi tự sinh sự kiện (`WorldRecord.events_between`). Rương xong, rương về 0, cổng, tiền bị nhặt gửi ngay; tiến độ rương bình thường gộp 10 lần/giây.
+
+## 7. Thẻ đạo cụ (bộ bài)
+
+Mỗi người có bộ bài 4 ô (`MatchConfig.deck_size`), bấm nút `skill_1..skill_4` (phím 1-4 hoặc Q/R/F/G) để dùng. Mỗi lần dùng **trả tiền** (`cost`) và có hồi chiêu. Vào trận có sẵn `start_coins`.
+
+| Thẻ | Giá | Hồi | Tác dụng |
+|---|---|---|---|
+| Túi cứu thương | 10 | 6 s | Ném cho đồng đội đang bị kéo / bị nhốt / gục gần nhất trong 8 m (đứng dậy ngay), không có ai thì tự hồi máu |
+| Lựu đạn choáng | 10 | 12 s | Tự nhắm thợ săn gần nhất trong 8 m, nổ bán kính 2.5 m, choáng 2 giây (đang kéo người thì buông) |
+| Ván trượt | 5 | 12 s | Chạy nhanh x1.7 trong 3.5 giây |
+| Đệm lò xo | 6 | 8 s | Đặt trước mặt, bước lên là bật vút qua tường cao (vào / ra nhà tù) |
+| Bẫy kẹp | 6 | 10 s | Đặt dưới chân, thợ săn dẫm vào bị kẹp 2.5 giây; thợ săn thấy mờ |
+| Hộp gỗ | 5 | 10 s | Vật cản chắn đường, chắn đạn trong 15 giây |
+
+Bộ bài mặc định của người trốn: túi cứu thương, lựu đạn, ván trượt, đệm lò xo. Màn chọn bộ bài làm ở UI sau; Core đã nhận `info["decks"]`.
+
+Cách chạy (server): Core (Match) thấy nút thẻ vừa bấm thì gọi `GameState.server_use_item(user, slot)`:
+
+1. Hỏi hiệu ứng `ItemEffect.plan(user)` (Items) có dùng được không, nhắm ai / chỗ nào. Không được thì không mất tiền.
+2. `MatchRules.use_item` trừ tiền, tính hồi chiêu, ghi `item_seq` để mọi máy phát `item_used`.
+3. `ItemEffect.server_apply` làm hiệu ứng bằng lệnh `server_heal`, `server_stun`, `server_speed_boost`, `server_place`.
+
+Vật thể đặt xuống đất nằm trong `MatchRules.placed` (đồng bộ như rương), mọi máy dựng node theo `object_placed` / `object_removed`. Phần luật của vật thể (bẫy kẹp, đệm hất) chạy trong node đó trên server.
+
+Thêm thẻ mới: thêm giá trị vào `GameTypes.ItemType` (Lead), viết `Items/effects/<tên>.gd` (extends `ItemEffect`), khai báo trong `Items/item_catalog.gd`. Không cần sửa Core.

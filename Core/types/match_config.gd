@@ -38,10 +38,11 @@ extends Resource
 @export var revive_time := 4.0 # đỡ đồng đội đang ngã dậy (một người cứu)
 @export var revive_hp := 1 # máu sau khi được đỡ dậy bằng tay hoặc thoát khỏi thợ săn
 
-@export_group("Túi máu")
-@export var medkits_per_escapee := 2 # tạm thời, sau thay bằng bộ bài
+@export_group("Thẻ đạo cụ")
+@export var start_coins := 12 # tiền lúc vào trận, đủ dùng một thẻ rẻ
+@export var deck_size := 4 # số ô thẻ (nút skill_1..skill_4)
 @export var medkit_heal := 1 # máu hồi; người đang gục/bị kéo/bị nhốt thì đứng dậy ngay
-@export var medkit_range := 8.0 # mét, tầm ném (Player kiểm tra khoảng cách)
+@export var medkit_range := 8.0 # mét, tầm ném (Items kiểm tra khoảng cách)
 
 @export_group("Tốc độ (hệ số)")
 @export var downed_speed := 0.3 # bò

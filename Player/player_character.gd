@@ -4,8 +4,8 @@ extends EntityBase
 ## quay mặt theo hướng chạy.
 ## Nút tương tác (E/Space): thợ săn túm người đang gục (kéo lê phía sau) hoặc
 ## vung đòn; người trốn giữ để đỡ đồng đội đang gục.
-## Q (skill_1): người trốn ném túi máu cho đồng đội đang gục / bị kéo / bị nhốt
-## gần nhất trong tầm, không có ai thì tự dùng nếu mất máu.
+## Nút thẻ đạo cụ (skill_1..4) do Core + Items xử lý, file này chỉ lo bị hất
+## tung (server_launch) khi giẫm đệm lò xo.
 ## Mọi quyết định đúng/sai nằm ở GameState; file này chỉ tính tầm đánh và vị trí.
 ## Hình dạng tạm là khối capsule; thay bằng model + AnimationTree sau.
 
@@ -31,7 +31,8 @@ var _target_pos := Vector3.ZERO
 var _target_yaw := 0.0
 var _body_mesh: MeshInstance3D
 var _material: StandardMaterial3D
-var _skill_was_pressed := false
+var _air_velocity := Vector3.ZERO # chỉ server: đang bay vì đệm lò xo
+var _flying := false
 
 
 func setup(id: int, p_role: GameTypes.Role, p_name: String, pos: Vector3, local: bool) -> void:
@@ -42,7 +43,6 @@ func setup(id: int, p_role: GameTypes.Role, p_name: String, pos: Vector3, local:
 	_build_body()
 	EventBus.player_hit.connect(_on_hit)
 	EventBus.player_attacked.connect(_on_attacked)
-	EventBus.player_healed.connect(_on_healed)
 	if local:
 		add_child(load("res://Player/follow_camera.gd").new())
 
@@ -98,6 +98,9 @@ func server_move(input: InputSource, delta: float) -> void:
 		GameTypes.PlayerState.ESCAPED, GameTypes.PlayerState.ELIMINATED:
 			velocity = Vector3.ZERO
 			return
+	if _flying:
+		_fly(delta)
+		return
 
 	var speed := (HUNTER_SPEED if is_hunter() else ESCAPEE_SPEED) * rules.speed_factor(peer_id)
 	var move := input.get_move().limit_length(1.0)
@@ -108,11 +111,6 @@ func server_move(input: InputSource, delta: float) -> void:
 	move_and_slide()
 	if dir.length_squared() > 0.01 and speed > 0.0:
 		rotation.y = lerp_angle(rotation.y, atan2(-dir.x, -dir.z), minf(1.0, delta * TURN_SPEED))
-
-	var skill := input.is_pressed(&"skill_1")
-	if skill and not _skill_was_pressed and not is_hunter():
-		_throw_medkit()
-	_skill_was_pressed = skill
 
 	if not input.is_pressed(&"interact"):
 		return
@@ -153,14 +151,21 @@ func _escapee_interact(delta: float) -> void:
 		GameState.server_channel_rescue(peer_id, downed.peer_id, delta)
 
 
-## Ném túi máu: ưu tiên đồng đội đang cần cứu gần nhất trong tầm, không có thì tự dùng.
-## Tạm thời trúng ngay; sau này Items làm đường bay và có thể ném trượt.
-func _throw_medkit() -> void:
-	var rules := GameState.rules
-	var target := _nearest_entity(rules.config.medkit_range, func(e: EntityBase) -> bool:
-		return not e.is_hunter() and (e.state == GameTypes.PlayerState.DOWNED
-			or e.state == GameTypes.PlayerState.CARRIED or e.state == GameTypes.PlayerState.IMPRISONED))
-	GameState.server_use_medkit(peer_id, target.peer_id if target else peer_id)
+func server_launch(v: Vector3) -> void:
+	_air_velocity = v
+	_flying = true
+	collision_mask = 0 # bay qua tường, tới đất mới va chạm lại
+
+
+## Bay theo đường parabol, chạm đất thì đứng lại bình thường.
+func _fly(delta: float) -> void:
+	_air_velocity.y -= GRAVITY * delta
+	global_position += _air_velocity * delta
+	if _air_velocity.y < 0.0 and global_position.y <= 0.05:
+		global_position.y = 0.05
+		_flying = false
+		collision_mask = 1
+		velocity = Vector3.ZERO
 
 
 func _follow_carrier(me: PlayerRecord) -> void:
@@ -225,32 +230,6 @@ func _on_hit(id: int, _attacker_id: int, _hp_left: int) -> void:
 	get_tree().create_timer(0.15).timeout.connect(func() -> void:
 		if is_instance_valid(self) and state != GameTypes.PlayerState.IMPRISONED:
 			_material.albedo_color = _base_color())
-
-
-## Hiệu ứng túi máu bay từ người ném tới người được cứu.
-func _on_healed(id: int, healer_id: int, _hp: int) -> void:
-	if healer_id != peer_id:
-		return
-	var target: Node3D = null
-	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
-		if (node as EntityBase).peer_id == id:
-			target = node
-	if target == null:
-		return
-	var kit := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = Vector3(0.3, 0.3, 0.3)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(1, 0.2, 0.3)
-	mat.emission_enabled = true
-	mat.emission = Color(1, 0.2, 0.3)
-	box.material = mat
-	kit.mesh = box
-	get_parent().add_child(kit)
-	kit.global_position = global_position + Vector3(0, 1.2, 0)
-	var tween := kit.create_tween()
-	tween.tween_property(kit, "global_position", target.global_position + Vector3(0, 0.5, 0), 0.3)
-	tween.tween_callback(kit.queue_free)
 
 
 func _on_attacked(attacker_id: int) -> void:

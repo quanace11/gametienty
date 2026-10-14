@@ -15,7 +15,8 @@ const TIME_SYNC_INTERVAL := 0.5
 const INPUT_SEND_HALF_INTERVAL := 1.0 / 60.0 ## client gửi input 30 lần/giây: trung bình trễ thêm nửa nhịp
 const PROGRESS_SYNC_INTERVAL := 0.1 ## tiến độ cứu, máu trong tù chỉ gửi 10 lần/giây
 ## Các trường đổi liên tục; chỉ đổi những trường này thì gửi thưa hơn.
-const _CONTINUOUS_KEYS := ["rescue_progress", "prison_time_left", "invulnerable_left", "attack_cooldown_left", "stunned_left", "chest_work"]
+const _CONTINUOUS_KEYS := ["rescue_progress", "prison_time_left", "invulnerable_left", "attack_cooldown_left", "stunned_left", "chest_work",
+	"item_cooldowns", "speed_boost_left"]
 
 var rules: MatchRules = null
 
@@ -27,6 +28,7 @@ var _applied := {} # mọi máy: id -> dict đã áp dụng lần cuối (để 
 var _world_pending := false # chỉ server
 var _world_sent := {} # chỉ server
 var _world_applied := {} # mọi máy
+var _effects := {} # ItemType -> ItemEffect (chỉ server dùng)
 
 
 func _ready() -> void:
@@ -37,6 +39,7 @@ func begin(info: Dictionary, total_safes: int, floor_coins: int = 0) -> void:
 	var cfg := MatchConfig.new()
 	cfg.duration = info["time"]
 	rules = MatchRules.new(cfg, info["roles"], info["names"], total_safes, floor_coins)
+	_setup_items(info.get("decks", {}))
 	_time_sync_timer = 0.0
 	_progress_sync_timer = 0.0
 	_pending.clear()
@@ -49,6 +52,21 @@ func begin(info: Dictionary, total_safes: int, floor_coins: int = 0) -> void:
 	_world_applied = rules.world_dict()
 	_world_sent = _world_applied
 	EventBus.match_state_changed.emit(rules.state)
+
+
+## Bảng thẻ do Items khai báo (ModuleRegistry.ITEM_CATALOG). Mọi máy dựng giống nhau.
+func _setup_items(decks: Dictionary) -> void:
+	var catalog_script: Script = load(ModuleRegistry.ITEM_CATALOG)
+	var items: Dictionary = catalog_script.call(&"all")
+	var defaults := {}
+	for role: int in [GameTypes.Role.HUNTER, GameTypes.Role.ESCAPEE]:
+		defaults[role] = catalog_script.call(&"default_deck", role)
+	rules.setup_items(items, decks, defaults)
+	_effects.clear()
+	for type: int in items:
+		var data: ItemData = items[type]
+		if data.effect_script != "":
+			_effects[type] = load(data.effect_script).new()
 
 
 func clear() -> void:
@@ -138,9 +156,42 @@ func server_channel_rescue(rescuer_id: int, target_id: int, delta: float) -> boo
 	return _can_mutate() and rules.channel_rescue(rescuer_id, target_id, delta)
 
 
-## `thrower_id` ném/dùng một túi máu cho `target_id` (module kiểm tra tầm ném).
-func server_use_medkit(thrower_id: int, target_id: int) -> bool:
-	return _can_mutate() and rules.use_medkit(thrower_id, target_id)
+## Người chơi bấm nút ô thẻ `slot`. Core gọi (Match), module không cần gọi.
+## Hỏi hiệu ứng (Items) có dùng được không, trả tiền, rồi chạy hiệu ứng.
+func server_use_item(user: EntityBase, slot: int) -> bool:
+	if not _can_mutate() or not rules.can_use_item(user.peer_id, slot):
+		return false
+	var type: int = rules.record(user.peer_id).deck[slot]
+	var effect: ItemEffect = _effects.get(type)
+	if effect == null:
+		return false
+	var plan := effect.plan(user)
+	if plan.is_empty():
+		return false
+	if not rules.use_item(user.peer_id, slot, plan.get("target_id", 0), plan.get("target_pos", user.global_position)):
+		return false
+	effect.server_apply(user, plan)
+	return true
+
+
+## Túi máu của `healer_id` trúng `target_id` (Items gọi khi túi tới nơi).
+func server_heal(healer_id: int, target_id: int) -> bool:
+	return _can_mutate() and rules.heal(healer_id, target_id)
+
+
+func server_speed_boost(id: int, seconds: float, factor: float) -> bool:
+	return _can_mutate() and rules.speed_boost(id, seconds, factor)
+
+
+## Đặt bẫy / đệm lò xo / hộp gỗ. Trả về id vật thể (0 = không đặt được).
+func server_place(type: GameTypes.ItemType, pos: Vector3, yaw: float, owner_id: int, lifetime: float) -> int:
+	if not _can_mutate():
+		return 0
+	return rules.place(type, pos, yaw, owner_id, lifetime)
+
+
+func server_remove_placed(obj_id: int) -> bool:
+	return _can_mutate() and rules.remove_placed(obj_id)
 
 
 func server_stun(id: int, seconds: float) -> bool:
@@ -191,7 +242,7 @@ func _is_significant(old: Dictionary, new: Dictionary) -> bool:
 func _world_significant(old: Dictionary, new: Dictionary) -> bool:
 	if old.is_empty() or old["gate_open"] != new["gate_open"] or old["gate_opening"] != new["gate_opening"]:
 		return true
-	if old["coins_taken"].size() != new["coins_taken"].size():
+	if old["coins_taken"].size() != new["coins_taken"].size() or old["placed"].size() != new["placed"].size():
 		return true
 	for safe_id: int in new["safes"]:
 		var a: float = old["safes"].get(safe_id, 0.0)

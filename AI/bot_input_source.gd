@@ -27,7 +27,7 @@ const QTE_GOOD_CHANCE := 0.25
 
 var _move := Vector2.ZERO
 var _interact := false
-var _skill := false
+var _skill_slot := -1 # ô thẻ bot bấm trong frame này (-1 = không)
 var _last_pos := Vector2.ZERO
 var _check_timer := 0.0
 var _detour_time := 0.0
@@ -43,11 +43,13 @@ func get_move() -> Vector2:
 
 
 func is_pressed(action: StringName) -> bool:
-	return (action == &"interact" and _interact) or (action == &"skill_1" and _skill)
+	if action == &"interact":
+		return _interact
+	return _skill_slot >= 0 and action == InputSource.SKILL_ACTIONS[_skill_slot]
 
 
 func update(delta: float) -> void:
-	_skill = false # nút bấm một lần, chỉ bật đúng frame bot nghĩ
+	_skill_slot = -1 # nút thẻ bấm một lần, chỉ bật đúng frame bot nghĩ
 	var rules := GameState.rules
 	if entity == null or rules == null or not rules.is_playing() or rules.record(entity.peer_id) == null:
 		_move = Vector2.ZERO
@@ -90,16 +92,17 @@ func _think(rules: MatchRules, rec: PlayerRecord, delta: float) -> void:
 	else:
 		var hunter_dist := _hunter_distance(me)
 		var downed := _escapees_in(GameTypes.PlayerState.DOWNED).filter(func(e: EntityBase) -> bool: return e != entity)
-		var medkits := rules.item_count(entity.peer_id, GameTypes.ItemType.MEDKIT)
+		var medkit_slot := rec.deck.find(GameTypes.ItemType.MEDKIT)
+		var has_medkit: bool = medkit_slot >= 0 and rec.coins >= rules.catalog[GameTypes.ItemType.MEDKIT]["cost"]
 		var captured := _escapees_where(func(e: EntityBase) -> bool:
 			return e.state == GameTypes.PlayerState.CARRIED or e.state == GameTypes.PlayerState.IMPRISONED)
 		var throw_range := rules.config.medkit_range * 0.9
-		if medkits > 0 and entity.state != GameTypes.PlayerState.DOWNED:
+		if entity.state != GameTypes.PlayerState.DOWNED:
 			var needy := captured.duplicate()
 			if hunter_dist < SAFE_TO_RESCUE_DIST:
 				needy.append_array(downed) # thợ săn ở gần thì ném luôn, không kịp đỡ tay
 			var in_range := needy.filter(func(e: EntityBase) -> bool: return me.distance_to(e.flat_position()) <= throw_range)
-			_skill = not in_range.is_empty()
+			_use_items(rules, rec, not in_range.is_empty(), hunter_dist)
 		if entity.state == GameTypes.PlayerState.DOWNED:
 			target = me # đang ngã thì chỉ bò né thợ săn
 		elif rules.gate_open or rules.gate_opening_left > 0.0:
@@ -107,7 +110,7 @@ func _think(rules: MatchRules, rec: PlayerRecord, delta: float) -> void:
 		elif not downed.is_empty() and hunter_dist > SAFE_TO_RESCUE_DIST:
 			target = _nearest(downed.map(func(e: EntityBase) -> Vector2: return e.flat_position()), me)
 			act = true
-		elif medkits > 0 and not captured.is_empty() and hunter_dist > FLEE_DIST:
+		elif has_medkit and not captured.is_empty() and hunter_dist > FLEE_DIST:
 			target = _nearest(captured.map(func(e: EntityBase) -> Vector2: return e.flat_position()), me)
 		elif hunter_dist > SAFE_TO_RESCUE_DIST and not _near_coins(me).is_empty():
 			target = _nearest(_near_coins(me), me)
@@ -136,6 +139,30 @@ func _think(rules: MatchRules, rec: PlayerRecord, delta: float) -> void:
 		_detour_time -= delta
 		dir = _detour_dir
 	_move = dir
+
+
+## Chọn thẻ để bấm: túi máu khi có người cần cứu trong tầm; lựu đạn khi thợ
+## săn đang kéo người hoặc sát mình; ván trượt khi bị đuổi sát.
+func _use_items(rules: MatchRules, rec: PlayerRecord, ally_needs_medkit: bool, hunter_dist: float) -> void:
+	var hunter := _hunter_record(rules)
+	var wants := []
+	if ally_needs_medkit:
+		wants.append(GameTypes.ItemType.MEDKIT)
+	if hunter and ((hunter.carrying_id != 0 and hunter_dist < 7.0) or hunter_dist < FLEE_DIST * 0.8):
+		wants.append(GameTypes.ItemType.STUN_GRENADE)
+	if hunter_dist < FLEE_DIST:
+		wants.append(GameTypes.ItemType.SPEED_BOOST)
+	if rec.hp < rec.max_hp and hunter_dist > SAFE_TO_RESCUE_DIST:
+		wants.append(GameTypes.ItemType.MEDKIT) # tự hồi máu khi an toàn
+	for type: int in wants:
+		var slot := rec.deck.find(type)
+		if slot >= 0 and rules.can_use_item(entity.peer_id, slot):
+			_skill_slot = slot
+			return
+
+
+func _hunter_record(rules: MatchRules) -> PlayerRecord:
+	return rules.record(rules.hunter_id())
 
 
 ## Đứng yên ở rương, bấm khi kim tới chỗ đã định (có lúc cố tình lệch để giống người).

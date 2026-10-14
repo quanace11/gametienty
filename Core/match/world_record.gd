@@ -27,6 +27,18 @@ static func diff(old: Dictionary, new: Dictionary) -> Dictionary:
 			taken[coin_id] = new["coins_taken"][coin_id]
 	if not taken.is_empty():
 		out["coins_taken"] = taken
+	var added := {}
+	for obj_id: int in new["placed"]:
+		if not old["placed"].has(obj_id):
+			added[obj_id] = new["placed"][obj_id]
+	var removed := []
+	for obj_id: int in old["placed"]:
+		if not new["placed"].has(obj_id):
+			removed.append(obj_id)
+	if not added.is_empty():
+		out["placed_add"] = added
+	if not removed.is_empty():
+		out["placed_remove"] = removed
 	return out
 
 
@@ -40,6 +52,10 @@ static func apply_diff(base: Dictionary, changes: Dictionary) -> Dictionary:
 		d["safes"][safe_id] = changes["safes"][safe_id]
 	for coin_id: int in changes.get("coins_taken", {}):
 		d["coins_taken"][coin_id] = changes["coins_taken"][coin_id]
+	for obj_id: int in changes.get("placed_add", {}):
+		d["placed"][obj_id] = changes["placed_add"][obj_id]
+	for obj_id: int in changes.get("placed_remove", []):
+		d["placed"].erase(obj_id)
 	return d
 
 
@@ -66,4 +82,11 @@ static func events_between(old: Dictionary, new: Dictionary, required: int) -> A
 	for coin_id: int in new["coins_taken"]:
 		if not old["coins_taken"].has(coin_id):
 			out.append({"signal": &"coin_taken", "args": [coin_id, new["coins_taken"][coin_id]]})
+	for obj_id: int in new["placed"]:
+		if not old["placed"].has(obj_id):
+			var o: Dictionary = new["placed"][obj_id]
+			out.append({"signal": &"object_placed", "args": [obj_id, o["type"], o["pos"], o["yaw"], o["owner"]]})
+	for obj_id: int in old["placed"]:
+		if not new["placed"].has(obj_id):
+			out.append({"signal": &"object_removed", "args": [obj_id]})
 	return out

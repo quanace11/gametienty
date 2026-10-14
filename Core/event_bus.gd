@@ -15,6 +15,8 @@ signal safe_unlocked(safe_id: int, unlocked: int, required: int) ## rương nh�
 signal gate_opening(seconds: float) ## đủ chìa: cả 2 cổng rung, nháy đèn, mở sau `seconds` giây
 signal gate_opened ## cổng mở hẳn tới hết trận
 signal coin_taken(coin_id: int, by_id: int)
+signal object_placed(obj_id: int, type: GameTypes.ItemType, position: Vector3, yaw: float, owner_id: int) ## bẫy, đệm lò xo, hộp gỗ
+signal object_removed(obj_id: int)
 
 # --- Nhóm 1: người chơi ---
 signal player_state_changed(id: int, old_state: GameTypes.PlayerState, new_state: GameTypes.PlayerState)
@@ -31,7 +33,8 @@ signal player_eliminated(id: int)
 signal player_escaped(id: int)
 signal player_stunned(id: int, seconds: float)
 signal rescue_progress_changed(id: int, progress: float)
-signal coins_changed(id: int, coins: int, gained: int)
+signal coins_changed(id: int, coins: int, gained: int) ## gained < 0 là vừa tiêu
+signal item_used(id: int, type: GameTypes.ItemType, target_id: int, target_pos: Vector3) ## đã trả tiền, hiệu ứng đang chạy
 signal qte_started(id: int, safe_id: int) ## vòng căn hiện ra cho người đang mở rương
 signal qte_resolved(id: int, safe_id: int, result: GameTypes.QteResult) ## FAIL: rương nổ, báo vị trí cho thợ săn
 

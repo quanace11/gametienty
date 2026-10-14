@@ -9,3 +9,5 @@ const BOT_INPUT := "res://AI/bot_input_source.gd" # extends InputSource
 const MAP := "res://Objects/maps/test_map.gd" # extends MapBase
 const HUD := "res://UI/hud.gd"
 const MAIN_MENU := "res://UI/main_menu.gd"
+const ITEM_CATALOG := "res://Items/item_catalog.gd" # static all() -> Dictionary, default_deck(role) -> Array
+const ITEM_VISUALS := "res://Items/item_visuals.gd" # Node3D: hiệu ứng thẻ, vật thể đặt xuống đất

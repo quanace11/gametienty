@@ -63,6 +63,10 @@ func _initialize() -> void:
 		&"_test_medkit_heals_standing",
 		&"_test_medkit_rejected",
 		&"_test_medkit_runs_out",
+		&"_test_use_item_rules",
+		&"_test_item_cooldown_client_tick",
+		&"_test_speed_boost",
+		&"_test_place_objects",
 		&"_test_escape_requires_open_gate",
 		&"_test_hunter_disconnect",
 		&"_test_carried_disconnect_frees_hunter",
@@ -91,6 +95,11 @@ func _rules() -> MatchRules:
 	var roles := {H: GameTypes.Role.HUNTER, A: GameTypes.Role.ESCAPEE, B: GameTypes.Role.ESCAPEE, C: GameTypes.Role.ESCAPEE, D: GameTypes.Role.ESCAPEE}
 	var r := MatchRules.new(cfg, roles, {}, 3, 2)
 	r.rng.seed = 42
+	var items := {
+		GameTypes.ItemType.MEDKIT: {"cost": 10, "cooldown": 6.0},
+		GameTypes.ItemType.STUN_GRENADE: {"cost": 10, "cooldown": 12.0},
+	}
+	r.setup_items(items, {}, {GameTypes.Role.ESCAPEE: [GameTypes.ItemType.MEDKIT, GameTypes.ItemType.STUN_GRENADE, 999]})
 	r.tick(0.001)
 	return r
 
@@ -274,7 +283,7 @@ func _test_qte_perfect() -> void:
 	_set_needle(r, p, p.qte_zone)
 	_check(r.resolve_qte(A) == GameTypes.QteResult.PERFECT, "kim ở giữa vùng sáng: hoàn hảo")
 	_check(is_equal_approx(r.safe_progress[0], before + r.config.qte_perfect_bonus), "rương mở nhanh thêm một đoạn")
-	_check(p.coins == r.config.qte_perfect_coins and p.qte_perfect == 1, "được tiền, đếm lần căn đẹp")
+	_check(p.coins == r.config.start_coins + r.config.qte_perfect_coins and p.qte_perfect == 1, "được tiền, đếm lần căn đẹp")
 	_check(p.qte_chest == -1, "vòng căn biến mất")
 	_check(r.resolve_qte(A) == GameTypes.QteResult.NONE, "bấm thêm khi không có vòng thì không sao")
 
@@ -286,7 +295,7 @@ func _test_qte_good() -> void:
 	_set_needle(r, p, p.qte_zone - (r.config.qte_perfect_width + r.config.qte_good_width) / 2.0)
 	_check(r.resolve_qte(A) == GameTypes.QteResult.GOOD, "kim ở vùng mờ: được")
 	_check(is_equal_approx(r.safe_progress[0], before), "vùng mờ không tăng tốc")
-	_check(p.coins == r.config.qte_good_coins, "nhưng được ít tiền hơn")
+	_check(p.coins == r.config.start_coins + r.config.qte_good_coins, "nhưng được ít tiền hơn")
 
 
 func _test_qte_fail_resets_chest() -> void:
@@ -296,7 +305,7 @@ func _test_qte_fail_resets_chest() -> void:
 	_set_needle(r, p, p.qte_zone - r.config.qte_good_width * 2.0)
 	_check(r.resolve_qte(A) == GameTypes.QteResult.FAIL, "bấm ngoài vùng: hỏng")
 	_check(r.safe_progress[0] == 0.0, "rương về 0, mở lại từ đầu")
-	_check(p.coins == 0 and p.qte_result == GameTypes.QteResult.FAIL and p.qte_result_chest == 0, "không được tiền, ghi kết quả")
+	_check(p.coins == r.config.start_coins and p.qte_result == GameTypes.QteResult.FAIL and p.qte_result_chest == 0, "không được tiền, ghi kết quả")
 
 
 func _test_qte_timeout_fails() -> void:
@@ -356,7 +365,7 @@ func _test_chest_coins_spawn() -> void:
 func _test_take_coin() -> void:
 	var r := _rules()
 	_check(r.take_coin(A, 0), "nhặt tiền")
-	_check(r.record(A).coins == r.config.floor_coin_value and r.record(A).coins_earned == r.config.floor_coin_value, "cộng tiền")
+	_check(r.record(A).coins == r.config.start_coins + r.config.floor_coin_value and r.record(A).coins_earned == r.config.floor_coin_value, "cộng tiền")
 	_check(not r.take_coin(B, 0), "cọc đã nhặt thì thôi")
 	_check(not r.take_coin(H, 1), "thợ săn không nhặt tiền")
 	_check(not r.take_coin(A, 999), "cọc không tồn tại")
@@ -541,7 +550,7 @@ func _test_prison_timeout_eliminates() -> void:
 	_check(r.state_of(A) == S.IMPRISONED and r.record(A).prison_time_left > 0.0, "chưa hết giờ thì vẫn sống")
 	r.tick(1.1)
 	_check(r.state_of(A) == S.ELIMINATED, "hết giờ mà không ai cứu thì bị đốt chết")
-	_check(not r.use_medkit(B, A), "chết rồi thì túi máu không cứu được")
+	_check(not r.heal(B, A), "chết rồi thì túi máu không cứu được")
 
 
 func _test_no_imprison_limit_by_default() -> void:
@@ -549,8 +558,7 @@ func _test_no_imprison_limit_by_default() -> void:
 	for i in 3:
 		_imprison(r, A)
 		_check(r.state_of(A) == S.IMPRISONED, "bị nhốt lần %d vẫn còn cơ hội" % (i + 1))
-		r.record(B).items[GameTypes.ItemType.MEDKIT] = 1
-		r.use_medkit(B, A)
+		r.heal(B, A)
 		r.tick(r.config.hit_invulnerable_time + 0.1)
 
 
@@ -558,7 +566,7 @@ func _test_imprison_limit_when_set() -> void:
 	var r := _rules()
 	r.config.max_imprisonments = 2
 	_imprison(r, A)
-	r.use_medkit(B, A)
+	r.heal(B, A)
 	r.tick(r.config.hit_invulnerable_time + 0.1)
 	_imprison(r, A)
 	_check(r.state_of(A) == S.ELIMINATED, "đặt giới hạn 2 thì bị nhốt lần 2 là bị loại")
@@ -568,17 +576,17 @@ func _test_imprison_limit_when_set() -> void:
 
 func _test_medkit_starting_count() -> void:
 	var r := _rules()
-	_check(r.item_count(A, GameTypes.ItemType.MEDKIT) == r.config.medkits_per_escapee, "người trốn có túi máu đầu trận")
-	_check(r.item_count(H, GameTypes.ItemType.MEDKIT) == 0, "thợ săn không có túi máu")
+	_check(r.record(A).deck == [GameTypes.ItemType.MEDKIT, GameTypes.ItemType.STUN_GRENADE], "người trốn có bộ bài mặc định")
+	_check(r.record(H).deck.is_empty(), "thợ săn chưa có thẻ")
+	_check(r.record(A).coins == r.config.start_coins, "vào trận có sẵn ít tiền")
 
 
 func _test_medkit_revives_downed() -> void:
 	var r := _rules()
 	_down(r, A)
-	_check(r.use_medkit(B, A), "ném túi máu cho người gục")
+	_check(r.heal(B, A), "ném túi máu cho người gục")
 	_check(r.state_of(A) == S.IDLE and r.record(A).hp == r.config.medkit_heal, "đứng dậy ngay với máu hồi")
 	_check(r.record(A).invulnerable_left > 0.0, "vừa được cứu thì bất tử một lúc")
-	_check(r.item_count(B, GameTypes.ItemType.MEDKIT) == r.config.medkits_per_escapee - 1, "mất một túi")
 	_check(r.record(A).last_rescuer_id == B, "ghi lại người cứu")
 
 
@@ -586,7 +594,7 @@ func _test_medkit_frees_carried() -> void:
 	var r := _rules()
 	_down(r, A)
 	r.pick_up(H, A)
-	_check(r.use_medkit(B, A), "ném túi máu cho người đang bị kéo")
+	_check(r.heal(B, A), "ném túi máu cho người đang bị kéo")
 	_check(r.state_of(A) == S.IDLE and r.record(A).carrier_id == 0, "bung khỏi tay thợ săn")
 	r.tick(r.config.attack_cooldown + 0.01)
 	_check(r.record(H).carrying_id == 0 and r.can_attack(H), "thợ săn hết kéo, đánh tiếp được")
@@ -596,7 +604,7 @@ func _test_medkit_frees_inmate() -> void:
 	var r := _rules()
 	_imprison(r, A, 1)
 	r.tick(10.0)
-	_check(r.use_medkit(B, A), "ném túi máu vào tù")
+	_check(r.heal(B, A), "ném túi máu vào tù")
 	_check(r.state_of(A) == S.IDLE and r.record(A).prison_id == -1, "người trong tù sống lại")
 	r.tick(100.0)
 	_check(r.state_of(A) == S.IDLE, "sống rồi thì không bị đốt nữa")
@@ -605,35 +613,87 @@ func _test_medkit_frees_inmate() -> void:
 func _test_medkit_heals_standing() -> void:
 	var r := _rules()
 	r.attack(H, [A])
-	_check(r.use_medkit(A, A), "tự dùng túi máu khi mất máu")
+	_check(r.heal(A, A), "tự dùng túi máu khi mất máu")
 	_check(r.record(A).hp == r.config.max_hp, "hồi máu")
-	_check(not r.use_medkit(A, A), "đầy máu thì không dùng, không mất túi")
-	_check(r.item_count(A, GameTypes.ItemType.MEDKIT) == r.config.medkits_per_escapee - 1, "chỉ mất một túi")
+	_check(not r.heal(A, A) and not r.can_heal(A, A), "đầy máu thì không có tác dụng")
 
 
 func _test_medkit_rejected() -> void:
 	var r := _rules()
 	_down(r, A)
 	_down(r, B)
-	_check(not r.use_medkit(A, B), "đang gục thì không ném được")
-	_check(not r.use_medkit(H, A), "thợ săn không dùng túi máu")
-	_check(not r.use_medkit(C, H), "không hồi máu cho thợ săn")
+	_check(not r.heal(A, B), "đang gục thì không ném được")
+	_check(not r.heal(H, A), "thợ săn không dùng túi máu")
+	_check(not r.heal(C, H), "không hồi máu cho thợ săn")
 	r.stun(C, 1.0)
-	_check(not r.use_medkit(C, A), "đang choáng thì không ném được")
+	_check(not r.heal(C, A), "đang choáng thì không ném được")
 	r.take_dirty()
-	_check(not r.use_medkit(C, A) and r.take_dirty().is_empty(), "bị từ chối thì không đổi gì")
+	_check(not r.heal(C, A) and r.take_dirty().is_empty(), "bị từ chối thì không đổi gì")
 
 
 func _test_medkit_runs_out() -> void:
 	var r := _rules()
-	for i in r.config.medkits_per_escapee:
-		r.tick(r.config.attack_cooldown + 0.01)
-		_down(r, A)
-		_check(r.use_medkit(B, A), "dùng túi thứ %d" % (i + 1))
-		r.tick(r.config.hit_invulnerable_time + 0.1)
+	r.record(B).coins = 15 # đủ 1 túi (10), thiếu túi thứ 2
 	_down(r, A)
-	_check(not r.use_medkit(B, A), "hết túi thì không dùng được")
-	_check(r.item_count(B, GameTypes.ItemType.MEDKIT) == 0, "số túi không âm")
+	_check(r.use_item(B, 0, A), "trả tiền dùng thẻ túi máu")
+	_check(r.record(B).coins == 5 and r.record(B).item_cooldowns[0] == 6.0, "trừ tiền, tính hồi chiêu")
+	_check(not r.can_use_item(B, 0), "đang hồi chiêu thì chưa dùng lại được")
+	r.tick(6.1)
+	_check(not r.can_use_item(B, 0), "hết hồi chiêu nhưng thiếu tiền thì không dùng được")
+	r.record(B).coins = 100
+	_check(r.can_use_item(B, 0), "đủ tiền thì dùng được")
+
+
+# ---------- Thẻ đạo cụ ----------
+
+func _test_use_item_rules() -> void:
+	var r := _rules()
+	_check(not r.can_use_item(A, 5), "ô thẻ không tồn tại")
+	_check(not r.can_use_item(H, 0), "thợ săn không có thẻ")
+	var seq := r.record(A).item_seq
+	_check(r.use_item(A, 1, H, Vector3(1, 0, 2)), "dùng lựu đạn")
+	var p := r.record(A)
+	_check(p.item_seq == seq + 1 and p.item_last_type == GameTypes.ItemType.STUN_GRENADE and p.item_target_pos == Vector3(1, 0, 2), "ghi lại để mọi máy phát item_used")
+	_down(r, B)
+	_check(not r.can_use_item(B, 0), "đang gục thì không dùng thẻ")
+	r.stun(C, 1.0)
+	_check(not r.can_use_item(C, 0), "đang choáng thì không dùng thẻ")
+
+
+func _test_item_cooldown_client_tick() -> void:
+	var r := _rules()
+	r.use_item(A, 1)
+	r.tick(2.0, false)
+	_check(is_equal_approx(r.record(A).item_cooldowns[1], 10.0), "client cũng đếm lùi hồi chiêu để hiển thị")
+
+
+func _test_speed_boost() -> void:
+	var r := _rules()
+	_check(r.speed_boost(A, 2.0, 1.5), "tăng tốc")
+	_check(is_equal_approx(r.speed_factor(A), 1.5), "chạy nhanh hơn")
+	r.tick(2.1)
+	_check(r.speed_factor(A) == 1.0, "hết giờ thì về bình thường")
+	r.speed_boost(A, 2.0, 1.5)
+	_down(r, A)
+	_check(is_equal_approx(r.speed_factor(A), r.config.downed_speed), "đang gục thì không được tăng tốc")
+
+
+func _test_place_objects() -> void:
+	var r := _rules()
+	var w0 := r.world_dict()
+	var trap := r.place(GameTypes.ItemType.TRAP, Vector3(3, 0, 4), 0.5, A, 5.0)
+	var pad := r.place(GameTypes.ItemType.JUMP_PAD, Vector3(5, 0, 4), 0.0, B, 0.0)
+	_check(trap > 0 and pad > trap, "id vật thể tăng dần")
+	var w1 := r.world_dict()
+	var sigs := _signals(WorldRecord.events_between(w0, w1, 3))
+	_check(sigs.count(&"object_placed") == 2, "sự kiện đặt vật thể")
+	_check(WorldRecord.apply_diff(w0, WorldRecord.diff(w0, w1)) == w1, "diff có vật thể mới")
+	r.tick(5.1)
+	_check(not r.placed.has(trap) and r.placed.has(pad), "hết giờ thì bẫy biến mất, đệm không hạn thì còn")
+	var w2 := r.world_dict()
+	_check(&"object_removed" in _signals(WorldRecord.events_between(w1, w2, 3)), "sự kiện vật thể biến mất")
+	_check(WorldRecord.apply_diff(w1, WorldRecord.diff(w1, w2)) == w2, "diff có vật thể bị xóa")
+	_check(r.remove_placed(pad) and not r.remove_placed(pad), "xóa một lần")
 
 
 func _test_escape_requires_open_gate() -> void:
@@ -733,7 +793,7 @@ func _test_events_pickup_imprison_rescue() -> void:
 	r.imprison(H, 0)
 	var d2 := r.record(A).to_dict()
 	_check(&"player_imprisoned" in _signals(PlayerRecord.events_between(A, d1, d2)), "sự kiện vào tù")
-	r.use_medkit(B, A)
+	r.heal(B, A)
 	var d3 := r.record(A).to_dict()
 	_check(&"player_rescued" in _signals(PlayerRecord.events_between(A, d2, d3)), "sự kiện được cứu")
 
@@ -754,7 +814,7 @@ func _test_events_medkit() -> void:
 	_down(r, A)
 	r.pick_up(H, A)
 	var d0 := r.record(A).to_dict()
-	r.use_medkit(B, A)
+	r.heal(B, A)
 	var ev := _signals(PlayerRecord.events_between(A, d0, r.record(A).to_dict()))
 	_check(&"player_healed" in ev and &"player_rescued" in ev, "túi máu cứu người bị kéo: healed + rescued")
 	_check(not &"player_released" in ev, "không nhầm thành bị buông")
@@ -773,13 +833,12 @@ func _test_events_stun_release() -> void:
 func _test_items_copied_not_shared() -> void:
 	var r := _rules()
 	var d0 := r.record(A).to_dict()
-	r.attack(H, [A])
-	r.use_medkit(A, A)
-	_check(d0["items"][GameTypes.ItemType.MEDKIT] == r.config.medkits_per_escapee, "bản cũ không bị đổi theo")
+	r.use_item(A, 1)
+	_check(d0["item_cooldowns"][1] == 0.0, "bản cũ không bị đổi theo")
 	var copy := PlayerRecord.new()
 	copy.apply_dict(d0)
-	d0["items"][GameTypes.ItemType.MEDKIT] = 99
-	_check(copy.items[GameTypes.ItemType.MEDKIT] == r.config.medkits_per_escapee, "apply_dict giữ bản sao riêng")
+	d0["deck"][0] = 99
+	_check(copy.deck[0] == GameTypes.ItemType.MEDKIT, "apply_dict giữ bản sao riêng")
 
 
 func _test_player_diff_small() -> void:
