@@ -73,12 +73,12 @@ func _my_status(me: PlayerRecord) -> String:
 			return "Đang kéo người: mang tới nhà tù"
 		if me.teleport_left > 0.0:
 			return "Đang tụ lực dịch chuyển %.1f giây" % me.teleport_left
-		return "Máu: %d/%d   E / Space: bắn cối, hoặc túm người đang gục\n%s" % [me.hp, me.max_hp, _deck_line(me)]
+		return "Máu: %d/%d   E / Space: bắn súng (đạn bay thẳng, tường chặn), hoặc túm người đang gục\n%s" % [me.hp, me.max_hp, _deck_line(me)]
 	match me.state:
 		GameTypes.PlayerState.DOWNED:
 			return "Bạn bị gục! Chờ đồng đội đỡ (%d%%) hoặc ném túi máu" % roundi(me.rescue_progress * 100)
 		GameTypes.PlayerState.CARRIED:
-			return "Bị thợ săn kéo đi! Chờ đồng đội ném túi máu hoặc làm choáng thợ săn"
+			return "Bị thợ săn kéo đi! Chờ đồng đội ném túi máu hoặc bắn hết máu thợ săn"
 		GameTypes.PlayerState.IMPRISONED:
 			return "Trong tù, bị đốt chết sau %d giây! Chờ túi máu" % ceili(me.prison_time_left)
 		GameTypes.PlayerState.ELIMINATED:
@@ -88,7 +88,7 @@ func _my_status(me: PlayerRecord) -> String:
 	return "Máu: %d/%d   Tiền: %d   Giữ E gần đồng đội gục để đỡ dậy\n%s" % [me.hp, me.max_hp, me.coins, _deck_line(me)]
 
 
-## Bộ bài: "1 Túi cứu thương (10) | 2 Lựu đạn choáng (hồi 4s) ...". Tên thẻ lấy từ Items qua ModuleRegistry.
+## Bộ bài: "1 Túi cứu thương (10) | 2 Lựu đạn làm chậm (hồi 4s) ...". Tên thẻ lấy từ Items qua ModuleRegistry.
 func _deck_line(me: PlayerRecord) -> String:
 	if _item_names.is_empty():
 		var items: Dictionary = load(ModuleRegistry.ITEM_CATALOG).call(&"all")

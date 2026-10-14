@@ -10,7 +10,7 @@ static func all() -> Dictionary:
 	var items := {}
 	for it: ItemData in [
 		ItemData.new(T.MEDKIT, "Túi cứu thương", 10, 6.0, "res://Items/effects/medkit.gd"),
-		ItemData.new(T.STUN_GRENADE, "Lựu đạn choáng", 10, 12.0, "res://Items/effects/stun_grenade.gd"),
+		ItemData.new(T.STUN_GRENADE, "Lựu đạn làm chậm", 10, 12.0, "res://Items/effects/stun_grenade.gd"),
 		ItemData.new(T.SPEED_BOOST, "Ván trượt", 5, 12.0, "res://Items/effects/speed_boost.gd"),
 		ItemData.new(T.JUMP_PAD, "Đệm lò xo", 6, 8.0, "res://Items/effects/jump_pad.gd"),
 		ItemData.new(T.TRAP, "Bẫy kẹp", 6, 10.0, "res://Items/effects/trap.gd"),

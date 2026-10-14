@@ -27,14 +27,17 @@ extends Resource
 
 @export_group("Đánh và bắn")
 @export var max_hp := 2 # số đòn để người trốn ngã
-@export var attack_cooldown := 1.2 # giây giữa hai phát cối của thợ săn
+@export var attack_cooldown := 1.2 # giây giữa hai phát súng của thợ săn
+@export var shoot_flinch_time := 0.25 # giây khựng lại sau khi bắn (thợ săn bắn súng, người trốn bắn súng lục)
+@export var hit_flinch_time := 0.35 # giây người trốn khựng lại khi trúng đạn (thợ săn trúng đạn thì không khựng)
+@export var flinch_speed := 0.2 # hệ số tốc độ lúc khựng
 @export var hit_invulnerable_time := 1.0 # sau khi trúng đòn/được cứu, không bị đánh tiếp
 @export var hunter_max_hp := 6 # máu thợ săn (số viên súng lục)
-@export var hunter_knockout_stun := 3.0 # thợ săn hết máu: choáng chừng này giây (buông người đang kéo) rồi hồi đầy
-@export var mortar_range := 10.0 # mét, tầm cối xa nhất
-@export var mortar_speed := 14.0 # m/s theo mặt sàn; bay = mortar_min_flight + khoảng cách / tốc độ
-@export var mortar_min_flight := 0.3
-@export var mortar_radius := 1.3 # mét, bán kính nổ
+@export var hunter_knockout_slow := 3.0 # thợ săn hết máu: buông người đang kéo, chạy chậm chừng này giây, rồi hồi đầy (không bị choáng)
+@export var hunter_knockout_slow_factor := 0.5
+@export var rifle_range := 12.0 # mét, tầm súng thợ săn (tường chặn đạn)
+@export var rifle_speed := 25.0 # m/s, đạn bay thẳng
+@export var rifle_radius := 0.5 # mét, đạn đi qua gần chừng này (cộng thân người) là trúng
 @export var bullet_range := 10.0 # mét, tầm súng lục
 @export var bullet_speed := 30.0
 @export var bullet_radius := 0.8

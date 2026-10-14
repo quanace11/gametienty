@@ -1,9 +1,11 @@
 extends Interactable
 ## Bẫy kẹp đặt dưới đất (id = obj_id của MatchRules.placed). Thợ săn dẫm vào
-## thì bị choáng và bẫy biến mất. Thợ săn chỉ thấy bẫy mờ mờ.
+## thì chạy chậm một lúc (người trốn không làm choáng được thợ săn) và bẫy
+## biến mất. Thợ săn chỉ thấy bẫy mờ mờ.
 
 const RADIUS := 0.7
-const STUN_TIME := 2.5
+const SLOW_TIME := 2.5
+const SLOW_FACTOR := 0.5
 
 static var _mesh: CylinderMesh
 
@@ -45,4 +47,4 @@ func interact_tick(users: Array[EntityBase], _delta: float) -> void:
 	if users.is_empty():
 		return
 	if GameState.server_remove_placed(interactable_id):
-		GameState.server_stun(users[0].peer_id, STUN_TIME)
+		GameState.server_speed_boost(users[0].peer_id, SLOW_TIME, SLOW_FACTOR)

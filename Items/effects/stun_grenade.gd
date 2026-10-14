@@ -1,11 +1,13 @@
 extends ItemEffect
-## Lựu đạn choáng: tự nhắm thợ săn gần nhất trong tầm (dễ dùng trên điện thoại),
-## không có thì ném thẳng trước mặt. Nổ sau FLIGHT_TIME giây, thợ săn trong bán
-## kính bị choáng (đang kéo người thì buông tay).
+## Lựu đạn (tên cũ "lựu đạn choáng"): tự nhắm thợ săn gần nhất trong tầm (dễ
+## dùng trên điện thoại), không có thì ném thẳng trước mặt. Nổ sau FLIGHT_TIME
+## giây, thợ săn trong bán kính chạy chậm SLOW_FACTOR trong SLOW_TIME giây.
+## Người trốn không làm choáng được thợ săn.
 
 const RANGE := 8.0
 const RADIUS := 2.5
-const STUN_TIME := 2.0
+const SLOW_TIME := 2.0
+const SLOW_FACTOR := 0.5
 const FLIGHT_TIME := 0.6
 
 
@@ -28,4 +30,4 @@ func server_apply(user: EntityBase, p: Dictionary) -> void:
 		for node in tree.get_nodes_in_group(GameTypes.GROUP_ENTITIES):
 			var e := node as EntityBase
 			if e.is_hunter() and e.flat_position().distance_to(Vector2(pos.x, pos.z)) <= RADIUS:
-				GameState.server_stun(e.peer_id, STUN_TIME))
+				GameState.server_speed_boost(e.peer_id, SLOW_TIME, SLOW_FACTOR))

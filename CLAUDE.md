@@ -59,7 +59,7 @@ Cả 3 chạy **cùng một đường code**. Quy tắc:
 | `GameTypes` | `Core/types/game_types.gd` | Enum `Role`, `PlayerState`, `MatchState`, `HunterResult`, `EscapeeResult`, `QteResult`, `ItemType`, `ShotKind`; tên group |
 | `ItemData`, `MatchConfig` | `Core/types/` | Dữ liệu thẻ đạo cụ (giá, hồi chiêu, hiệu ứng), thông số trận |
 | `EventBus` (autoload) | `Core/event_bus.gd` | Tín hiệu chung |
-| `GameState` (autoload) | `Core/game_state.gd` | `rules` (đọc), lệnh `server_fire_mortar/shoot_bullet/attack/pick_up/drop/imprison/channel_rescue/heal/stun/escape/channel_chest/resolve_qte/take_coin/speed_boost/place/remove_placed/start_teleport/reveal_footprints/set_aim_point`, `find_standing_spot()`, `aim_point()`, `set_aim_point()` (máy người chơi), `my_role()`. Chi tiết: [docs/CHU_TRINH_BAT.md](docs/CHU_TRINH_BAT.md), [docs/LUAT_TRAN.md](docs/LUAT_TRAN.md) |
+| `GameState` (autoload) | `Core/game_state.gd` | `rules` (đọc), lệnh `server_fire_rifle/shoot_bullet/attack/pick_up/drop/imprison/channel_rescue/heal/stun/escape/channel_chest/resolve_qte/take_coin/speed_boost/place/remove_placed/start_teleport/reveal_footprints/set_aim_point`, `find_standing_spot()`, `aim_point()`, `set_aim_point()` (máy người chơi), `my_role()`. Chi tiết: [docs/CHU_TRINH_BAT.md](docs/CHU_TRINH_BAT.md), [docs/LUAT_TRAN.md](docs/LUAT_TRAN.md) |
 | `MatchRules` | `Core/match/match_rules.gd` | Luật thuần logic, đọc qua `GameState.rules` (`record()`, `can_move()`, `speed_factor()`, `can_attack()`...) |
 | `PlayerRecord` | `Core/match/player_record.gd` | Dữ liệu gameplay của một người chơi (máu, bị kéo, tù, tiến độ cứu, vật phẩm, tiền, vòng căn...) |
 | `WorldRecord` | `Core/match/world_record.gd` | Sinh sự kiện khi rương / cổng / tiền trên sàn đổi |

@@ -2,7 +2,7 @@ extends ItemEffect
 ## Súng lục: tự nhắm thợ săn gần nhất trong tầm bullet_range, ngắm đón đầu theo
 ## hướng chạy. Không có thợ săn trong tầm thì không bắn (không mất tiền).
 ## Đạn do Core tính (GameState.server_shoot_bullet); trúng thì thợ săn mất máu,
-## hết máu thì bị choáng và buông người đang kéo.
+## hết máu thì buông người đang kéo và chạy chậm vài giây (không bị choáng).
 
 
 func plan(user: EntityBase) -> Dictionary:
