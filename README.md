@@ -49,7 +49,7 @@ Cập nhật mỗi khi merge một phần lớn. Người mới vào đọc mụ
 |---|---|---|
 | Kiến trúc | Server có thẩm quyền, offline / host / server riêng chạy cùng code, gửi trạng thái khi đổi, CI chạy test luật + trận offline + trận online 3 máy | `Core/`, `tools/smoke_test.sh` |
 | Người trốn | Di chuyển, cạy rương có vòng căn (vẽ trên sàn), nhặt tiền, đỡ đồng đội gục, 2 cổng mở trễ 3 giây, thoát là thắng riêng | `Player/`, `Objects/`, `UI/qte_ring.gd` |
-| Thợ săn | Súng bắn thẳng (tường chặn), ngắm tay có luồng xanh + nút Hủy, tự ngắm khi chạm nhanh, bắn xong khựng nhẹ, có máu (bị bắn hết máu thì buông người + chạy chậm), túm người gục kéo vào tù | `Player/player_character.gd`, `Core/match/match_rules.gd` |
+| Thợ săn | Súng bắn tên lửa bay thẳng (tường chặn), chạm thì nổ lửa + khói, ngắm tay có luồng xanh + nút Hủy, tự ngắm khi chạm nhanh, bắn xong khựng nhẹ, có máu (bị bắn hết máu thì buông người + chạy chậm), túm người gục kéo vào tù | `Player/player_character.gd`, `Core/match/match_rules.gd` |
 | Nhà tù | Tường cao, bị đốt sau 45 giây, cứu bằng túi máu ném qua tường, đệm lò xo bật ra | `Objects/prison.gd` |
 | Bộ bài | Người trốn chọn 5 thẻ ở menu, trả bằng tiền: túi máu (vùng tròn xanh), lựu đạn làm chậm, súng lục, ván trượt, đệm lò xo, bẫy, hộp gỗ. Thợ săn: radar dấu chân, dịch chuyển (chạm minimap chọn chỗ) | `Items/`, `UI/main_menu.gd` |
 | Giao diện | Cần di chuyển, nút BẮN / Cạy, thanh thẻ có giá và hồi chiêu, minimap, bảng kết quả từng người | `UI/` |
