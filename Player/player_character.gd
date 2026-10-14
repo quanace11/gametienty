@@ -2,8 +2,10 @@ class_name PlayerCharacter
 extends EntityBase
 ## Nhân vật mặc định (3D): di chuyển 8 hướng trên mặt sàn, có trọng lực,
 ## quay mặt theo hướng chạy.
-## Nút tương tác (E/Space): thợ săn nhấc người đang ngã hoặc vung đòn; người trốn
-## giữ để đỡ đồng đội đang ngã, bấm liên tục để vùng vẫy khi bị vác.
+## Nút tương tác (E/Space): thợ săn túm người đang gục (kéo lê phía sau) hoặc
+## vung đòn; người trốn giữ để đỡ đồng đội đang gục.
+## Q (skill_1): người trốn ném túi máu cho đồng đội đang gục / bị kéo / bị nhốt
+## gần nhất trong tầm, không có ai thì tự dùng nếu mất máu.
 ## Mọi quyết định đúng/sai nằm ở GameState; file này chỉ tính tầm đánh và vị trí.
 ## Hình dạng tạm là khối capsule; thay bằng model + AnimationTree sau.
 
@@ -16,8 +18,7 @@ const ATTACK_RANGE := 1.6 # mét, tầm đòn trước mặt thợ săn
 const ATTACK_ANGLE := 100.0 # độ, góc hình nón đòn đánh
 const PICKUP_RANGE := 1.5
 const REVIVE_RANGE := 1.5
-const STRUGGLE_PER_PRESS := 0.015 # mỗi lần bấm khi bị vác (bấm 8 lần/giây: ~5 giây thoát)
-const CARRY_OFFSET := Vector3(0, 1.2, 0)
+const DRAG_DISTANCE := 1.1 # mét, người bị kéo nằm sau lưng thợ săn
 const GRAVITY := 20.0
 const TURN_SPEED := 12.0
 const LERP_SPEED := 15.0
@@ -30,7 +31,7 @@ var _target_pos := Vector3.ZERO
 var _target_yaw := 0.0
 var _body_mesh: MeshInstance3D
 var _material: StandardMaterial3D
-var _interact_was_pressed := false
+var _skill_was_pressed := false
 
 
 func setup(id: int, p_role: GameTypes.Role, p_name: String, pos: Vector3, local: bool) -> void:
@@ -41,6 +42,7 @@ func setup(id: int, p_role: GameTypes.Role, p_name: String, pos: Vector3, local:
 	_build_body()
 	EventBus.player_hit.connect(_on_hit)
 	EventBus.player_attacked.connect(_on_attacked)
+	EventBus.player_healed.connect(_on_healed)
 	if local:
 		add_child(load("res://Player/follow_camera.gd").new())
 
@@ -88,10 +90,7 @@ func server_move(input: InputSource, delta: float) -> void:
 	var me := rules.record(peer_id)
 	match state:
 		GameTypes.PlayerState.CARRIED:
-			_follow_carrier(me)
-			if input.is_pressed(&"interact") and not _interact_was_pressed:
-				GameState.server_add_struggle(peer_id, STRUGGLE_PER_PRESS)
-			_interact_was_pressed = input.is_pressed(&"interact")
+			_follow_carrier(me) # bị khóa hoàn toàn, không nút nào có tác dụng
 			return
 		GameTypes.PlayerState.IMPRISONED:
 			_stay_in_prison(me.prison_id)
@@ -110,8 +109,12 @@ func server_move(input: InputSource, delta: float) -> void:
 	if dir.length_squared() > 0.01 and speed > 0.0:
 		rotation.y = lerp_angle(rotation.y, atan2(-dir.x, -dir.z), minf(1.0, delta * TURN_SPEED))
 
-	_interact_was_pressed = input.is_pressed(&"interact")
-	if not _interact_was_pressed:
+	var skill := input.is_pressed(&"skill_1")
+	if skill and not _skill_was_pressed and not is_hunter():
+		_throw_medkit()
+	_skill_was_pressed = skill
+
+	if not input.is_pressed(&"interact"):
 		return
 	if is_hunter():
 		_hunter_interact()
@@ -119,7 +122,7 @@ func server_move(input: InputSource, delta: float) -> void:
 		_escapee_interact(delta)
 
 
-## Nút tương tác của thợ săn: ưu tiên nhấc người đang ngã, không thì vung đòn.
+## Nút tương tác của thợ săn: ưu tiên túm người đang gục, không thì vung đòn.
 func _hunter_interact() -> void:
 	var downed := _nearest_entity(PICKUP_RANGE, func(e: EntityBase) -> bool:
 		return e.state == GameTypes.PlayerState.DOWNED)
@@ -150,12 +153,22 @@ func _escapee_interact(delta: float) -> void:
 		GameState.server_channel_rescue(peer_id, downed.peer_id, delta)
 
 
+## Ném túi máu: ưu tiên đồng đội đang cần cứu gần nhất trong tầm, không có thì tự dùng.
+## Tạm thời trúng ngay; sau này Items làm đường bay và có thể ném trượt.
+func _throw_medkit() -> void:
+	var rules := GameState.rules
+	var target := _nearest_entity(rules.config.medkit_range, func(e: EntityBase) -> bool:
+		return not e.is_hunter() and (e.state == GameTypes.PlayerState.DOWNED
+			or e.state == GameTypes.PlayerState.CARRIED or e.state == GameTypes.PlayerState.IMPRISONED))
+	GameState.server_use_medkit(peer_id, target.peer_id if target else peer_id)
+
+
 func _follow_carrier(me: PlayerRecord) -> void:
 	velocity = Vector3.ZERO
 	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
 		var e := node as EntityBase
 		if e.peer_id == me.carrier_id:
-			global_position = e.global_position + CARRY_OFFSET
+			global_position = e.global_position + e.global_transform.basis.z * DRAG_DISTANCE
 			rotation.y = e.rotation.y
 			return
 
@@ -212,6 +225,32 @@ func _on_hit(id: int, _attacker_id: int, _hp_left: int) -> void:
 	get_tree().create_timer(0.15).timeout.connect(func() -> void:
 		if is_instance_valid(self) and state != GameTypes.PlayerState.IMPRISONED:
 			_material.albedo_color = _base_color())
+
+
+## Hiệu ứng túi máu bay từ người ném tới người được cứu.
+func _on_healed(id: int, healer_id: int, _hp: int) -> void:
+	if healer_id != peer_id:
+		return
+	var target: Node3D = null
+	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
+		if (node as EntityBase).peer_id == id:
+			target = node
+	if target == null:
+		return
+	var kit := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	box.size = Vector3(0.3, 0.3, 0.3)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(1, 0.2, 0.3)
+	mat.emission_enabled = true
+	mat.emission = Color(1, 0.2, 0.3)
+	box.material = mat
+	kit.mesh = box
+	get_parent().add_child(kit)
+	kit.global_position = global_position + Vector3(0, 1.2, 0)
+	var tween := kit.create_tween()
+	tween.tween_property(kit, "global_position", target.global_position + Vector3(0, 0.5, 0), 0.3)
+	tween.tween_callback(kit.queue_free)
 
 
 func _on_attacked(attacker_id: int) -> void:

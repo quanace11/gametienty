@@ -32,6 +32,8 @@ func _init(cfg: MatchConfig, p_roles: Dictionary, p_names: Dictionary, total_saf
 	for id: int in roles:
 		var hp := 0 if roles[id] == GameTypes.Role.HUNTER else cfg.max_hp
 		players[id] = PlayerRecord.new(id, roles[id], hp)
+		if roles[id] == GameTypes.Role.ESCAPEE and cfg.medkits_per_escapee > 0:
+			players[id].items[GameTypes.ItemType.MEDKIT] = cfg.medkits_per_escapee
 	for i in total_safes:
 		safe_progress[i] = 0.0
 
@@ -50,7 +52,7 @@ func state_of(id: int) -> GameTypes.PlayerState:
 	return players[id].state if players.has(id) else GameTypes.PlayerState.ELIMINATED
 
 
-## Có được tự di chuyển không (bị vác, bị nhốt, bị choáng thì không).
+## Có được tự di chuyển không (bị kéo, bị nhốt, bị choáng thì không).
 func can_move(id: int) -> bool:
 	var p := record(id)
 	if p == null or p.stunned_left > 0.0:
@@ -112,7 +114,7 @@ func attack(attacker_id: int, targets: Array) -> bool:
 	return true
 
 
-## Thợ săn nhấc người đang ngã lên vai.
+## Thợ săn túm người đang gục, kéo lê phía sau.
 func pick_up(hunter_id: int, target_id: int) -> bool:
 	var hunter := record(hunter_id)
 	var p := record(target_id)
@@ -122,7 +124,6 @@ func pick_up(hunter_id: int, target_id: int) -> bool:
 		return false
 	p.state = GameTypes.PlayerState.CARRIED
 	p.carrier_id = hunter_id
-	p.struggle = 0.0
 	p.rescue_progress = 0.0
 	hunter.carrying_id = target_id
 	_mark(hunter_id)
@@ -130,7 +131,7 @@ func pick_up(hunter_id: int, target_id: int) -> bool:
 	return true
 
 
-## Thợ săn thả người đang vác xuống đất (vẫn nằm ngã).
+## Thợ săn thả người đang kéo (vẫn nằm gục).
 func drop(hunter_id: int) -> bool:
 	var hunter := record(hunter_id)
 	if hunter == null or hunter.carrying_id == 0:
@@ -143,7 +144,8 @@ func drop(hunter_id: int) -> bool:
 	return true
 
 
-## Thợ săn đưa người đang vác vào nhà tù `prison_id`.
+## Thợ săn kéo người vào nhà tù `prison_id`. Người bị nhốt mất máu dần
+## (prison_time_left), hết thì bị đốt chết; chỉ túi máu cứu được.
 func imprison(hunter_id: int, prison_id: int) -> bool:
 	var hunter := record(hunter_id)
 	if hunter == null or hunter.carrying_id == 0 or not is_playing():
@@ -152,7 +154,7 @@ func imprison(hunter_id: int, prison_id: int) -> bool:
 	_detach(hunter, p)
 	p.imprison_count += 1
 	p.rescue_progress = 0.0
-	if p.imprison_count >= config.max_imprisonments:
+	if config.max_imprisonments > 0 and p.imprison_count >= config.max_imprisonments:
 		p.state = GameTypes.PlayerState.ELIMINATED
 		p.prison_id = -1
 	else:
@@ -163,9 +165,10 @@ func imprison(hunter_id: int, prison_id: int) -> bool:
 	return true
 
 
-## Người trốn `rescuer_id` cứu `target_id` (đang ngã hoặc đang bị nhốt) thêm
-## `delta` giây. Gọi mỗi physics frame khi đang giữ nút / đứng trong vùng.
-## Nhiều người cứu cùng lúc thì cộng dồn. Trả về true nếu lần này cứu xong.
+## Người trốn `rescuer_id` đỡ `target_id` (đang gục dưới đất) thêm `delta`
+## giây. Gọi mỗi physics frame khi đang giữ nút E. Nhiều người cứu cùng lúc
+## thì cộng dồn. Trả về true nếu lần này đỡ dậy xong. Người bị kéo hoặc bị
+## nhốt không đỡ tay được, phải dùng túi máu (use_medkit).
 func channel_rescue(rescuer_id: int, target_id: int, delta: float) -> bool:
 	var r := record(rescuer_id)
 	var p := record(target_id)
@@ -173,14 +176,9 @@ func channel_rescue(rescuer_id: int, target_id: int, delta: float) -> bool:
 		return false
 	if not GameTypes.is_active(r.state) or r.stunned_left > 0.0 or not is_playing():
 		return false
-	var duration: float
-	match p.state:
-		GameTypes.PlayerState.DOWNED:
-			duration = config.revive_time
-		GameTypes.PlayerState.IMPRISONED:
-			duration = config.prison_rescue_time
-		_:
-			return false
+	if p.state != GameTypes.PlayerState.DOWNED:
+		return false
+	var duration := config.revive_time
 
 	r.channel_left = RESCUE_CHANNEL_GRACE
 	if r.state != GameTypes.PlayerState.RESCUING:
@@ -192,24 +190,54 @@ func channel_rescue(rescuer_id: int, target_id: int, delta: float) -> bool:
 	if p.rescue_progress < 1.0:
 		return false
 
-	p.hp = config.revive_hp if p.state == GameTypes.PlayerState.DOWNED else p.max_hp
+	p.hp = config.revive_hp
 	p.state = GameTypes.PlayerState.IDLE
 	p.rescue_progress = 0.0
-	p.prison_id = -1
 	p.invulnerable_left = config.hit_invulnerable_time
 	return true
 
 
-## Người bị vác vùng vẫy (ví dụ bấm liên tục). `amount` 0..1 cộng vào tiến độ.
-## Không gọi thì tiến độ vẫn tự tăng theo thời gian (carry_escape_time).
-func add_struggle(target_id: int, amount: float) -> void:
+## Còn bao nhiêu vật phẩm `type`.
+func item_count(id: int, type: GameTypes.ItemType) -> int:
+	var p := record(id)
+	return p.items.get(type, 0) if p else 0
+
+
+## Người trốn `thrower_id` dùng một túi máu cho `target_id` (có thể là chính
+## mình khi đang đứng). Module tự kiểm tra tầm ném (config.medkit_range).
+## Người đang gục, bị kéo hoặc bị nhốt thì đứng dậy ngay; đang đứng thì hồi máu.
+## Trả về true nếu đã dùng (mất một túi). Mục tiêu đầy máu thì không dùng.
+func use_medkit(thrower_id: int, target_id: int) -> bool:
+	var t := record(thrower_id)
 	var p := record(target_id)
-	if p and p.state == GameTypes.PlayerState.CARRIED and is_playing():
-		p.struggle = minf(1.0, p.struggle + maxf(amount, 0.0))
-		_mark(target_id)
+	if t == null or p == null or t.is_hunter() or p.is_hunter() or not is_playing():
+		return false
+	if not GameTypes.is_active(t.state) or t.stunned_left > 0.0 or item_count(thrower_id, GameTypes.ItemType.MEDKIT) <= 0:
+		return false
+	var heal := maxi(config.medkit_heal, 1)
+	match p.state:
+		GameTypes.PlayerState.DOWNED, GameTypes.PlayerState.CARRIED, GameTypes.PlayerState.IMPRISONED:
+			if p.carrier_id != 0:
+				_detach(record(p.carrier_id), p)
+			p.state = GameTypes.PlayerState.IDLE
+			p.hp = mini(heal, p.max_hp)
+			p.prison_id = -1
+			p.prison_time_left = 0.0
+			p.rescue_progress = 0.0
+			p.invulnerable_left = config.hit_invulnerable_time
+		_:
+			if not GameTypes.is_active(p.state) or p.hp >= p.max_hp:
+				return false
+			p.hp = mini(p.hp + heal, p.max_hp)
+	t.items[GameTypes.ItemType.MEDKIT] = item_count(thrower_id, GameTypes.ItemType.MEDKIT) - 1
+	p.last_rescuer_id = thrower_id
+	p.heal_seq += 1
+	_mark(thrower_id)
+	_mark(target_id)
+	return true
 
 
-## Làm choáng (súng, bẫy...). Thợ săn đang vác mà bị choáng thì người bị vác thoát ra.
+## Làm choáng (súng, lựu đạn, bẫy...). Thợ săn đang kéo người mà bị choáng thì buông tay, người đó đứng dậy chạy tiếp.
 func stun(id: int, seconds: float) -> bool:
 	var p := record(id)
 	if p == null or seconds <= 0.0 or not is_playing() or GameTypes.is_out(p.state):
@@ -262,7 +290,7 @@ func set_safe_progress(safe_id: int, p: float) -> bool:
 
 # ---------- Thời gian ----------
 
-## `authoritative` = true trên server: chạy đủ luật (hết giờ tù, vùng thoát...).
+## `authoritative` = true trên server: chạy đủ luật (bị đốt trong tù...).
 ## Trên client = false: chỉ đếm lùi các con số để hiển thị mượt giữa hai lần
 ## nhận dữ liệu, không bao giờ tự đổi trạng thái.
 func tick(delta: float, authoritative: bool = true) -> void:
@@ -290,8 +318,6 @@ func _tick_player(p: PlayerRecord, delta: float, authoritative: bool) -> void:
 	if not authoritative:
 		if p.state == GameTypes.PlayerState.IMPRISONED:
 			p.prison_time_left = maxf(0.0, p.prison_time_left - delta)
-		elif p.state == GameTypes.PlayerState.CARRIED:
-			p.struggle = minf(0.99, p.struggle + delta / maxf(config.carry_escape_time, 0.01))
 		return
 
 	if p.state == GameTypes.PlayerState.RESCUING:
@@ -300,22 +326,14 @@ func _tick_player(p: PlayerRecord, delta: float, authoritative: bool) -> void:
 			p.state = GameTypes.PlayerState.IDLE
 			_mark(p.id)
 
-	match p.state:
-		GameTypes.PlayerState.CARRIED:
-			p.struggle = minf(1.0, p.struggle + delta / maxf(config.carry_escape_time, 0.01))
-			if p.struggle >= 1.0:
-				var hunter := record(p.carrier_id)
-				_release(hunter)
-				if hunter:
-					hunter.stunned_left = maxf(hunter.stunned_left, config.stun_after_struggle)
-		GameTypes.PlayerState.IMPRISONED:
-			p.prison_time_left -= delta
-			if p.prison_time_left <= 0.0:
-				p.prison_time_left = 0.0
-				p.state = GameTypes.PlayerState.ELIMINATED
-				p.prison_id = -1
-				p.rescue_progress = 0.0
-				_mark(p.id)
+	if p.state == GameTypes.PlayerState.IMPRISONED:
+		p.prison_time_left -= delta
+		if p.prison_time_left <= 0.0:
+			p.prison_time_left = 0.0
+			p.state = GameTypes.PlayerState.ELIMINATED
+			p.prison_id = -1
+			p.rescue_progress = 0.0
+			_mark(p.id)
 
 
 # ---------- Hết trận ----------
@@ -351,7 +369,7 @@ func count_escapees(s: GameTypes.PlayerState) -> int:
 	return escapee_ids().filter(func(id: int) -> bool: return state_of(id) == s).size()
 
 
-## Người trốn chưa bị loại khỏi bản đồ (kể cả đang ngã / bị vác).
+## Người trốn chưa bị loại khỏi bản đồ (kể cả đang gục / bị kéo).
 func active_escapees() -> int:
 	return escapee_ids().filter(func(id: int) -> bool: return not GameTypes.is_out(state_of(id))).size()
 
@@ -404,18 +422,17 @@ func _mark(id: int) -> void:
 	_dirty[id] = true
 
 
-## Gỡ liên kết vác giữa thợ săn và người bị vác (không đổi state người bị vác).
+## Gỡ liên kết kéo giữa thợ săn và người bị kéo (không đổi state người bị kéo).
 func _detach(hunter: PlayerRecord, p: PlayerRecord) -> void:
 	if hunter:
 		hunter.carrying_id = 0
 		_mark(hunter.id)
 	if p:
 		p.carrier_id = 0
-		p.struggle = 0.0
 		_mark(p.id)
 
 
-## Người bị vác thoát ra, đứng dậy với máu hồi.
+## Thợ săn buông người đang kéo, người đó đứng dậy với máu hồi.
 func _release(hunter: PlayerRecord) -> void:
 	if hunter == null or hunter.carrying_id == 0:
 		return

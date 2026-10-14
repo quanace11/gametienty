@@ -1,7 +1,8 @@
 class_name Prison
 extends Interactable
-## Nhà tù: thợ săn vác người trốn bước vào là nhốt. Người trốn đứng trong
-## vùng thì phá khóa, cứu tất cả người đang bị nhốt ở đây.
+## Nhà tù: thợ săn kéo người trốn bước vào là nhốt. Người bị nhốt mất máu
+## dần (MatchConfig.prison_time), hết thì bị đốt chết; chỉ túi máu cứu được.
+## Chưa có tường cao và đệm lò xo: được cứu thì đi thẳng ra ngoài.
 
 const SIZE := Vector3(2.4, 2.6, 2.4)
 
@@ -34,25 +35,21 @@ func _ready() -> void:
 	_label.position.y = SIZE.y + 0.5
 	_label.font_size = 48
 	add_child(_label)
-	for sig: Signal in [EventBus.player_imprisoned, EventBus.player_rescued, EventBus.player_eliminated, EventBus.rescue_progress_changed]:
-		sig.connect(func(_a: Variant = null, _b: Variant = null) -> void: _refresh())
 	_refresh()
 
 
+func _process(_delta: float) -> void:
+	_refresh() # máu người trong tù tụt liên tục
+
+
 func can_interact(entity: EntityBase) -> bool:
-	return entity.is_hunter() or GameTypes.is_active(entity.state)
+	return entity.is_hunter()
 
 
-func interact_tick(users: Array[EntityBase], delta: float) -> void:
-	var rules := GameState.rules
-	var inmates := _inmates()
+func interact_tick(users: Array[EntityBase], _delta: float) -> void:
 	for e in users:
-		if e.is_hunter():
-			if rules.record(e.peer_id).carrying_id != 0:
-				GameState.server_imprison(e.peer_id, interactable_id)
-		else:
-			for id: int in inmates:
-				GameState.server_channel_rescue(e.peer_id, id, delta)
+		if GameState.rules.record(e.peer_id).carrying_id != 0:
+			GameState.server_imprison(e.peer_id, interactable_id)
 
 
 func _inmates() -> Array:
@@ -69,5 +66,7 @@ func _refresh() -> void:
 	if inmates.is_empty():
 		_label.text = "Nhà tù"
 		return
-	var progress: float = GameState.rules.players[inmates[0]].rescue_progress
-	_label.text = "Nhà tù: %d người" % inmates.size() + (" (cứu %d%%)" % roundi(progress * 100) if progress > 0.0 else "")
+	var least := INF
+	for id: int in inmates:
+		least = minf(least, GameState.rules.players[id].prison_time_left)
+	_label.text = "Nhà tù: %d người (cháy sau %d giây)" % [inmates.size(), ceili(least)]

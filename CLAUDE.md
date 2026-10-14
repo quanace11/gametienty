@@ -59,9 +59,9 @@ Cả 3 chạy **cùng một đường code**. Quy tắc:
 | `GameTypes` | `Core/types/game_types.gd` | Enum `Role`, `PlayerState`, `MatchState`, `Winner`, `ItemType`; tên group |
 | `ItemData`, `MatchConfig` | `Core/types/` | Dữ liệu vật phẩm, thông số trận |
 | `EventBus` (autoload) | `Core/event_bus.gd` | Tín hiệu chung |
-| `GameState` (autoload) | `Core/game_state.gd` | `rules` (đọc), lệnh `server_attack/pick_up/drop/imprison/channel_rescue/add_struggle/stun/escape/set_safe_progress`, `my_role()`. Chi tiết: [docs/CHU_TRINH_BAT.md](docs/CHU_TRINH_BAT.md) |
+| `GameState` (autoload) | `Core/game_state.gd` | `rules` (đọc), lệnh `server_attack/pick_up/drop/imprison/channel_rescue/use_medkit/stun/escape/set_safe_progress`, `my_role()`. Chi tiết: [docs/CHU_TRINH_BAT.md](docs/CHU_TRINH_BAT.md) |
 | `MatchRules` | `Core/match/match_rules.gd` | Luật thuần logic, đọc qua `GameState.rules` (`record()`, `can_move()`, `speed_factor()`, `can_attack()`...) |
-| `PlayerRecord` | `Core/match/player_record.gd` | Dữ liệu gameplay của một người chơi (máu, vác, tù, tiến độ cứu...) |
+| `PlayerRecord` | `Core/match/player_record.gd` | Dữ liệu gameplay của một người chơi (máu, bị kéo, tù, tiến độ cứu, vật phẩm...) |
 | `Net` (autoload) | `Core/network/net.gd` | Tạo/vào phòng, offline, bắt đầu trận |
 | `EntityBase` | `Core/interfaces/entity_base.gd` | Lớp cha của mọi nhân vật |
 | `InputSource` | `Core/interfaces/input_source.gd` | Nguồn điều khiển (bàn phím, mạng, bot) |

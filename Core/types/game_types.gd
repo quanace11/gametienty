@@ -5,18 +5,18 @@ extends RefCounted
 enum Role { HUNTER, ESCAPEE }
 
 ## Bảng chuyển trạng thái của người trốn (chỉ MatchRules được đổi):
-##   IDLE/RESCUING --đánh hết máu--> DOWNED --nhấc lên--> CARRIED --vào tù--> IMPRISONED
-##   CARRIED --vùng thoát / thợ săn bị choáng--> IDLE        CARRIED --bị thả--> DOWNED
-##   DOWNED --đồng đội cứu--> IDLE                           IMPRISONED --đồng đội phá khóa--> IDLE
-##   IMPRISONED --hết giờ / bị nhốt quá số lần--> ELIMINATED
+##   IDLE/RESCUING --đánh hết máu--> DOWNED --bị túm--> CARRIED --kéo vào tù--> IMPRISONED
+##   DOWNED --đồng đội giữ E / túi máu--> IDLE               CARRIED --bị thả--> DOWNED
+##   CARRIED --túi máu / thợ săn bị choáng--> IDLE           IMPRISONED --túi máu--> IDLE
+##   IMPRISONED --bị đốt hết giờ (prison_time)--> ELIMINATED
 ##   IDLE/RESCUING --vào cổng đã mở--> ESCAPED
 ## Thợ săn luôn IDLE. RUNNING để dành cho anim, luật không dùng.
 enum PlayerState {
 	IDLE,
 	RUNNING,
 	DOWNED, # hết máu, đang bò
-	CARRIED, # bị thợ săn vác
-	IMPRISONED, # trong nhà tù
+	CARRIED, # bị thợ săn kéo lê phía sau, không tự làm gì được
+	IMPRISONED, # gục trong nhà tù, đang bị đốt
 	RESCUING, # đang cứu đồng đội
 	ESCAPED, # đã thoát qua cổng
 	ELIMINATED, # bị loại hẳn
@@ -26,7 +26,7 @@ enum MatchState { LOBBY, COUNTDOWN, PLAYING, ENDED }
 
 enum Winner { NONE, HUNTER, ESCAPEES }
 
-enum ItemType { DISGUISE, BARRIER, SPEED_SHOES, GUN }
+enum ItemType { DISGUISE, BARRIER, SPEED_SHOES, GUN, MEDKIT }
 
 ## Group mà các module dùng để tìm nhau mà không cần biết class cụ thể.
 const GROUP_ENTITIES := &"entities"

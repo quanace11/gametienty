@@ -5,11 +5,12 @@ extends InputSource
 ## Chưa có NavMesh: đi thẳng tới mục tiêu, kẹt tường thì rẽ ngẫu nhiên một lúc.
 ## Bot chỉ chọn hướng đi và nút bấm; đúng/sai do GameState quyết như người thật.
 ##
-## Thợ săn: vác người thì mang về nhà tù gần nhất; thấy người ngã thì tới nhấc;
+## Thợ săn: kéo người thì mang về nhà tù gần nhất; thấy người gục thì tới túm;
 ## còn lại đuổi người gần nhất và đánh khi đủ gần.
-## Người trốn: bị vác thì vùng vẫy; cổng mở thì chạy ra cổng; đồng đội ngã
-## hoặc bị nhốt mà thợ săn ở xa thì đi cứu; còn lại đi mở két. Thợ săn lại
-## gần thì né.
+## Người trốn: bị kéo thì chịu (bị khóa); cổng mở thì chạy ra cổng; đồng đội
+## gục mà thợ săn ở xa thì tới đỡ; còn túi máu và có người bị kéo / bị nhốt
+## thì tới gần để ném; còn lại đi mở két. Thợ săn lại gần thì né. Ai cần cứu
+## lọt vào tầm ném thì ném luôn.
 
 const FLEE_DIST := 3.6 # mét
 const SAFE_TO_RESCUE_DIST := 6.0 # thợ săn xa hơn chừng này mới đi cứu
@@ -20,6 +21,7 @@ const DETOUR_TIME := 0.8
 
 var _move := Vector2.ZERO
 var _interact := false
+var _skill := false
 var _last_pos := Vector2.ZERO
 var _check_timer := 0.0
 var _detour_time := 0.0
@@ -31,12 +33,13 @@ func get_move() -> Vector2:
 
 
 func is_pressed(action: StringName) -> bool:
-	return action == &"interact" and _interact
+	return (action == &"interact" and _interact) or (action == &"skill_1" and _skill)
 
 
 func update(delta: float) -> void:
 	_move = Vector2.ZERO
 	_interact = false
+	_skill = false
 	var rules := GameState.rules
 	if entity == null or rules == null or not rules.is_playing() or rules.record(entity.peer_id) == null:
 		return
@@ -44,10 +47,8 @@ func update(delta: float) -> void:
 	var rec := rules.record(entity.peer_id)
 
 	match entity.state:
-		GameTypes.PlayerState.CARRIED:
-			_interact = Engine.get_physics_frames() % 8 == 0 # bấm ~7 lần/giây như người thật
-			return
-		GameTypes.PlayerState.IMPRISONED, GameTypes.PlayerState.ESCAPED, GameTypes.PlayerState.ELIMINATED:
+		GameTypes.PlayerState.CARRIED, GameTypes.PlayerState.IMPRISONED, \
+				GameTypes.PlayerState.ESCAPED, GameTypes.PlayerState.ELIMINATED:
 			return
 
 	var target := me
@@ -64,7 +65,16 @@ func update(delta: float) -> void:
 	else:
 		var hunter_dist := _hunter_distance(me)
 		var downed := _escapees_in(GameTypes.PlayerState.DOWNED).filter(func(e: EntityBase) -> bool: return e != entity)
-		var has_inmates := rules.count_escapees(GameTypes.PlayerState.IMPRISONED) > 0
+		var medkits := rules.item_count(entity.peer_id, GameTypes.ItemType.MEDKIT)
+		var captured := _escapees_where(func(e: EntityBase) -> bool:
+			return e.state == GameTypes.PlayerState.CARRIED or e.state == GameTypes.PlayerState.IMPRISONED)
+		var throw_range := rules.config.medkit_range * 0.9
+		if medkits > 0 and entity.state != GameTypes.PlayerState.DOWNED:
+			var needy := captured.duplicate()
+			if hunter_dist < SAFE_TO_RESCUE_DIST:
+				needy.append_array(downed) # thợ săn ở gần thì ném luôn, không kịp đỡ tay
+			var in_range := needy.filter(func(e: EntityBase) -> bool: return me.distance_to(e.flat_position()) <= throw_range)
+			_skill = not in_range.is_empty() and Engine.get_physics_frames() % 10 == 0
 		if entity.state == GameTypes.PlayerState.DOWNED:
 			target = me # đang ngã thì chỉ bò né thợ săn
 		elif rules.gate_open:
@@ -72,8 +82,8 @@ func update(delta: float) -> void:
 		elif not downed.is_empty() and hunter_dist > SAFE_TO_RESCUE_DIST:
 			target = _nearest(downed.map(func(e: EntityBase) -> Vector2: return e.flat_position()), me)
 			act = true
-		elif has_inmates and hunter_dist > SAFE_TO_RESCUE_DIST:
-			target = _nearest(_occupied_prisons(), me)
+		elif medkits > 0 and not captured.is_empty() and hunter_dist > FLEE_DIST:
+			target = _nearest(captured.map(func(e: EntityBase) -> Vector2: return e.flat_position()), me)
 		else:
 			var safes := entity.get_tree().get_nodes_in_group(GameTypes.GROUP_SAFES).filter(
 				func(s: Interactable) -> bool: return rules.safe_progress.get(s.interactable_id, 1.0) < 1.0)
@@ -120,17 +130,6 @@ func _nearest_hunter_pos(me: Vector2) -> Vector2:
 
 func _hunter_distance(me: Vector2) -> float:
 	return me.distance_to(_nearest_hunter_pos(me))
-
-
-func _occupied_prisons() -> Array:
-	var rules := GameState.rules
-	var ids := {}
-	for p: PlayerRecord in rules.players.values():
-		if p.state == GameTypes.PlayerState.IMPRISONED:
-			ids[p.prison_id] = true
-	return entity.get_tree().get_nodes_in_group(GameTypes.GROUP_PRISONS).filter(
-		func(n: Interactable) -> bool: return ids.has(n.interactable_id)).map(
-		func(n: Node3D) -> Vector2: return _flat(n.global_position))
 
 
 func _positions(group: StringName) -> Array:

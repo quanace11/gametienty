@@ -13,18 +13,20 @@ extends Resource
 @export var attack_cooldown := 1.2 # giây giữa hai đòn của thợ săn
 @export var hit_invulnerable_time := 1.0 # sau khi trúng đòn/được cứu, không bị đánh tiếp
 
-@export_group("Vác và nhà tù")
-@export var carry_escape_time := 12.0 # bị vác lâu chừng này thì tự vùng thoát
-@export var stun_after_struggle := 1.5 # thợ săn bị choáng khi người bị vác vùng thoát
-@export var prison_time := 60.0 # ở tù quá lâu thì bị loại
-@export var max_imprisonments := 2 # bị nhốt lần thứ N thì bị loại luôn
+@export_group("Kéo và nhà tù")
+@export var prison_time := 45.0 # gục trong tù chừng này giây mà không được cứu thì bị đốt chết
+@export var max_imprisonments := 0 # bị nhốt lần thứ N thì bị loại luôn; 0 = không giới hạn
 
 @export_group("Cứu")
 @export var revive_time := 4.0 # đỡ đồng đội đang ngã dậy (một người cứu)
-@export var prison_rescue_time := 3.0 # phá khóa nhà tù (một người cứu)
-@export var revive_hp := 1 # máu sau khi được đỡ dậy
+@export var revive_hp := 1 # máu sau khi được đỡ dậy bằng tay hoặc thoát khỏi thợ săn
+
+@export_group("Túi máu")
+@export var medkits_per_escapee := 2 # tạm thời, sau thay bằng bộ bài
+@export var medkit_heal := 1 # máu hồi; người đang gục/bị kéo/bị nhốt thì đứng dậy ngay
+@export var medkit_range := 8.0 # mét, tầm ném (Player kiểm tra khoảng cách)
 
 @export_group("Tốc độ (hệ số)")
 @export var downed_speed := 0.3 # bò
-@export var carrying_speed := 0.85 # thợ săn đang vác
+@export var carrying_speed := 0.85 # thợ săn đang kéo người
 @export var rescuing_speed := 0.0 # đứng yên khi đang cứu

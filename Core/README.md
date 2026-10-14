@@ -11,4 +11,4 @@ Xương sống của game. **Không sửa khi chưa có Lead duyệt.**
 - `module_registry.gd`: chọn bản cài đặt của từng module
 
 Đã có: enum, EventBus, GameState, đếm giờ, đếm két, thắng/thua, offline + host + server riêng.
-Tiếp theo: thêm tín hiệu/trạng thái khi các module cần (DOWNED, vác, nhà tù, cứu).
+Tiếp theo: thêm tín hiệu/trạng thái khi các module cần (vật phẩm, bắn, cổng mở trễ...).
