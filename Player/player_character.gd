@@ -3,7 +3,8 @@ extends EntityBase
 ## Nhân vật mặc định (3D): di chuyển 8 hướng trên mặt sàn, có trọng lực,
 ## quay mặt theo hướng chạy.
 ## Nút tương tác (E/Space): thợ săn túm người đang gục (kéo lê phía sau) hoặc
-## bắn cối (tự nhắm người gần nhất phía trước, ngắm đón đầu); người trốn giữ
+## bắn súng theo đường thẳng (tự nhắm người gần nhất phía trước, ngắm đón đầu,
+## tường chặn đạn); người trốn giữ
 ## để đỡ đồng đội đang gục.
 ## Nút thẻ đạo cụ (skill_1..4) do Core + Items xử lý, file này chỉ lo bị hất
 ## tung (server_launch) khi giẫm đệm lò xo.
@@ -15,7 +16,7 @@ const ESCAPEE_SPEED := 4.2
 const HUNTER_RADIUS := 0.4
 const ESCAPEE_RADIUS := 0.32 # người trốn chậm hơn nhưng hitbox nhỏ hơn
 const HEIGHT := 1.7
-const AIM_ANGLE := 150.0 # độ, góc trước mặt để cối tự nhắm người trốn
+const AIM_ANGLE := 150.0 # độ, góc trước mặt để súng tự nhắm người trốn
 const BLIND_SHOT_DIST := 6.0 # mét, không ai trong tầm thì bắn thẳng trước mặt
 const PICKUP_RANGE := 1.5
 const REVIVE_RANGE := 1.5
@@ -37,10 +38,8 @@ var _air_velocity := Vector3.ZERO # chỉ server: đang bay vì đệm lò xo
 var _flying := false
 
 # Hình đạn dùng chung cho mọi nhân vật (đỡ tốn bộ nhớ, đỡ draw call trên điện thoại).
-static var _shell_mesh: SphereMesh
+static var _rifle_mesh: SphereMesh
 static var _bullet_mesh: SphereMesh
-static var _marker_mesh: CylinderMesh
-static var _blast_material: StandardMaterial3D
 
 
 func setup(id: int, p_role: GameTypes.Role, p_name: String, pos: Vector3, local: bool) -> void:
@@ -142,7 +141,7 @@ func _hunter_interact() -> void:
 	var cfg := rules.config
 	var forward := facing()
 	var aim := global_position + forward * BLIND_SHOT_DIST
-	var best_d := cfg.mortar_range
+	var best_d := cfg.rifle_range
 	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
 		var e := node as EntityBase
 		if e == self or not rules.is_hittable(e.peer_id):
@@ -152,11 +151,10 @@ func _hunter_interact() -> void:
 		var d := to.length()
 		if d < best_d and (d < 1.0 or forward.angle_to(to) <= deg_to_rad(AIM_ANGLE / 2.0)):
 			best_d = d
-			# Đón đầu: đạn cối bay mortar_min_flight + d / mortar_speed giây.
-			var flight := cfg.mortar_min_flight + d / cfg.mortar_speed
-			aim = e.global_position + Vector3(e.velocity.x, 0.0, e.velocity.z) * flight
+			# Đón đầu: đạn bay d / rifle_speed giây.
+			aim = e.global_position + Vector3(e.velocity.x, 0.0, e.velocity.z) * (d / cfg.rifle_speed)
 	aim.y = 0.0
-	if GameState.server_fire_mortar(self, aim) != 0:
+	if GameState.server_fire_rifle(self, aim) != 0:
 		var to_aim := aim - global_position
 		if to_aim.length_squared() > 0.01:
 			rotation.y = atan2(-to_aim.x, -to_aim.z) # quay mặt về hướng bắn
@@ -261,72 +259,40 @@ func _on_attacked(attacker_id: int) -> void:
 	tween.tween_property(_body_mesh, "scale", Vector3.ONE, 0.12)
 
 
-## Vẽ đạn của chính nhân vật này. Cối: vòng đỏ báo trước chỗ rơi (để người
-## trốn kịp né), đạn bay vòng cung rồi nổ. Súng: viên đạn bay thẳng.
+## Vẽ đạn của chính nhân vật này: viên đạn bay thẳng từ nòng tới điểm cuối
+## (súng thợ săn màu cam to hơn, súng lục màu vàng).
 func _on_shot_fired(_shot_id: int, kind: GameTypes.ShotKind, owner_id: int, from: Vector3, to: Vector3, flight: float) -> void:
 	if owner_id != peer_id:
 		return
 	_build_shot_meshes()
-	var root := get_parent()
-	var mortar := kind == GameTypes.ShotKind.MORTAR
 	var shot := MeshInstance3D.new()
-	shot.mesh = _shell_mesh if mortar else _bullet_mesh
+	shot.mesh = _rifle_mesh if kind == GameTypes.ShotKind.RIFLE else _bullet_mesh
 	shot.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	root.add_child(shot)
+	get_parent().add_child(shot)
 	shot.global_position = from
-	var end := to + (Vector3(0, 0.2, 0) if mortar else Vector3(0, 1.0, 0))
-	var arc := clampf(from.distance_to(end) * 0.4, 1.0, 4.0) if mortar else 0.0
 	var tween := shot.create_tween()
-	tween.tween_method(func(t: float) -> void:
-		shot.global_position = from.lerp(end, t) + Vector3(0, sin(t * PI) * arc, 0), 0.0, 1.0, flight)
+	tween.tween_property(shot, "global_position", to, flight)
 	tween.tween_callback(shot.queue_free)
-	if not mortar:
-		return
-	var radius := GameState.rules.shot_radius(kind) if GameState.rules else 1.0
-	var marker := MeshInstance3D.new()
-	marker.mesh = _marker_mesh
-	marker.material_override = _blast_material
-	marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	marker.transparency = 0.6
-	root.add_child(marker)
-	marker.global_position = Vector3(to.x, 0.04, to.z)
-	marker.scale = Vector3(radius, 1, radius)
-	var mt := marker.create_tween()
-	mt.tween_interval(flight)
-	mt.tween_property(marker, "transparency", 0.0, 0.05) # nổ: sáng lên rồi tắt
-	mt.tween_property(marker, "transparency", 1.0, 0.3)
-	mt.tween_callback(marker.queue_free)
 
 
 static func _build_shot_meshes() -> void:
-	if _shell_mesh:
+	if _rifle_mesh:
 		return
-	_blast_material = StandardMaterial3D.new()
-	_blast_material.albedo_color = Color(1, 0.35, 0.1)
-	_blast_material.emission_enabled = true
-	_blast_material.emission = Color(1, 0.35, 0.1)
-	_blast_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_shell_mesh = SphereMesh.new()
-	_shell_mesh.radius = 0.2
-	_shell_mesh.height = 0.4
-	_shell_mesh.radial_segments = 8
-	_shell_mesh.rings = 4
-	_shell_mesh.material = _blast_material
-	_bullet_mesh = SphereMesh.new()
-	_bullet_mesh.radius = 0.08
-	_bullet_mesh.height = 0.16
-	_bullet_mesh.radial_segments = 6
-	_bullet_mesh.rings = 3
-	var bm := StandardMaterial3D.new()
-	bm.albedo_color = Color(1, 0.95, 0.4)
-	bm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_bullet_mesh.material = bm
-	_marker_mesh = CylinderMesh.new()
-	_marker_mesh.top_radius = 1.0
-	_marker_mesh.bottom_radius = 1.0
-	_marker_mesh.height = 0.03
-	_marker_mesh.radial_segments = 20
-	_marker_mesh.rings = 1
+	_rifle_mesh = _shot_mesh(0.12, Color(1, 0.4, 0.1))
+	_bullet_mesh = _shot_mesh(0.08, Color(1, 0.95, 0.4))
+
+
+static func _shot_mesh(radius: float, color: Color) -> SphereMesh:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = color
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var mesh := SphereMesh.new()
+	mesh.radius = radius
+	mesh.height = radius * 2.0
+	mesh.radial_segments = 6
+	mesh.rings = 3
+	mesh.material = m
+	return mesh
 
 
 func _base_color() -> Color:

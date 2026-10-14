@@ -56,11 +56,11 @@ Mỗi người có bộ bài 5 ô (`MatchConfig.deck_size`), bấm nút `skill_1
 | Thẻ | Giá | Hồi | Tác dụng |
 |---|---|---|---|
 | Túi cứu thương | 10 | 6 s | Ném cho đồng đội đang bị kéo / bị nhốt / gục gần nhất trong 8 m (đứng dậy ngay), không có ai thì tự hồi máu |
-| Lựu đạn choáng | 10 | 12 s | Tự nhắm thợ săn gần nhất trong 8 m, nổ bán kính 2.5 m, choáng 2 giây (đang kéo người thì buông) |
+| Lựu đạn làm chậm | 10 | 12 s | Tự nhắm thợ săn gần nhất trong 8 m, nổ bán kính 2.5 m, thợ săn chạy chậm một nửa trong 2 giây (không choáng, không buông người) |
 | Súng lục | 4 | 1.5 s | Tự nhắm thợ săn trong 10 m, ngắm đón đầu; trúng thì thợ săn mất 1 máu (xem mục 8). Không có thợ săn trong tầm thì không bắn, không mất tiền |
 | Ván trượt | 5 | 12 s | Chạy nhanh x1.7 trong 3.5 giây |
 | Đệm lò xo | 6 | 8 s | Đặt trước mặt, bước lên là bật vút qua tường cao (vào / ra nhà tù) |
-| Bẫy kẹp | 6 | 10 s | Đặt dưới chân, thợ săn dẫm vào bị kẹp 2.5 giây; thợ săn thấy mờ |
+| Bẫy kẹp | 6 | 10 s | Đặt dưới chân, thợ săn dẫm vào thì chạy chậm một nửa trong 2.5 giây; thợ săn thấy mờ |
 | Hộp gỗ | 5 | 10 s | Vật cản chắn đường, chắn đạn trong 15 giây |
 
 Bộ bài mặc định của người trốn: túi cứu thương, lựu đạn, súng lục, ván trượt, đệm lò xo. Người chơi chọn bộ bài ở menu (thứ tự chọn = ô 1..5), gửi lên server khi vào phòng, đi kèm `info["decks"]`. Luật tự lọc: bỏ thẻ không có, thẻ không dành cho vai mình (`allowed_roles`), thẻ trùng, quá 5 ô; lọc xong rỗng thì dùng bộ mặc định. Thợ săn luôn dùng bộ của thợ săn (mục 9).
@@ -75,20 +75,21 @@ Vật thể đặt xuống đất nằm trong `MatchRules.placed` (đồng bộ 
 
 Thêm thẻ mới: thêm giá trị vào `GameTypes.ItemType` (Lead), viết `Items/effects/<tên>.gd` (extends `ItemEffect`), khai báo trong `Items/item_catalog.gd`. Không cần sửa Core.
 
-## 8. Bắn: cối của thợ săn, súng của người trốn
+## 8. Bắn: súng của thợ săn, súng lục của người trốn
 
-Thợ săn không đánh cận chiến nữa. Bấm E / Space (không có người gục để túm) là **bắn cối**:
+Thợ săn không đánh cận chiến. Bấm E / Space (không có người gục để túm) là **bắn súng**:
 
-- Tự nhắm người trốn gần nhất trong tầm `mortar_range` (10 m) ở phía trước (góc 150°), ngắm đón đầu theo hướng chạy. Không có ai thì bắn thẳng 6 m trước mặt.
-- Đạn bay `mortar_min_flight + khoảng cách / mortar_speed` giây (8 m mất khoảng 0.9 giây). Chỗ rơi hiện vòng đỏ ngay khi bắn để người trốn kịp né (đổi hướng là trượt).
-- Rơi xuống thì nổ bán kính `mortar_radius` (1.3 m): mọi người trốn đứng trong vùng mất 1 máu (2 lần là gục). Hồi chiêu `attack_cooldown`.
+- Tự nhắm người trốn gần nhất trong tầm `rifle_range` (12 m) ở phía trước (góc 150°), ngắm đón đầu theo hướng chạy. Không có ai thì bắn thẳng về phía trước.
+- Đạn bay **đường thẳng** ngang tầm ngực, tốc độ `rifle_speed` (25 m/s, 10 m mất 0.4 giây). Server raycast một lần lúc bắn: gặp tường / vật cản (layer 1, kể cả hộp gỗ) thì đạn dừng ở đó.
+- Đạn tới nơi thì xét cả đoạn bay: người trốn đầu tiên nằm trong `rifle_radius` (0.5 m, cộng thân người) tính từ nòng súng bị trúng, mất 1 máu (2 lần là gục). Một viên chỉ trúng một người. Hồi chiêu `attack_cooldown`.
+- Bắn xong thì người bắn khựng lại `shoot_flinch_time` (0.25 giây, đi chậm còn `flinch_speed` = 20%); người trốn trúng đạn khựng `hit_flinch_time` (0.35 giây). Súng lục cũng làm người bắn khựng, nhưng thợ săn trúng đạn thì không khựng. Khựng chỉ tính trên server (di chuyển do server quyết), không gửi thêm dữ liệu.
 
-Người trốn có **súng lục** (thẻ trong bộ bài). Thợ săn có `hunter_max_hp` (6) máu. Hết máu thì bị choáng `hunter_knockout_stun` (3 giây), buông người đang kéo, tỉnh lại thì hồi đầy máu. Mỗi máu bắn mất được `score_damage` điểm.
+Người trốn có **súng lục** (thẻ trong bộ bài), đạn cũng bay thẳng và bị tường chặn. Thợ săn có `hunter_max_hp` (6) máu. **Người trốn không làm choáng được thợ săn**: hết máu thì thợ săn buông người đang kéo, chạy chậm `hunter_knockout_slow_factor` (một nửa) trong `hunter_knockout_slow` (3 giây), và hồi đầy máu ngay. Mỗi máu bắn mất được `score_damage` điểm.
 
 Cách chạy (server):
 
-1. Player gọi `GameState.server_fire_mortar(hunter, target)`; Items (súng) gọi `GameState.server_shoot_bullet(shooter, target)`. Luật kẹp tầm bắn, ghi viên đạn vào `MatchRules.shots` kèm giờ rơi.
-2. Mỗi physics frame Match gọi `GameState.server_land_shots(entities)`: đạn tới giờ thì xét ai đứng trong vùng trúng (theo mặt sàn, cộng 0.3 m thân người) rồi gọi `MatchRules.land_shot`. Cối chỉ trúng người trốn, đạn súng chỉ trúng thợ săn.
+1. Player gọi `GameState.server_fire_rifle(hunter, target)`; Items (súng lục) gọi `GameState.server_shoot_bullet(shooter, target)`. GameState kẹp tầm bắn, raycast tìm tường, ghi viên đạn vào `MatchRules.shots` kèm giờ rơi.
+2. Mỗi physics frame Match gọi `GameState.server_land_shots(entities)`: đạn tới giờ thì tìm người gần nòng nhất đứng sát đường bay (theo mặt sàn, cộng 0.3 m thân người, lọc bằng `MatchRules.can_be_shot`) rồi gọi `MatchRules.land_shot`. Súng thợ săn chỉ trúng người trốn, súng lục chỉ trúng thợ săn.
 3. Đạn đồng bộ như vật đặt: bắn thì gửi một lần (điểm đầu, điểm rơi, giờ bắn, giờ rơi), rơi thì chỉ gửi id. Mọi máy phát `shot_fired` / `shot_landed`; ai trúng thì có `player_hit` riêng. Client tự vẽ đường bay, không gửi vị trí đạn từng frame.
 
 `MatchRules.attack(hunter, targets)` (đòn trúng ngay) vẫn giữ cho vũ khí cận chiến sau này.

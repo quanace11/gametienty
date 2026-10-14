@@ -80,9 +80,10 @@ func _initialize() -> void:
 		&"_test_events_medkit",
 		&"_test_events_stun_release",
 		&"_test_items_copied_not_shared",
-		&"_test_mortar_flies_then_hits",
-		&"_test_mortar_range_clamped_and_cooldown",
-		&"_test_mortar_only_hits_escapees",
+		&"_test_rifle_flies_then_hits",
+		&"_test_rifle_range_clamped_and_cooldown",
+		&"_test_rifle_only_hits_escapees",
+		&"_test_shooting_and_hits_flinch",
 		&"_test_bullet_damages_hunter",
 		&"_test_hunter_knockout_releases_and_recovers",
 		&"_test_shots_world_sync",
@@ -878,39 +879,60 @@ func _test_world_diff() -> void:
 
 # ---------- Bắn ----------
 
-func _test_mortar_flies_then_hits() -> void:
+func _test_rifle_flies_then_hits() -> void:
 	var r := _rules()
-	var shot := r.fire_mortar(H, Vector3.ZERO, Vector3(7, 0, 0))
-	_check(shot != 0 and r.shots.has(shot), "bắn cối tạo đạn bay")
-	_check(r.record(H).attack_seq == 1 and r.record(H).attack_cooldown_left > 0.0, "bắn cối tính là một đòn")
+	var shot := r.fire_rifle(H, Vector3.ZERO, Vector3(7, 0, 0))
+	_check(shot != 0 and r.shots.has(shot), "bắn súng tạo đạn bay")
+	_check(r.shots[shot]["kind"] == GameTypes.ShotKind.RIFLE, "đạn súng thợ săn")
+	_check(r.record(H).attack_seq == 1 and r.record(H).attack_cooldown_left > 0.0, "bắn súng tính là một đòn")
 	_check(r.due_shots().is_empty(), "đạn chưa tới nơi")
-	r.tick(r.config.mortar_min_flight + 7.0 / r.config.mortar_speed + 0.01)
+	r.tick(7.0 / r.config.rifle_speed + 0.01)
 	_check(r.due_shots() == [shot], "hết thời gian bay thì đạn tới nơi")
-	_check(r.land_shot(shot, [A, B]), "đạn rơi")
-	_check(r.record(A).hp == r.config.max_hp - 1 and r.record(B).hp == r.config.max_hp - 1, "người trong vùng nổ mất máu")
+	_check(r.land_shot(shot, [A]), "đạn tới nơi")
+	_check(r.record(A).hp == r.config.max_hp - 1 and r.record(B).hp == r.config.max_hp, "chỉ người bị trúng mất máu")
 	_check(r.record(A).last_attacker_id == H, "ghi lại người bắn")
-	_check(not r.shots.has(shot) and not r.land_shot(shot, [A]), "đạn rơi rồi thì không rơi lần nữa")
+	_check(not r.shots.has(shot) and not r.land_shot(shot, [A]), "đạn tới rồi thì không tính lần nữa")
 
 
-func _test_mortar_range_clamped_and_cooldown() -> void:
+func _test_rifle_range_clamped_and_cooldown() -> void:
 	var r := _rules()
-	var shot := r.fire_mortar(H, Vector3.ZERO, Vector3(100, 0, 0))
+	var shot := r.fire_rifle(H, Vector3.ZERO, Vector3(100, 0, 0))
 	var to: Vector3 = r.shots[shot]["to"]
-	_check(is_equal_approx(Vector2(to.x, to.z).length(), r.config.mortar_range), "điểm rơi bị kẹp trong tầm cối")
-	_check(r.fire_mortar(H, Vector3.ZERO, Vector3(3, 0, 0)) == 0, "đang hồi chiêu thì không bắn được")
-	_check(r.fire_mortar(A, Vector3.ZERO, Vector3(3, 0, 0)) == 0, "người trốn không bắn cối")
+	_check(is_equal_approx(Vector2(to.x, to.z).length(), r.config.rifle_range), "đạn bị kẹp trong tầm súng")
+	_check(r.fire_rifle(H, Vector3.ZERO, Vector3(3, 0, 0)) == 0, "đang hồi chiêu thì không bắn được")
+	_check(r.fire_rifle(A, Vector3.ZERO, Vector3(3, 0, 0)) == 0, "người trốn không bắn súng thợ săn")
 	r.stun(H, r.config.attack_cooldown + 1.0)
 	r.tick(r.config.attack_cooldown + 0.01)
-	_check(r.record(H).stunned_left > 0.0 and r.fire_mortar(H, Vector3.ZERO, Vector3(3, 0, 0)) == 0, "đang choáng thì không bắn")
+	_check(r.record(H).stunned_left > 0.0 and r.fire_rifle(H, Vector3.ZERO, Vector3(3, 0, 0)) == 0, "đang choáng thì không bắn")
 
 
-func _test_mortar_only_hits_escapees() -> void:
+func _test_rifle_only_hits_escapees() -> void:
 	var r := _rules()
-	var shot := r.fire_mortar(H, Vector3.ZERO, Vector3(2, 0, 0))
+	_check(r.can_be_shot(GameTypes.ShotKind.RIFLE, A) and not r.can_be_shot(GameTypes.ShotKind.RIFLE, H), "súng thợ săn chỉ nhắm người trốn")
+	_check(r.can_be_shot(GameTypes.ShotKind.BULLET, H) and not r.can_be_shot(GameTypes.ShotKind.BULLET, A), "súng lục chỉ nhắm thợ săn")
+	var shot := r.fire_rifle(H, Vector3.ZERO, Vector3(2, 0, 0))
 	r.tick(2.0)
 	r.land_shot(shot, [H, A])
-	_check(r.record(H).hp == r.config.hunter_max_hp, "cối không làm thợ săn mất máu")
-	_check(r.record(A).hp == r.config.max_hp - 1, "cối trúng người trốn")
+	_check(r.record(H).hp == r.config.hunter_max_hp, "súng không làm thợ săn mất máu")
+	_check(r.record(A).hp == r.config.max_hp - 1, "súng trúng người trốn")
+
+
+func _test_shooting_and_hits_flinch() -> void:
+	var r := _rules()
+	var slow := r.config.flinch_speed
+	var shot := r.fire_rifle(H, Vector3.ZERO, Vector3(3, 0, 0))
+	_check(is_equal_approx(r.speed_factor(H), slow), "bắn xong thì thợ săn khựng lại")
+	r.tick(r.config.shoot_flinch_time + 0.01)
+	_check(is_equal_approx(r.speed_factor(H), 1.0), "hết khựng thì đi bình thường")
+	r.land_shot(shot, [A])
+	_check(is_equal_approx(r.speed_factor(A), slow), "người trốn trúng đạn thì khựng lại")
+	_check(is_equal_approx(r.speed_factor(B), 1.0), "người không trúng thì không khựng")
+	r.tick(r.config.hit_flinch_time + 0.01)
+	_check(is_equal_approx(r.speed_factor(A), 1.0), "hết khựng")
+	var bullet := r.shoot_bullet(B, Vector3.ZERO, Vector3(3, 0, 0))
+	_check(is_equal_approx(r.speed_factor(B), slow), "bắn súng lục cũng khựng")
+	r.land_shot(bullet, [H])
+	_check(r.record(H).flinch_left == 0.0, "thợ săn trúng đạn thì không khựng")
 
 
 func _test_bullet_damages_hunter() -> void:
@@ -934,31 +956,36 @@ func _test_hunter_knockout_releases_and_recovers() -> void:
 	r.pick_up(H, A)
 	_check(r.state_of(A) == S.CARRIED, "đang kéo A")
 	r.damage_hunter(H, r.config.hunter_max_hp - 1, B)
-	_check(r.record(H).stunned_left <= 0.0 and r.state_of(A) == S.CARRIED, "còn máu thì chưa choáng")
+	_check(r.record(H).speed_boost_left <= 0.0 and r.state_of(A) == S.CARRIED, "còn máu thì chưa buông")
 	r.damage_hunter(H, 5, B)
-	_check(r.record(H).hp == 0 and r.record(H).stunned_left > 0.0, "hết máu thì bị choáng")
-	_check(r.state_of(A) == S.IDLE and r.record(H).carrying_id == 0, "bị bắn gục thì buông người đang kéo")
+	var h := r.record(H)
+	_check(h.hp == 0 and h.stunned_left <= 0.0, "hết máu nhưng không bị choáng")
+	_check(h.speed_boost_left > 0.0 and is_equal_approx(h.speed_boost_factor, r.config.hunter_knockout_slow_factor), "hết máu thì chạy chậm")
+	_check(r.can_move(H), "vẫn đi được")
+	_check(r.state_of(A) == S.IDLE and h.carrying_id == 0, "bị bắn hết máu thì buông người đang kéo")
 	_check(r.record(B).damage_dealt == r.config.hunter_max_hp, "không tính sát thương thừa")
-	_check(not r.damage_hunter(H, 1, B), "đang gục thì bắn không mất thêm máu")
-	r.tick(r.config.hunter_knockout_stun + 0.01)
-	_check(r.record(H).hp == r.config.hunter_max_hp and r.record(H).stunned_left <= 0.0, "tỉnh lại thì hồi đầy máu")
+	_check(not r.damage_hunter(H, 1, B), "đang hết máu thì bắn không mất thêm")
+	r.tick(0.05)
+	_check(h.hp == r.config.hunter_max_hp and h.speed_boost_left > 0.0, "hồi đầy máu ngay, vẫn còn chậm")
+	r.tick(r.config.hunter_knockout_slow + 0.01)
+	_check(h.speed_boost_left <= 0.0, "hết chậm")
 	var r2 := _rules()
 	r2.damage_hunter(H, 99, B)
-	r2.tick(r2.config.hunter_knockout_stun + 0.01, false)
+	r2.tick(0.05, false)
 	_check(r2.record(H).hp == 0, "client không tự hồi máu thợ săn")
 
 
 func _test_shots_world_sync() -> void:
 	var r := _rules()
 	var w0 := r.world_dict()
-	var shot := r.fire_mortar(H, Vector3(0, 1, 0), Vector3(4, 0, 0))
+	var shot := r.fire_rifle(H, Vector3(0, 1, 0), Vector3(4, 0, 0))
 	var w1 := r.world_dict()
 	var changes := WorldRecord.diff(w0, w1)
 	_check(changes.has("shot_add") and changes.size() == 1, "chỉ gửi đạn mới")
 	_check(WorldRecord.apply_diff(w0, changes) == w1, "dựng lại đúng đạn từ diff")
 	var ev := WorldRecord.events_between(w0, w1, 3)
 	_check(ev.size() == 1 and ev[0]["signal"] == &"shot_fired", "sự kiện bắn")
-	_check(is_equal_approx(ev[0]["args"][5], r.config.mortar_min_flight + 4.0 / r.config.mortar_speed), "thời gian bay gửi kèm")
+	_check(is_equal_approx(ev[0]["args"][5], 4.0 / r.config.rifle_speed), "thời gian bay gửi kèm")
 	r.tick(2.0)
 	r.land_shot(shot, [])
 	var w2 := r.world_dict()

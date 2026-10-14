@@ -14,6 +14,7 @@ extends Node
 const TIME_SYNC_INTERVAL := 0.5
 const INPUT_SEND_HALF_INTERVAL := 1.0 / 60.0 ## client gửi input 30 lần/giây: trung bình trễ thêm nửa nhịp
 const HIT_PADDING := 0.3 ## mét, cộng vào bán kính đạn cho bằng thân người
+const SHOT_HEIGHT := 1.1 ## mét, đạn bay ngang tầm ngực
 const TELEPORT_CLEARANCE := 0.45 ## mét, bán kính khoảng trống cần có ở điểm dịch chuyển tới
 const PRISON_KEEP_OUT := 2.8 ## mét từ giữa nhà tù: không dịch chuyển vào trong tường
 const PROGRESS_SYNC_INTERVAL := 0.1 ## tiến độ cứu, máu trong tù chỉ gửi 10 lần/giây
@@ -148,19 +149,31 @@ func server_attack(attacker_id: int, target_ids: Array) -> bool:
 	return _can_mutate() and rules.attack(attacker_id, target_ids)
 
 
-## Thợ săn bắn cối về phía `target` (module Player tự chọn điểm ngắm).
-## Tầm bắn do luật kẹp. Trả về id viên đạn, 0 nếu chưa bắn được (hồi chiêu...).
-func server_fire_mortar(hunter: EntityBase, target: Vector3) -> int:
-	if not _can_mutate():
+## Thợ săn bắn súng về phía `target` (module Player tự chọn điểm ngắm), đạn
+## bay thẳng. Tầm bắn do luật kẹp, tường chặn đạn. Trả về id viên đạn, 0 nếu
+## chưa bắn được (hồi chiêu...).
+func server_fire_rifle(hunter: EntityBase, target: Vector3) -> int:
+	if not _can_mutate() or not rules.can_attack(hunter.peer_id):
 		return 0
-	return rules.fire_mortar(hunter.peer_id, hunter.global_position + Vector3.UP * 1.2, target)
+	var from := hunter.global_position + Vector3.UP * SHOT_HEIGHT
+	return rules.fire_rifle(hunter.peer_id, from, _until_wall(hunter, from, target, rules.config.rifle_range))
 
 
-## Người trốn bắn súng lục (Items gọi sau khi thẻ đã trả tiền).
+## Người trốn bắn súng lục (Items gọi sau khi thẻ đã trả tiền). Tường chặn đạn.
 func server_shoot_bullet(shooter: EntityBase, target: Vector3) -> int:
 	if not _can_mutate():
 		return 0
-	return rules.shoot_bullet(shooter.peer_id, shooter.global_position + Vector3.UP * 1.1, target)
+	var from := shooter.global_position + Vector3.UP * SHOT_HEIGHT
+	return rules.shoot_bullet(shooter.peer_id, from, _until_wall(shooter, from, target, rules.config.bullet_range))
+
+
+## Điểm cuối đường đạn: kẹp trong tầm, dừng ở bức tường đầu tiên (một raycast mỗi phát).
+func _until_wall(shooter: EntityBase, from: Vector3, target: Vector3, max_range: float) -> Vector3:
+	var flat := Vector2(target.x - from.x, target.z - from.z).limit_length(max_range)
+	var end := Vector3(from.x + flat.x, from.y, from.z + flat.y)
+	var query := PhysicsRayQueryParameters3D.create(from, end, 1) # layer 1: tường, vật cản
+	var hit := shooter.get_world_3d().direct_space_state.intersect_ray(query)
+	return hit["position"] if not hit.is_empty() else end
 
 
 ## Match gọi mỗi physics frame trên server sau khi mọi nhân vật đã di chuyển:
@@ -180,17 +193,25 @@ func server_after_move(entities: Array) -> void:
 		_record_footprints(entities)
 
 
-## Đạn tới nơi thì xét ai đứng trong vùng trúng (theo mặt sàn).
+## Đạn tới nơi: trúng người đầu tiên (gần chỗ bắn nhất) mà đường đạn đi qua
+## (theo mặt sàn). Người không trúng được (đang gục, bất tử...) không chặn đạn.
 func _land_shots(entities: Array) -> void:
 	for shot_id: int in rules.due_shots():
 		var s: Dictionary = rules.shots[shot_id]
-		var at := Vector2(s["to"].x, s["to"].z)
+		var a := Vector2(s["from"].x, s["from"].z)
+		var b := Vector2(s["to"].x, s["to"].z)
 		var r := rules.shot_radius(s["kind"]) + HIT_PADDING
-		var hits := []
+		var first_id := 0
+		var first_d := INF
 		for e: EntityBase in entities:
-			if e.peer_id != s["owner"] and e.flat_position().distance_squared_to(at) <= r * r:
-				hits.append(e.peer_id)
-		rules.land_shot(shot_id, hits)
+			if e.peer_id == s["owner"] or not rules.can_be_shot(s["kind"], e.peer_id):
+				continue
+			var p := e.flat_position()
+			var q := Geometry2D.get_closest_point_to_segment(p, a, b)
+			if p.distance_squared_to(q) <= r * r and a.distance_squared_to(q) < first_d:
+				first_d = a.distance_squared_to(q)
+				first_id = e.peer_id
+		rules.land_shot(shot_id, [first_id] if first_id != 0 else [])
 
 
 func server_pick_up(hunter_id: int, target_id: int) -> bool:

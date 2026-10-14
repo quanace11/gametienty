@@ -94,7 +94,8 @@ func speed_factor(id: int) -> float:
 			return config.rescuing_speed
 	if p.carrying_id != 0:
 		return config.carrying_speed
-	return p.speed_boost_factor if p.speed_boost_left > 0.0 else 1.0
+	var factor := p.speed_boost_factor if p.speed_boost_left > 0.0 else 1.0
+	return factor * config.flinch_speed if p.flinch_left > 0.0 else factor
 
 
 func can_attack(id: int) -> bool:
@@ -111,7 +112,7 @@ func is_hittable(id: int) -> bool:
 # ---------- Lệnh (server gọi qua GameState) ----------
 
 ## Đòn trúng ngay (không bay): `targets` là những người trốn trúng đòn. Thợ
-## săn hiện dùng cối (fire_mortar); hàm này để dành cho vũ khí cận chiến.
+## săn hiện dùng súng (fire_rifle); hàm này để dành cho vũ khí cận chiến.
 ## Trả về true nếu đòn được vung (kể cả trượt).
 func attack(attacker_id: int, targets: Array) -> bool:
 	if not can_attack(attacker_id):
@@ -122,14 +123,16 @@ func attack(attacker_id: int, targets: Array) -> bool:
 	return true
 
 
-## Thợ săn bắn cối từ `from` tới `to` (bị kẹp trong tầm mortar_range). Đạn rơi
-## sau một lúc; GameState xét ai đứng trong vùng nổ rồi gọi land_shot.
+## Thợ săn bắn súng theo đường thẳng từ `from` tới `to` (bị kẹp trong tầm
+## rifle_range; GameState đã cắt ở bức tường đầu tiên). Đạn tới nơi thì
+## GameState xét người trốn đầu tiên trên đường đạn rồi gọi land_shot.
 ## Trả về id viên đạn, 0 nếu không bắn được.
-func fire_mortar(hunter_id: int, from: Vector3, to: Vector3) -> int:
+func fire_rifle(hunter_id: int, from: Vector3, to: Vector3) -> int:
 	if not can_attack(hunter_id):
 		return 0
 	_start_attack(record(hunter_id))
-	return _add_shot(GameTypes.ShotKind.MORTAR, hunter_id, from, to)
+	record(hunter_id).flinch_left = config.shoot_flinch_time
+	return _add_shot(GameTypes.ShotKind.RIFLE, hunter_id, from, to)
 
 
 ## Người trốn bắn súng lục (tiền và hồi chiêu đã tính ở use_item).
@@ -137,12 +140,22 @@ func shoot_bullet(owner_id: int, from: Vector3, to: Vector3) -> int:
 	var p := record(owner_id)
 	if p == null or p.is_hunter() or not is_playing() or not GameTypes.is_active(p.state) or p.stunned_left > 0.0:
 		return 0
+	p.flinch_left = config.shoot_flinch_time
 	return _add_shot(GameTypes.ShotKind.BULLET, owner_id, from, to)
 
 
 ## Bán kính trúng của một loại đạn.
 func shot_radius(kind: GameTypes.ShotKind) -> float:
-	return config.mortar_radius if kind == GameTypes.ShotKind.MORTAR else config.bullet_radius
+	return config.rifle_radius if kind == GameTypes.ShotKind.RIFLE else config.bullet_radius
+
+
+## Đạn loại `kind` có trúng được người `id` không: súng thợ săn chỉ trúng người
+## trốn đang đứng (không bất tử), súng lục chỉ trúng thợ săn còn máu.
+func can_be_shot(kind: GameTypes.ShotKind, id: int) -> bool:
+	if kind == GameTypes.ShotKind.RIFLE:
+		return is_hittable(id)
+	var p := record(id)
+	return p != null and p.is_hunter() and p.hp > 0
 
 
 ## Những viên đạn đã tới nơi, chờ xét trúng.
@@ -150,8 +163,8 @@ func due_shots() -> Array:
 	return shots.keys().filter(func(shot_id: int) -> bool: return shots[shot_id]["lands"] <= elapsed)
 
 
-## Đạn rơi xuống; `hit_ids` là những người đứng trong vùng trúng (GameState
-## tính theo vị trí). Cối chỉ trúng người trốn, đạn súng chỉ trúng thợ săn.
+## Đạn tới nơi; `hit_ids` là người trúng (GameState tính theo vị trí, thường
+## chỉ người đầu tiên trên đường đạn). Súng thợ săn chỉ trúng người trốn, súng lục chỉ trúng thợ săn.
 func land_shot(shot_id: int, hit_ids: Array) -> bool:
 	if not shots.has(shot_id):
 		return false
@@ -159,15 +172,15 @@ func land_shot(shot_id: int, hit_ids: Array) -> bool:
 	shots.erase(shot_id)
 	_world_dirty = true
 	for id: int in hit_ids:
-		if s["kind"] == GameTypes.ShotKind.MORTAR:
+		if s["kind"] == GameTypes.ShotKind.RIFLE:
 			_hit_escapee(id, s["owner"])
 		else:
 			damage_hunter(id, config.bullet_damage, s["owner"])
 	return true
 
 
-## Thợ săn mất máu (súng lục). Hết máu thì bị choáng (buông người đang kéo),
-## hết choáng thì hồi đầy.
+## Thợ săn mất máu (súng lục). Hết máu thì buông người đang kéo và chạy chậm
+## (không bị choáng: người trốn không làm choáng được thợ săn), rồi hồi đầy máu.
 func damage_hunter(id: int, amount: int, attacker_id: int) -> bool:
 	var p := record(id)
 	if p == null or not p.is_hunter() or p.hp <= 0 or amount <= 0 or not is_playing():
@@ -181,7 +194,8 @@ func damage_hunter(id: int, amount: int, attacker_id: int) -> bool:
 		shooter.damage_dealt += dealt
 		_mark(attacker_id)
 	if p.hp == 0:
-		stun(id, config.hunter_knockout_stun)
+		_release(p)
+		speed_boost(id, config.hunter_knockout_slow, config.hunter_knockout_slow_factor)
 	return true
 
 
@@ -580,12 +594,13 @@ func _tick_player(p: PlayerRecord, delta: float, authoritative: bool) -> void:
 			_mark(p.id)
 	if p.speed_boost_left > 0.0:
 		p.speed_boost_left = maxf(0.0, p.speed_boost_left - delta)
+	p.flinch_left = maxf(0.0, p.flinch_left - delta)
 	if p.teleport_left > 0.0:
 		p.teleport_left = maxf(0.0, p.teleport_left - delta)
 		if p.teleport_left == 0.0 and authoritative:
 			_teleports_done.append(p.id)
 			_mark(p.id)
-	if authoritative and p.is_hunter() and p.hp <= 0 and p.stunned_left <= 0.0:
+	if authoritative and p.is_hunter() and p.hp <= 0:
 		p.hp = p.max_hp # tỉnh lại sau khi bị bắn gục
 		_mark(p.id)
 	for i in p.item_cooldowns.size():
@@ -775,7 +790,7 @@ func _start_attack(hunter: PlayerRecord) -> void:
 	_mark(hunter.id)
 
 
-## Người trốn trúng đòn / trúng cối: mất 1 máu, hết máu thì gục.
+## Người trốn trúng đòn / trúng súng: mất 1 máu, hết máu thì gục.
 func _hit_escapee(target_id: int, attacker_id: int) -> void:
 	if not is_hittable(target_id):
 		return
@@ -783,6 +798,7 @@ func _hit_escapee(target_id: int, attacker_id: int) -> void:
 	p.hp -= 1
 	p.last_attacker_id = attacker_id
 	p.invulnerable_left = config.hit_invulnerable_time
+	p.flinch_left = config.hit_flinch_time
 	if p.hp <= 0:
 		p.hp = 0
 		p.state = GameTypes.PlayerState.DOWNED
@@ -794,11 +810,10 @@ func _hit_escapee(target_id: int, attacker_id: int) -> void:
 
 ## Thêm đạn bay. Kẹp tầm bắn theo mặt sàn (không tin vị trí client gửi).
 func _add_shot(kind: GameTypes.ShotKind, owner_id: int, from: Vector3, to: Vector3) -> int:
-	var mortar := kind == GameTypes.ShotKind.MORTAR
-	var flat := Vector2(to.x - from.x, to.z - from.z).limit_length(config.mortar_range if mortar else config.bullet_range)
+	var rifle := kind == GameTypes.ShotKind.RIFLE
+	var flat := Vector2(to.x - from.x, to.z - from.z).limit_length(config.rifle_range if rifle else config.bullet_range)
 	var dest := Vector3(from.x + flat.x, to.y, from.z + flat.y)
-	var flight := config.mortar_min_flight + flat.length() / config.mortar_speed if mortar \
-		else maxf(0.05, flat.length() / config.bullet_speed)
+	var flight := maxf(0.05, flat.length() / (config.rifle_speed if rifle else config.bullet_speed))
 	var shot_id := _next_shot_id
 	_next_shot_id += 1
 	shots[shot_id] = {"kind": kind, "owner": owner_id, "from": from, "to": dest, "fired": elapsed, "lands": elapsed + flight}
