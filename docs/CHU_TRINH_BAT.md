@@ -30,10 +30,11 @@ Tất cả trả về `true` nếu lệnh hợp lệ và đã thực hiện. G�
 
 | Lệnh | Ai gọi | Khi nào |
 |---|---|---|
-| `GameState.server_attack(hunter_id, target_ids)` | Player | Thợ săn bấm đánh. `target_ids` là người trong hitbox (module tự tính). Core lo hồi chiêu, bất tử sau khi trúng, trừ máu |
+| `GameState.server_fire_mortar(hunter, target)` | Player | Thợ săn bắn cối về điểm `target` (module tự ngắm). Core kẹp tầm, lo hồi chiêu, đạn rơi thì trừ máu người trong vùng nổ. Xem [LUAT_TRAN.md](LUAT_TRAN.md#8-bắn-cối-của-thợ-săn-súng-của-người-trốn) |
+| `GameState.server_attack(hunter_id, target_ids)` | (dành cho cận chiến) | Đòn trúng ngay `target_ids`. Core lo hồi chiêu, bất tử sau khi trúng, trừ máu |
 | `GameState.server_pick_up(hunter_id, target_id)` | Player | Thợ săn bấm gần người đang gục: túm lấy để kéo |
 | `GameState.server_drop(hunter_id)` | Player | Thợ săn thả người đang kéo |
-| `GameState.server_imprison(hunter_id, prison_id)` | Objects (nhà tù) | Thợ săn đang kéo người bước vào nhà tù |
+| `GameState.server_imprison(hunter_id, prison_id)` | Objects (nhà tù) | Thợ săn đang kéo người tới sát tường nhà tù (trong 1 m) |
 | `GameState.server_channel_rescue(rescuer_id, target_id, delta)` | Player | **Mỗi physics frame** khi đang giữ E gần người đang gục. Nhiều người cùng đỡ thì nhanh hơn. Không dùng được cho người bị kéo / bị nhốt |
 | `GameState.server_use_medkit(thrower_id, target_id)` | Player, Items | Ném túi máu (module tự kiểm tra tầm `medkit_range` và đường bay). Người đang gục / bị kéo / bị nhốt đứng dậy ngay; đang đứng thì hồi máu. `target_id = thrower_id` là tự dùng |
 | `GameState.server_stun(id, seconds)` | Items (súng, lựu đạn), Objects (bẫy) | Làm choáng. Thợ săn đang kéo người mà bị choáng thì buông tay |
@@ -88,8 +89,8 @@ Mọi con số nằm trong `Core/types/match_config.gd`: số máu, hồi chiêu
 
 ## 7. Bản cài đặt mẫu (để chơi được ngay, các thành viên thay dần)
 
-- `Player/player_character.gd`: E/Space: thợ săn túm người gục gần nhất, không có thì vung đòn hình nón trước mặt; người trốn giữ để đỡ đồng đội gục. Q: ném túi máu cho đồng đội cần cứu gần nhất trong tầm (tạm thời trúng ngay), không có ai thì tự dùng. Người bị kéo nằm sau lưng thợ săn, người bị nhốt đứng trong nhà tù.
-- `Objects/prison.gd`: thợ săn kéo người bước vào là nhốt, hiện số giây trước khi bị đốt. Chưa có tường cao và đệm lò xo: được túi máu cứu thì đi thẳng ra ngoài.
+- `Player/player_character.gd`: E/Space: thợ săn túm người gục gần nhất, không có thì bắn cối; người trốn giữ để đỡ đồng đội gục. Túi máu là thẻ trong bộ bài (Items). Người bị kéo nằm sau lưng thợ săn, người bị nhốt nằm giữa nhà tù.
+- `Objects/prison.gd`: khu tường cao 3 m không cửa. Thợ săn kéo người tới sát tường là nhốt, hiện số giây trước khi bị đốt. Túi máu ném qua tường cứu được; người được cứu vẫn kẹt trong tường (không bị đốt nữa), bước lên đệm lò xo trong tù để bật ra ngoài (hoặc tự đặt đệm lò xo).
 - `AI/bot_input_source.gd`: thợ săn đánh, túm, kéo về tù; người trốn mở két, đỡ đồng đội gục khi thợ săn ở xa, tới gần người bị kéo / bị nhốt để ném túi máu.
 
 ## 8. Test

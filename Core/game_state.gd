@@ -13,9 +13,13 @@ extends Node
 
 const TIME_SYNC_INTERVAL := 0.5
 const INPUT_SEND_HALF_INTERVAL := 1.0 / 60.0 ## client gửi input 30 lần/giây: trung bình trễ thêm nửa nhịp
+const HIT_PADDING := 0.3 ## mét, cộng vào bán kính đạn cho bằng thân người
+const TELEPORT_CLEARANCE := 0.45 ## mét, bán kính khoảng trống cần có ở điểm dịch chuyển tới
+const PRISON_KEEP_OUT := 2.8 ## mét từ giữa nhà tù: không dịch chuyển vào trong tường
 const PROGRESS_SYNC_INTERVAL := 0.1 ## tiến độ cứu, máu trong tù chỉ gửi 10 lần/giây
 ## Các trường đổi liên tục; chỉ đổi những trường này thì gửi thưa hơn.
-const _CONTINUOUS_KEYS := ["rescue_progress", "prison_time_left", "invulnerable_left", "attack_cooldown_left", "stunned_left", "chest_work"]
+const _CONTINUOUS_KEYS := ["rescue_progress", "prison_time_left", "invulnerable_left", "attack_cooldown_left", "stunned_left", "chest_work",
+	"item_cooldowns", "speed_boost_left"]
 
 var rules: MatchRules = null
 
@@ -27,6 +31,10 @@ var _applied := {} # mọi máy: id -> dict đã áp dụng lần cuối (để 
 var _world_pending := false # chỉ server
 var _world_sent := {} # chỉ server
 var _world_applied := {} # mọi máy
+var _effects := {} # ItemType -> ItemEffect (chỉ server dùng)
+var _aim_points := {} # chỉ server: id -> Vector3, điểm người chơi chọn trên minimap
+var _footprints := {} # chỉ server: id người trốn -> [Vector3 (y = elapsed lúc ghi)]
+var _footprint_timer := 0.0
 
 
 func _ready() -> void:
@@ -37,6 +45,7 @@ func begin(info: Dictionary, total_safes: int, floor_coins: int = 0) -> void:
 	var cfg := MatchConfig.new()
 	cfg.duration = info["time"]
 	rules = MatchRules.new(cfg, info["roles"], info["names"], total_safes, floor_coins)
+	_setup_items(info.get("decks", {}))
 	_time_sync_timer = 0.0
 	_progress_sync_timer = 0.0
 	_pending.clear()
@@ -46,9 +55,27 @@ func begin(info: Dictionary, total_safes: int, floor_coins: int = 0) -> void:
 		_applied[id] = rules.players[id].to_dict()
 		_sent[id] = _applied[id]
 	_world_pending = false
+	_aim_points.clear()
+	_footprints.clear()
+	_footprint_timer = 0.0
 	_world_applied = rules.world_dict()
 	_world_sent = _world_applied
 	EventBus.match_state_changed.emit(rules.state)
+
+
+## Bảng thẻ do Items khai báo (ModuleRegistry.ITEM_CATALOG). Mọi máy dựng giống nhau.
+func _setup_items(decks: Dictionary) -> void:
+	var catalog_script: Script = load(ModuleRegistry.ITEM_CATALOG)
+	var items: Dictionary = catalog_script.call(&"all")
+	var defaults := {}
+	for role: int in [GameTypes.Role.HUNTER, GameTypes.Role.ESCAPEE]:
+		defaults[role] = catalog_script.call(&"default_deck", role)
+	rules.setup_items(items, decks, defaults)
+	_effects.clear()
+	for type: int in items:
+		var data: ItemData = items[type]
+		if data.effect_script != "":
+			_effects[type] = load(data.effect_script).new()
 
 
 func clear() -> void:
@@ -121,6 +148,51 @@ func server_attack(attacker_id: int, target_ids: Array) -> bool:
 	return _can_mutate() and rules.attack(attacker_id, target_ids)
 
 
+## Thợ săn bắn cối về phía `target` (module Player tự chọn điểm ngắm).
+## Tầm bắn do luật kẹp. Trả về id viên đạn, 0 nếu chưa bắn được (hồi chiêu...).
+func server_fire_mortar(hunter: EntityBase, target: Vector3) -> int:
+	if not _can_mutate():
+		return 0
+	return rules.fire_mortar(hunter.peer_id, hunter.global_position + Vector3.UP * 1.2, target)
+
+
+## Người trốn bắn súng lục (Items gọi sau khi thẻ đã trả tiền).
+func server_shoot_bullet(shooter: EntityBase, target: Vector3) -> int:
+	if not _can_mutate():
+		return 0
+	return rules.shoot_bullet(shooter.peer_id, shooter.global_position + Vector3.UP * 1.1, target)
+
+
+## Match gọi mỗi physics frame trên server sau khi mọi nhân vật đã di chuyển:
+## đạn tới nơi thì xét trúng, thợ săn tụ lực xong thì dời tới chỗ mới, ghi dấu chân.
+func server_after_move(entities: Array) -> void:
+	if not _can_mutate():
+		return
+	_land_shots(entities)
+	for id: int in rules.take_teleports():
+		for e: EntityBase in entities:
+			if e.peer_id == id:
+				e.global_position = rules.record(id).teleport_pos
+				e.velocity = Vector3.ZERO
+	_footprint_timer -= get_physics_process_delta_time()
+	if _footprint_timer <= 0.0:
+		_footprint_timer = rules.config.footprint_interval
+		_record_footprints(entities)
+
+
+## Đạn tới nơi thì xét ai đứng trong vùng trúng (theo mặt sàn).
+func _land_shots(entities: Array) -> void:
+	for shot_id: int in rules.due_shots():
+		var s: Dictionary = rules.shots[shot_id]
+		var at := Vector2(s["to"].x, s["to"].z)
+		var r := rules.shot_radius(s["kind"]) + HIT_PADDING
+		var hits := []
+		for e: EntityBase in entities:
+			if e.peer_id != s["owner"] and e.flat_position().distance_squared_to(at) <= r * r:
+				hits.append(e.peer_id)
+		rules.land_shot(shot_id, hits)
+
+
 func server_pick_up(hunter_id: int, target_id: int) -> bool:
 	return _can_mutate() and rules.pick_up(hunter_id, target_id)
 
@@ -138,9 +210,148 @@ func server_channel_rescue(rescuer_id: int, target_id: int, delta: float) -> boo
 	return _can_mutate() and rules.channel_rescue(rescuer_id, target_id, delta)
 
 
-## `thrower_id` ném/dùng một túi máu cho `target_id` (module kiểm tra tầm ném).
-func server_use_medkit(thrower_id: int, target_id: int) -> bool:
-	return _can_mutate() and rules.use_medkit(thrower_id, target_id)
+## Người chơi bấm nút ô thẻ `slot`. Core gọi (Match), module không cần gọi.
+## Hỏi hiệu ứng (Items) có dùng được không, trả tiền, rồi chạy hiệu ứng.
+func server_use_item(user: EntityBase, slot: int) -> bool:
+	if not _can_mutate() or not rules.can_use_item(user.peer_id, slot):
+		return false
+	var type: int = rules.record(user.peer_id).deck[slot]
+	var effect: ItemEffect = _effects.get(type)
+	if effect == null:
+		return false
+	var plan := effect.plan(user)
+	if plan.is_empty():
+		return false
+	if not rules.use_item(user.peer_id, slot, plan.get("target_id", 0), plan.get("target_pos", user.global_position)):
+		return false
+	effect.server_apply(user, plan)
+	return true
+
+
+## Thợ săn bắt đầu tụ lực dịch chuyển (Items gọi). Điểm tới được kẹp trong
+## bản đồ, tránh tường và nhà tù; không tìm được chỗ đứng thì không dịch chuyển.
+func server_start_teleport(id: int, target: Vector3) -> bool:
+	if not _can_mutate():
+		return false
+	var spot: Variant = find_standing_spot(target)
+	return spot != null and rules.start_teleport(id, spot)
+
+
+## Điểm đứng được gần `target` nhất (trong 3 m), null nếu không có. Chỉ server dùng.
+func find_standing_spot(target: Vector3) -> Variant:
+	var map := get_tree().get_first_node_in_group(GameTypes.GROUP_MAP) as MapBase
+	if map == null:
+		return null
+	var bounds := map.get_bounds().grow(-TELEPORT_CLEARANCE)
+	var space := map.get_world_3d().direct_space_state
+	var query := PhysicsShapeQueryParameters3D.new()
+	var shape := SphereShape3D.new()
+	shape.radius = TELEPORT_CLEARANCE
+	query.shape = shape
+	query.collision_mask = 1 # tường, vật cản
+	for ring in 7: # thử chính điểm đó rồi các vòng 0.5 m, 1 m... ra xa dần
+		var steps := 1 if ring == 0 else 8
+		for k in steps:
+			var off := Vector2(ring * 0.5, 0).rotated(TAU * k / steps)
+			var p := Vector2(clampf(target.x + off.x, bounds.position.x, bounds.end.x),
+				clampf(target.z + off.y, bounds.position.y, bounds.end.y))
+			if _near_prison(p):
+				continue
+			query.transform = Transform3D(Basis(), Vector3(p.x, 1.0, p.y))
+			if space.intersect_shape(query, 1).is_empty():
+				return Vector3(p.x, 0.05, p.y)
+	return null
+
+
+func _near_prison(p: Vector2) -> bool:
+	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_PRISONS):
+		var c := (node as Node3D).global_position
+		if p.distance_to(Vector2(c.x, c.z)) < PRISON_KEEP_OUT:
+			return true
+	return false
+
+
+## Điểm người chơi `id` chọn trên minimap (null nếu chưa chọn). Chỉ server có.
+func aim_point(id: int) -> Variant:
+	return _aim_points.get(id)
+
+
+## Máy người chơi gọi khi chạm minimap. Bot (trên server) gọi server_set_aim_point.
+func set_aim_point(point: Vector3) -> void:
+	if multiplayer.is_server():
+		server_set_aim_point(multiplayer.get_unique_id(), point)
+	else:
+		_submit_aim_point.rpc_id(1, point)
+
+
+func server_set_aim_point(id: int, point: Vector3) -> void:
+	if rules == null or not rules.players.has(id) or not multiplayer.is_server():
+		return
+	var map := get_tree().get_first_node_in_group(GameTypes.GROUP_MAP) as MapBase
+	var b := map.get_bounds() if map else Rect2(-500, -500, 1000, 1000)
+	_aim_points[id] = Vector3(clampf(point.x, b.position.x, b.end.x), 0.0, clampf(point.z, b.position.y, b.end.y))
+
+
+@rpc("any_peer", "reliable")
+func _submit_aim_point(point: Vector3) -> void:
+	server_set_aim_point(multiplayer.get_remote_sender_id(), point) # chỉ đặt được cho chính mình
+
+
+## Radar của `viewer_id`: gửi dấu chân người trốn trong footprint_history giây
+## gần nhất, CHỈ tới máy người đó (máy khác không biết, đỡ băng thông).
+func server_reveal_footprints(viewer_id: int, seconds: float) -> bool:
+	if not _can_mutate():
+		return false
+	if GameTypes.is_bot_id(viewer_id):
+		return true # bot vốn đọc được vị trí, không cần gửi
+	var points := PackedVector3Array()
+	for id: int in _footprints:
+		if not GameTypes.is_active(rules.state_of(id)) and rules.state_of(id) != GameTypes.PlayerState.DOWNED:
+			continue
+		for f: Vector3 in _footprints[id]:
+			points.append(Vector3(f.x, rules.elapsed - f.y, f.z))
+	if viewer_id == multiplayer.get_unique_id():
+		_reveal(points, seconds)
+	elif viewer_id in multiplayer.get_peers():
+		_reveal.rpc_id(viewer_id, points, seconds)
+	return true
+
+
+func _record_footprints(entities: Array) -> void:
+	var keep := ceili(rules.config.footprint_history / maxf(rules.config.footprint_interval, 0.05))
+	for e: EntityBase in entities:
+		if e.is_hunter() or e.is_out():
+			continue
+		var trail: Array = _footprints.get(e.peer_id, [])
+		trail.append(Vector3(e.global_position.x, rules.elapsed, e.global_position.z))
+		if trail.size() > keep:
+			trail.pop_front()
+		_footprints[e.peer_id] = trail
+
+
+@rpc("authority", "reliable")
+func _reveal(points: PackedVector3Array, seconds: float) -> void:
+	EventBus.footprints_revealed.emit(points, seconds)
+
+
+## Túi máu của `healer_id` trúng `target_id` (Items gọi khi túi tới nơi).
+func server_heal(healer_id: int, target_id: int) -> bool:
+	return _can_mutate() and rules.heal(healer_id, target_id)
+
+
+func server_speed_boost(id: int, seconds: float, factor: float) -> bool:
+	return _can_mutate() and rules.speed_boost(id, seconds, factor)
+
+
+## Đặt bẫy / đệm lò xo / hộp gỗ. Trả về id vật thể (0 = không đặt được).
+func server_place(type: GameTypes.ItemType, pos: Vector3, yaw: float, owner_id: int, lifetime: float) -> int:
+	if not _can_mutate():
+		return 0
+	return rules.place(type, pos, yaw, owner_id, lifetime)
+
+
+func server_remove_placed(obj_id: int) -> bool:
+	return _can_mutate() and rules.remove_placed(obj_id)
 
 
 func server_stun(id: int, seconds: float) -> bool:
@@ -187,11 +398,12 @@ func _is_significant(old: Dictionary, new: Dictionary) -> bool:
 	return new["rescue_progress"] != old["rescue_progress"] and (new["rescue_progress"] == 0.0 or new["rescue_progress"] >= 1.0)
 
 
-## Rương xong, về 0, cổng, tiền: gửi ngay; tiến độ rương bình thường gửi 10 lần/giây.
+## Rương xong, về 0, cổng, tiền, vật đặt, đạn: gửi ngay; tiến độ rương bình thường gửi 10 lần/giây.
 func _world_significant(old: Dictionary, new: Dictionary) -> bool:
 	if old.is_empty() or old["gate_open"] != new["gate_open"] or old["gate_opening"] != new["gate_opening"]:
 		return true
-	if old["coins_taken"].size() != new["coins_taken"].size():
+	if old["coins_taken"].size() != new["coins_taken"].size() or old["placed"].size() != new["placed"].size() \
+			or old["shots"].keys() != new["shots"].keys():
 		return true
 	for safe_id: int in new["safes"]:
 		var a: float = old["safes"].get(safe_id, 0.0)

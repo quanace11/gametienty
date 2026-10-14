@@ -1,11 +1,21 @@
 class_name ItemData
 extends Resource
-## Dữ liệu một thẻ kỹ năng / vật phẩm. Module Items tạo các file .tres từ đây.
+## Dữ liệu một thẻ đạo cụ. Module Items khai báo trong ItemCatalog. Core chỉ
+## đọc cost / cooldown để kiểm tra khi dùng; hiệu ứng nằm ở `effect_script`.
 
-@export var id: StringName
-@export var type: GameTypes.ItemType = GameTypes.ItemType.DISGUISE
+@export var type: GameTypes.ItemType = GameTypes.ItemType.MEDKIT
 @export var display_name := ""
 @export var icon: Texture2D
-@export var cooldown := 10.0 # giây
-@export var duration := 0.0 # giây, 0 = dùng một lần
+@export var cost := 0 ## tiền mỗi lần kích hoạt
+@export var cooldown := 10.0 ## giây
 @export var allowed_roles: Array[GameTypes.Role] = [GameTypes.Role.ESCAPEE]
+@export_file("*.gd") var effect_script := "" ## extends ItemEffect
+
+
+func _init(p_type: GameTypes.ItemType = GameTypes.ItemType.MEDKIT, p_name: String = "", p_cost: int = 0,
+		p_cooldown: float = 10.0, p_effect: String = "") -> void:
+	type = p_type
+	display_name = p_name
+	cost = p_cost
+	cooldown = p_cooldown
+	effect_script = p_effect

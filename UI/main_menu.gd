@@ -1,7 +1,14 @@
 extends CanvasLayer
 ## Menu chính và sảnh chờ. Chỉ gọi API công khai của Net.
+## Chọn bộ bài người trốn (tối đa DECK_SIZE thẻ) trước khi vào trận: lưu vào
+## Net.my_deck, server gửi kèm thông tin trận. Thợ săn dùng bộ bài cố định.
+
+const DECK_SIZE := 5 # khớp MatchConfig.deck_size
 
 var match_time := 180.0
+var _deck_checks := {} # ItemType -> CheckBox
+var _deck_order := [] # thứ tự chọn = thứ tự ô 1..5
+var _deck_label: Label
 
 var _name_edit: LineEdit
 var _ip_edit: LineEdit
@@ -30,6 +37,8 @@ func _ready() -> void:
 	_name_edit.placeholder_text = "Tên của bạn"
 	_name_edit.text = Net.my_name if Net.my_name != "Player" else "Người chơi %d" % (randi() % 1000)
 	box.add_child(_name_edit)
+
+	_build_deck_picker(box)
 
 	_offline_row = HBoxContainer.new()
 	box.add_child(_offline_row)
@@ -87,6 +96,45 @@ func refresh() -> void:
 	_start_btn.visible = can_start
 	_start_btn.disabled = Net.players.size() < 2 and not _fill_bots.button_pressed
 	_leave_btn.visible = online
+
+
+func _build_deck_picker(box: VBoxContainer) -> void:
+	var catalog: Script = load(ModuleRegistry.ITEM_CATALOG)
+	var items: Dictionary = catalog.call(&"all")
+	_deck_order = catalog.call(&"default_deck", GameTypes.Role.ESCAPEE)
+	if not Net.my_deck.is_empty():
+		_deck_order = Net.my_deck.duplicate()
+	_deck_label = Label.new()
+	box.add_child(_deck_label)
+	var grid := GridContainer.new()
+	grid.columns = 2
+	box.add_child(grid)
+	for type: int in catalog.call(&"choices", GameTypes.Role.ESCAPEE):
+		var it: ItemData = items[type]
+		var cb := CheckBox.new()
+		cb.text = "%s (%d xu, hồi %ds)" % [it.display_name, it.cost, roundi(it.cooldown)]
+		cb.button_pressed = type in _deck_order
+		cb.toggled.connect(func(on: bool) -> void: _on_deck_toggled(type, on))
+		grid.add_child(cb)
+		_deck_checks[type] = cb
+	_update_deck()
+
+
+func _on_deck_toggled(type: int, on: bool) -> void:
+	if on and type not in _deck_order:
+		if _deck_order.size() >= DECK_SIZE:
+			_deck_checks[type].set_pressed_no_signal(false) # đủ ô rồi, bỏ bớt thẻ khác trước
+			return
+		_deck_order.append(type)
+	elif not on:
+		_deck_order.erase(type)
+	_update_deck()
+
+
+func _update_deck() -> void:
+	Net.my_deck = _deck_order.duplicate()
+	_deck_label.text = "Bộ bài người trốn (%d/%d thẻ, phím 1-%d theo thứ tự chọn):" % [
+		_deck_order.size(), DECK_SIZE, DECK_SIZE]
 
 
 func _offline(role: GameTypes.Role) -> void:

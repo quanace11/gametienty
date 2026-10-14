@@ -10,7 +10,7 @@ enum Role { HUNTER, ESCAPEE }
 ##   CARRIED --túi máu / thợ săn bị choáng--> IDLE           IMPRISONED --túi máu--> IDLE
 ##   IMPRISONED --bị đốt hết giờ (prison_time)--> ELIMINATED
 ##   IDLE/RESCUING --vào cổng đã mở--> ESCAPED
-## Thợ săn luôn IDLE. RUNNING để dành cho anim, luật không dùng.
+## Thợ săn luôn IDLE; hết máu (bị bắn) thì bị choáng hunter_knockout_stun giây rồi hồi đầy máu. RUNNING để dành cho anim, luật không dùng.
 enum PlayerState {
 	IDLE,
 	RUNNING,
@@ -34,7 +34,14 @@ enum EscapeeResult { CAUGHT, ESCAPED }
 ## Kết quả một lần căn vòng khi mở rương.
 enum QteResult { NONE, PERFECT, GOOD, FAIL }
 
-enum ItemType { DISGUISE, BARRIER, SPEED_SHOES, GUN, MEDKIT }
+## Thẻ đạo cụ trong bộ bài. Cũng dùng làm loại vật thể đặt xuống đất (TRAP, JUMP_PAD, CRATE).
+## Thêm loại mới ở CUỐI để số của loại cũ không đổi.
+enum ItemType { MEDKIT, STUN_GRENADE, TRAP, JUMP_PAD, CRATE, SPEED_BOOST, PISTOL, DISGUISE, TELEPORT, RADAR }
+
+## Loại đạn bay. Server tính đường bay và điểm rơi, client chỉ vẽ lại.
+## MORTAR: đạn cối của thợ săn, rơi theo đường cong, nổ trúng người trốn trong vùng.
+## BULLET: đạn súng lục của người trốn, bay thẳng, trúng thì thợ săn mất máu.
+enum ShotKind { MORTAR, BULLET }
 
 ## Group mà các module dùng để tìm nhau mà không cần biết class cụ thể.
 const GROUP_ENTITIES := &"entities"
@@ -42,6 +49,8 @@ const GROUP_SAFES := &"safes"
 const GROUP_EXIT_GATES := &"exit_gates"
 const GROUP_PRISONS := &"prisons"
 const GROUP_COINS := &"coins"
+const GROUP_MAP := &"map" ## bản đồ đang chơi (MapBase), UI minimap và GameState đọc
+const GROUP_JUMP_PADS := &"jump_pads" ## Node3D đệm lò xo (trong nhà tù, đặt từ bộ bài): bot tìm đường thoát
 
 ## Bot dùng id âm (-1, -2, ...), người thật dùng peer id của Godot (luôn dương).
 static func is_bot_id(id: int) -> bool:

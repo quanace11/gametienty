@@ -28,6 +28,14 @@ var gate_open := false
 var gate_opening_left := 0.0 ## > 0: cổng đang rung, chưa qua được
 var coins := {} # coin_id -> giá trị, những cọc tiền còn trên sàn
 var coins_taken := {} # coin_id -> id người nhặt
+var placed := {} # obj_id -> {"type": ItemType, "pos": Vector3, "yaw": float, "owner": id, "expires": elapsed}
+var catalog := {} ## ItemType -> {"cost": int, "cooldown": float}, Items khai báo (setup_items)
+## Đạn đang bay: shot_id -> {"kind": ShotKind, "owner": id, "from": Vector3, "to": Vector3, "fired": elapsed, "lands": elapsed}
+var shots := {}
+
+var _next_placed_id := 1
+var _next_shot_id := 1
+var _teleports_done := [] # chỉ server: id thợ săn vừa tụ lực xong, GameState dời nhân vật
 
 var rng := RandomNumberGenerator.new() ## chỉ server dùng (vị trí vùng sáng, giờ hiện vòng căn)
 
@@ -45,10 +53,9 @@ func _init(cfg: MatchConfig, p_roles: Dictionary, p_names: Dictionary, total_saf
 	for i in floor_coins:
 		coins[i] = cfg.floor_coin_value
 	for id: int in roles:
-		var hp := 0 if roles[id] == GameTypes.Role.HUNTER else cfg.max_hp
+		var hp := cfg.hunter_max_hp if roles[id] == GameTypes.Role.HUNTER else cfg.max_hp
 		players[id] = PlayerRecord.new(id, roles[id], hp)
-		if roles[id] == GameTypes.Role.ESCAPEE and cfg.medkits_per_escapee > 0:
-			players[id].items[GameTypes.ItemType.MEDKIT] = cfg.medkits_per_escapee
+		players[id].coins = cfg.start_coins
 	for i in total_safes:
 		safe_progress[i] = 0.0
 
@@ -67,10 +74,10 @@ func state_of(id: int) -> GameTypes.PlayerState:
 	return players[id].state if players.has(id) else GameTypes.PlayerState.ELIMINATED
 
 
-## Có được tự di chuyển không (bị kéo, bị nhốt, bị choáng thì không).
+## Có được tự di chuyển không (bị kéo, bị nhốt, bị choáng, đang tụ lực dịch chuyển thì không).
 func can_move(id: int) -> bool:
 	var p := record(id)
-	if p == null or p.stunned_left > 0.0:
+	if p == null or p.stunned_left > 0.0 or p.teleport_left > 0.0:
 		return false
 	return GameTypes.is_active(p.state) or p.state == GameTypes.PlayerState.DOWNED
 
@@ -87,12 +94,12 @@ func speed_factor(id: int) -> float:
 			return config.rescuing_speed
 	if p.carrying_id != 0:
 		return config.carrying_speed
-	return 1.0
+	return p.speed_boost_factor if p.speed_boost_left > 0.0 else 1.0
 
 
 func can_attack(id: int) -> bool:
 	var p := record(id)
-	return p != null and p.is_hunter() and p.stunned_left <= 0.0 and p.attack_cooldown_left <= 0.0 \
+	return p != null and p.is_hunter() and p.stunned_left <= 0.0 and p.attack_cooldown_left <= 0.0 and p.teleport_left <= 0.0 \
 		and p.carrying_id == 0 and is_playing()
 
 
@@ -103,29 +110,78 @@ func is_hittable(id: int) -> bool:
 
 # ---------- Lệnh (server gọi qua GameState) ----------
 
-## Thợ săn vung đòn. `targets` là những người trốn trong tầm đánh (module
-## Player tự tính hitbox). Trả về true nếu đòn được vung (kể cả trượt).
+## Đòn trúng ngay (không bay): `targets` là những người trốn trúng đòn. Thợ
+## săn hiện dùng cối (fire_mortar); hàm này để dành cho vũ khí cận chiến.
+## Trả về true nếu đòn được vung (kể cả trượt).
 func attack(attacker_id: int, targets: Array) -> bool:
 	if not can_attack(attacker_id):
 		return false
-	var hunter := record(attacker_id)
-	hunter.attack_cooldown_left = config.attack_cooldown
-	hunter.attack_seq += 1
-	_mark(attacker_id)
+	_start_attack(record(attacker_id))
 	for target_id: int in targets:
-		if not is_hittable(target_id):
-			continue
-		var p := record(target_id)
-		p.hp -= 1
-		p.last_attacker_id = attacker_id
-		p.invulnerable_left = config.hit_invulnerable_time
-		if p.hp <= 0:
-			p.hp = 0
-			p.state = GameTypes.PlayerState.DOWNED
-			p.rescue_progress = 0.0
-		elif p.state == GameTypes.PlayerState.RESCUING:
-			p.state = GameTypes.PlayerState.IDLE # bị đánh thì ngừng cứu
-		_mark(target_id)
+		_hit_escapee(target_id, attacker_id)
+	return true
+
+
+## Thợ săn bắn cối từ `from` tới `to` (bị kẹp trong tầm mortar_range). Đạn rơi
+## sau một lúc; GameState xét ai đứng trong vùng nổ rồi gọi land_shot.
+## Trả về id viên đạn, 0 nếu không bắn được.
+func fire_mortar(hunter_id: int, from: Vector3, to: Vector3) -> int:
+	if not can_attack(hunter_id):
+		return 0
+	_start_attack(record(hunter_id))
+	return _add_shot(GameTypes.ShotKind.MORTAR, hunter_id, from, to)
+
+
+## Người trốn bắn súng lục (tiền và hồi chiêu đã tính ở use_item).
+func shoot_bullet(owner_id: int, from: Vector3, to: Vector3) -> int:
+	var p := record(owner_id)
+	if p == null or p.is_hunter() or not is_playing() or not GameTypes.is_active(p.state) or p.stunned_left > 0.0:
+		return 0
+	return _add_shot(GameTypes.ShotKind.BULLET, owner_id, from, to)
+
+
+## Bán kính trúng của một loại đạn.
+func shot_radius(kind: GameTypes.ShotKind) -> float:
+	return config.mortar_radius if kind == GameTypes.ShotKind.MORTAR else config.bullet_radius
+
+
+## Những viên đạn đã tới nơi, chờ xét trúng.
+func due_shots() -> Array:
+	return shots.keys().filter(func(shot_id: int) -> bool: return shots[shot_id]["lands"] <= elapsed)
+
+
+## Đạn rơi xuống; `hit_ids` là những người đứng trong vùng trúng (GameState
+## tính theo vị trí). Cối chỉ trúng người trốn, đạn súng chỉ trúng thợ săn.
+func land_shot(shot_id: int, hit_ids: Array) -> bool:
+	if not shots.has(shot_id):
+		return false
+	var s: Dictionary = shots[shot_id]
+	shots.erase(shot_id)
+	_world_dirty = true
+	for id: int in hit_ids:
+		if s["kind"] == GameTypes.ShotKind.MORTAR:
+			_hit_escapee(id, s["owner"])
+		else:
+			damage_hunter(id, config.bullet_damage, s["owner"])
+	return true
+
+
+## Thợ săn mất máu (súng lục). Hết máu thì bị choáng (buông người đang kéo),
+## hết choáng thì hồi đầy.
+func damage_hunter(id: int, amount: int, attacker_id: int) -> bool:
+	var p := record(id)
+	if p == null or not p.is_hunter() or p.hp <= 0 or amount <= 0 or not is_playing():
+		return false
+	var dealt := mini(amount, p.hp)
+	p.hp -= dealt
+	p.last_attacker_id = attacker_id
+	_mark(id)
+	var shooter := record(attacker_id)
+	if shooter:
+		shooter.damage_dealt += dealt
+		_mark(attacker_id)
+	if p.hp == 0:
+		stun(id, config.hunter_knockout_stun)
 	return true
 
 
@@ -183,7 +239,7 @@ func imprison(hunter_id: int, prison_id: int) -> bool:
 ## Người trốn `rescuer_id` đỡ `target_id` (đang gục dưới đất) thêm `delta`
 ## giây. Gọi mỗi physics frame khi đang giữ nút E. Nhiều người cứu cùng lúc
 ## thì cộng dồn. Trả về true nếu lần này đỡ dậy xong. Người bị kéo hoặc bị
-## nhốt không đỡ tay được, phải dùng túi máu (use_medkit).
+## nhốt không đỡ tay được, phải dùng túi máu (heal).
 func channel_rescue(rescuer_id: int, target_id: int, delta: float) -> bool:
 	var r := record(rescuer_id)
 	var p := record(target_id)
@@ -213,45 +269,138 @@ func channel_rescue(rescuer_id: int, target_id: int, delta: float) -> bool:
 	return true
 
 
-## Còn bao nhiêu vật phẩm `type`.
-func item_count(id: int, type: GameTypes.ItemType) -> int:
+## Gán bảng giá thẻ (`items`: ItemType -> ItemData hoặc {"cost", "cooldown"}) và
+## bộ bài từng người (`decks`: id -> Array[ItemType]; thiếu thì dùng `defaults`:
+## Role -> Array). Gọi một lần lúc vào trận, trên mọi máy giống nhau.
+func setup_items(items: Dictionary, decks: Dictionary, defaults: Dictionary) -> void:
+	catalog.clear()
+	for type: int in items:
+		var it: Variant = items[type]
+		catalog[type] = {"cost": it.cost, "cooldown": it.cooldown, "roles": Array(it.allowed_roles)} if it is Resource else it
+	for id: int in players:
+		var p: PlayerRecord = players[id]
+		p.deck = _valid_deck(decks.get(id, []), p.role)
+		if p.deck.is_empty():
+			p.deck = _valid_deck(defaults.get(p.role, []), p.role)
+		p.item_cooldowns = []
+		p.item_cooldowns.resize(p.deck.size())
+		p.item_cooldowns.fill(0.0)
+
+
+## Bộ bài người chơi gửi lên: bỏ thẻ không có, thẻ không dành cho vai này, thẻ trùng; tối đa deck_size ô.
+func _valid_deck(deck: Variant, role: GameTypes.Role) -> Array:
+	var out := []
+	if not deck is Array:
+		return out
+	for t: Variant in deck:
+		if not t is int or not catalog.has(t) or t in out:
+			continue
+		if role not in catalog[t].get("roles", [role]):
+			continue
+		out.append(t)
+		if out.size() >= config.deck_size:
+			break
+	return out
+
+
+## Ô thẻ `slot` của `id` dùng được ngay không (đủ tiền, hết hồi chiêu, đang đứng).
+func can_use_item(id: int, slot: int) -> bool:
 	var p := record(id)
-	return p.items.get(type, 0) if p else 0
+	if p == null or not is_playing() or not GameTypes.is_active(p.state) or p.stunned_left > 0.0 or p.teleport_left > 0.0:
+		return false
+	if slot < 0 or slot >= p.deck.size() or p.item_cooldowns[slot] > 0.0:
+		return false
+	return p.coins >= catalog[p.deck[slot]]["cost"]
 
 
-## Người trốn `thrower_id` dùng một túi máu cho `target_id` (có thể là chính
-## mình khi đang đứng). Module tự kiểm tra tầm ném (config.medkit_range).
-## Người đang gục, bị kéo hoặc bị nhốt thì đứng dậy ngay; đang đứng thì hồi máu.
-## Trả về true nếu đã dùng (mất một túi). Mục tiêu đầy máu thì không dùng.
-func use_medkit(thrower_id: int, target_id: int) -> bool:
-	var t := record(thrower_id)
+## Trả tiền và tính hồi chiêu cho ô thẻ `slot`, ghi lại để mọi máy phát
+## item_used. Hiệu ứng do Items làm sau đó. Trả về false nếu không dùng được.
+func use_item(id: int, slot: int, target_id: int = 0, target_pos: Vector3 = Vector3.ZERO) -> bool:
+	if not can_use_item(id, slot):
+		return false
+	var p := record(id)
+	var info: Dictionary = catalog[p.deck[slot]]
+	p.coins -= info["cost"]
+	p.item_cooldowns[slot] = info["cooldown"]
+	p.item_seq += 1
+	p.item_last_type = p.deck[slot]
+	p.item_target_id = target_id
+	p.item_target_pos = target_pos
+	_mark(id)
+	return true
+
+
+## Có hồi máu / cứu được `target_id` bằng túi máu của `healer_id` không.
+func can_heal(healer_id: int, target_id: int) -> bool:
+	var t := record(healer_id)
 	var p := record(target_id)
 	if t == null or p == null or t.is_hunter() or p.is_hunter() or not is_playing():
 		return false
-	if not GameTypes.is_active(t.state) or t.stunned_left > 0.0 or item_count(thrower_id, GameTypes.ItemType.MEDKIT) <= 0:
+	if not GameTypes.is_active(t.state) or t.stunned_left > 0.0:
 		return false
-	var heal := maxi(config.medkit_heal, 1)
 	match p.state:
 		GameTypes.PlayerState.DOWNED, GameTypes.PlayerState.CARRIED, GameTypes.PlayerState.IMPRISONED:
-			if p.carrier_id != 0:
-				_detach(record(p.carrier_id), p)
-			p.state = GameTypes.PlayerState.IDLE
-			p.hp = mini(heal, p.max_hp)
-			p.prison_id = -1
-			p.prison_time_left = 0.0
-			p.rescue_progress = 0.0
-			p.invulnerable_left = config.hit_invulnerable_time
-			if thrower_id != target_id:
-				t.rescues += 1
-		_:
-			if not GameTypes.is_active(p.state) or p.hp >= p.max_hp:
-				return false
-			p.hp = mini(p.hp + heal, p.max_hp)
-	t.items[GameTypes.ItemType.MEDKIT] = item_count(thrower_id, GameTypes.ItemType.MEDKIT) - 1
-	p.last_rescuer_id = thrower_id
+			return true
+	return GameTypes.is_active(p.state) and p.hp < p.max_hp
+
+
+## Túi máu của `healer_id` trúng `target_id` (có thể là chính mình khi đang
+## đứng). Người đang gục, bị kéo hoặc bị nhốt thì đứng dậy ngay; đang đứng thì
+## hồi máu. Tiền đã trả khi dùng thẻ (use_item). Trả về false nếu không có tác dụng.
+func heal(healer_id: int, target_id: int) -> bool:
+	if not can_heal(healer_id, target_id):
+		return false
+	var t := record(healer_id)
+	var p := record(target_id)
+	var amount := maxi(config.medkit_heal, 1)
+	if GameTypes.is_active(p.state):
+		p.hp = mini(p.hp + amount, p.max_hp)
+	else:
+		if p.carrier_id != 0:
+			_detach(record(p.carrier_id), p)
+		p.state = GameTypes.PlayerState.IDLE
+		p.hp = mini(amount, p.max_hp)
+		p.prison_id = -1
+		p.prison_time_left = 0.0
+		p.rescue_progress = 0.0
+		p.invulnerable_left = config.hit_invulnerable_time
+		if healer_id != target_id:
+			t.rescues += 1
+	p.last_rescuer_id = healer_id
 	p.heal_seq += 1
-	_mark(thrower_id)
+	_mark(healer_id)
 	_mark(target_id)
+	return true
+
+
+## Tăng tốc (xe / ván trượt): nhân tốc độ chạy với `factor` trong `seconds` giây.
+func speed_boost(id: int, seconds: float, factor: float) -> bool:
+	var p := record(id)
+	if p == null or seconds <= 0.0 or factor <= 0.0 or not is_playing() or GameTypes.is_out(p.state):
+		return false
+	p.speed_boost_left = seconds
+	p.speed_boost_factor = factor
+	_mark(id)
+	return true
+
+
+## Đặt vật thể xuống đất (bẫy, đệm lò xo, hộp gỗ). Tự biến mất sau `lifetime`
+## giây (0 = tới hết trận). Trả về id vật thể, 0 nếu không đặt được.
+func place(type: GameTypes.ItemType, pos: Vector3, yaw: float, owner_id: int, lifetime: float) -> int:
+	if not is_playing():
+		return 0
+	var obj_id := _next_placed_id
+	_next_placed_id += 1
+	placed[obj_id] = {"type": type, "pos": pos, "yaw": yaw, "owner": owner_id,
+		"expires": elapsed + lifetime if lifetime > 0.0 else INF}
+	_world_dirty = true
+	return obj_id
+
+
+func remove_placed(obj_id: int) -> bool:
+	if not placed.erase(obj_id):
+		return false
+	_world_dirty = true
 	return true
 
 
@@ -261,10 +410,32 @@ func stun(id: int, seconds: float) -> bool:
 	if p == null or seconds <= 0.0 or not is_playing() or GameTypes.is_out(p.state):
 		return false
 	p.stunned_left = maxf(p.stunned_left, seconds)
+	p.teleport_left = 0.0 # bị choáng thì hủy dịch chuyển
 	_mark(id)
 	if p.carrying_id != 0:
 		_release(p)
 	return true
+
+
+## Thợ săn bắt đầu tụ lực dịch chuyển tới `pos` (GameState đã kiểm tra chỗ
+## đứng được). Đứng yên teleport_charge giây rồi mới tới; bị choáng thì hủy.
+func start_teleport(id: int, pos: Vector3) -> bool:
+	var p := record(id)
+	if p == null or not p.is_hunter() or not is_playing() or p.carrying_id != 0:
+		return false
+	if p.stunned_left > 0.0 or p.teleport_left > 0.0:
+		return false
+	p.teleport_left = maxf(config.teleport_charge, 0.001)
+	p.teleport_pos = pos
+	_mark(id)
+	return true
+
+
+## Những thợ săn vừa tụ lực xong (server dời nhân vật tới teleport_pos), rồi xóa danh sách.
+func take_teleports() -> Array:
+	var ids := _teleports_done
+	_teleports_done = []
+	return ids
 
 
 ## Người trốn bước qua cổng đã mở.
@@ -391,6 +562,10 @@ func tick(delta: float, authoritative: bool = true) -> void:
 					_world_dirty = true
 			for p: PlayerRecord in players.values():
 				_tick_player(p, delta, authoritative)
+			if authoritative:
+				for obj_id: int in placed.keys():
+					if placed[obj_id]["expires"] <= elapsed:
+						remove_placed(obj_id)
 
 
 func _tick_player(p: PlayerRecord, delta: float, authoritative: bool) -> void:
@@ -403,6 +578,19 @@ func _tick_player(p: PlayerRecord, delta: float, authoritative: bool) -> void:
 		p.stunned_left = maxf(0.0, p.stunned_left - delta)
 		if p.stunned_left == 0.0:
 			_mark(p.id)
+	if p.speed_boost_left > 0.0:
+		p.speed_boost_left = maxf(0.0, p.speed_boost_left - delta)
+	if p.teleport_left > 0.0:
+		p.teleport_left = maxf(0.0, p.teleport_left - delta)
+		if p.teleport_left == 0.0 and authoritative:
+			_teleports_done.append(p.id)
+			_mark(p.id)
+	if authoritative and p.is_hunter() and p.hp <= 0 and p.stunned_left <= 0.0:
+		p.hp = p.max_hp # tỉnh lại sau khi bị bắn gục
+		_mark(p.id)
+	for i in p.item_cooldowns.size():
+		if p.item_cooldowns[i] > 0.0:
+			p.item_cooldowns[i] = maxf(0.0, p.item_cooldowns[i] - delta)
 	if not authoritative:
 		if p.state == GameTypes.PlayerState.IMPRISONED:
 			p.prison_time_left = maxf(0.0, p.prison_time_left - delta)
@@ -507,6 +695,7 @@ func results() -> Dictionary:
 		var row := {
 			"name": names.get(id, str(id)), "role": p.role, "coins": p.coins_earned,
 			"rescues": p.rescues, "qte_perfect": p.qte_perfect, "chests": snappedf(p.chest_work, 0.01),
+			"damage": p.damage_dealt,
 		}
 		if p.is_hunter():
 			row["result"] = hunter_result(caught, ids.size())
@@ -515,7 +704,8 @@ func results() -> Dictionary:
 			var escaped := not is_caught(id)
 			row["result"] = GameTypes.EscapeeResult.ESCAPED if escaped else GameTypes.EscapeeResult.CAUGHT
 			row["score"] = (config.score_escape if escaped else 0) + roundi(p.chest_work * config.score_chest) \
-				+ p.rescues * config.score_rescue + p.qte_perfect * config.score_perfect_qte + p.coins_earned * config.score_per_coin
+				+ p.rescues * config.score_rescue + p.qte_perfect * config.score_perfect_qte + p.coins_earned * config.score_per_coin \
+				+ p.damage_dealt * config.score_damage
 		per_player[id] = row
 	return {
 		"hunter_result": hunter_result(caught, ids.size()),
@@ -554,6 +744,7 @@ func world_dict() -> Dictionary:
 	return {
 		"safes": safe_progress.duplicate(), "gate_open": gate_open, "gate_opening": gate_opening_left > 0.0,
 		"gate_opening_left": gate_opening_left, "coins_taken": coins_taken.duplicate(),
+		"placed": placed.duplicate(true), "shots": shots.duplicate(true),
 	}
 
 
@@ -563,6 +754,8 @@ func apply_world_dict(d: Dictionary) -> void:
 	gate_open = d["gate_open"]
 	gate_opening_left = d["gate_opening_left"]
 	coins_taken = d["coins_taken"].duplicate()
+	placed = d["placed"].duplicate(true)
+	shots = d["shots"].duplicate(true)
 	for safe_id: int in safe_progress:
 		if safe_progress[safe_id] >= 1.0:
 			for c: int in chest_coin_ids(safe_id):
@@ -574,6 +767,43 @@ func apply_world_dict(d: Dictionary) -> void:
 
 func _mark(id: int) -> void:
 	_dirty[id] = true
+
+
+func _start_attack(hunter: PlayerRecord) -> void:
+	hunter.attack_cooldown_left = config.attack_cooldown
+	hunter.attack_seq += 1
+	_mark(hunter.id)
+
+
+## Người trốn trúng đòn / trúng cối: mất 1 máu, hết máu thì gục.
+func _hit_escapee(target_id: int, attacker_id: int) -> void:
+	if not is_hittable(target_id):
+		return
+	var p := record(target_id)
+	p.hp -= 1
+	p.last_attacker_id = attacker_id
+	p.invulnerable_left = config.hit_invulnerable_time
+	if p.hp <= 0:
+		p.hp = 0
+		p.state = GameTypes.PlayerState.DOWNED
+		p.rescue_progress = 0.0
+	elif p.state == GameTypes.PlayerState.RESCUING:
+		p.state = GameTypes.PlayerState.IDLE # bị đánh thì ngừng cứu
+	_mark(target_id)
+
+
+## Thêm đạn bay. Kẹp tầm bắn theo mặt sàn (không tin vị trí client gửi).
+func _add_shot(kind: GameTypes.ShotKind, owner_id: int, from: Vector3, to: Vector3) -> int:
+	var mortar := kind == GameTypes.ShotKind.MORTAR
+	var flat := Vector2(to.x - from.x, to.z - from.z).limit_length(config.mortar_range if mortar else config.bullet_range)
+	var dest := Vector3(from.x + flat.x, to.y, from.z + flat.y)
+	var flight := config.mortar_min_flight + flat.length() / config.mortar_speed if mortar \
+		else maxf(0.05, flat.length() / config.bullet_speed)
+	var shot_id := _next_shot_id
+	_next_shot_id += 1
+	shots[shot_id] = {"kind": kind, "owner": owner_id, "from": from, "to": dest, "fired": elapsed, "lands": elapsed + flight}
+	_world_dirty = true
+	return shot_id
 
 
 ## Gỡ liên kết kéo giữa thợ săn và người bị kéo (không đổi state người bị kéo).

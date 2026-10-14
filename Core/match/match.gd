@@ -55,6 +55,7 @@ func setup(info: Dictionary) -> void:
 				src = NetworkInputSource.new()
 			input_sources[id] = src
 
+	add_child(load(ModuleRegistry.ITEM_VISUALS).new())
 	add_child(load(ModuleRegistry.HUD).new())
 	print("[%d] Trận bắt đầu: %s" % [_my_id, info["names"]])
 
@@ -78,11 +79,20 @@ func _physics_process(delta: float) -> void:
 			src.update(delta)
 			entities[id].server_read_input(src)
 			entities[id].server_move(src, delta)
+			_server_use_items(entities[id])
+		GameState.server_after_move(entities.values())
 		GameState.flush(delta)
 		_send_snapshot(delta)
 	else:
 		for e: EntityBase in entities.values():
 			e.client_update(delta)
+
+
+## Nút ô thẻ vừa bấm thì dùng thẻ (GameState kiểm tra tiền, hồi chiêu).
+func _server_use_items(e: EntityBase) -> void:
+	for slot in InputSource.SKILL_ACTIONS.size():
+		if e.just_pressed(InputSource.SKILL_ACTIONS[slot]):
+			GameState.server_use_item(e, slot)
 
 
 func _send_snapshot(delta: float) -> void:

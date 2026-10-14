@@ -9,8 +9,11 @@ const KEYS := {
 	&"move_down": [KEY_S, KEY_DOWN],
 	&"interact": [KEY_E, KEY_SPACE],
 	&"dash": [KEY_SHIFT],
-	&"skill_1": [KEY_Q],
-	&"skill_2": [KEY_R],
+	&"skill_1": [KEY_1, KEY_Q], # ô thẻ 1..5
+	&"skill_2": [KEY_2, KEY_R],
+	&"skill_3": [KEY_3, KEY_F],
+	&"skill_4": [KEY_4, KEY_G],
+	&"skill_5": [KEY_5, KEY_T],
 }
 
 
