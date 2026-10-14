@@ -12,8 +12,7 @@ Làm bằng Godot 4.6 (GDScript), đội 4 người.
 - **Nhưng code đã là client-server từ đầu.** Bản offline chạy đúng đường code của bản online, nên sau này lên online không phải viết lại. Chế độ tạo phòng/vào phòng qua mạng LAN đã chạy được. Lý do và cách làm: [docs/KIEN_TRUC.md](docs/KIEN_TRUC.md).
 - Mục tiêu 4 tuần: một trận 1v4 offline trọn vẹn (đánh gục, kéo vào tù, cứu đồng đội, kỹ năng, bot thông minh).
 
-Đã có: di chuyển 3D, rương có vòng căn, tiền, bộ bài 5 thẻ tự chọn ở menu, mua bằng tiền (túi máu, lựu đạn làm chậm, súng lục, ván trượt, đệm lò xo, bẫy, hộp gỗ), thợ săn bắn súng bay thẳng (tường chặn), có máu, radar dấu chân và dịch chuyển, minimap, bảng kết quả, 2 cổng mở trễ 3 giây, kết quả từng người, chu trình bắt người (bắn gục, kéo lê, nhà tù tường cao bị đốt, cứu bằng tay hoặc túi máu, đệm lò xo bật ra khỏi tù), thắng/thua, bot đơn giản, offline + host + server riêng, CI tự kiểm tra.
-Hình dạng nhân vật và bản đồ đang là khối tạm, sẽ thay bằng model.
+Chi tiết việc đã làm và việc còn lại: mục [Tiến độ](#tiến-độ) bên dưới.
 
 ## Chơi thử
 
@@ -39,6 +38,42 @@ Mở thư mục này bằng Godot 4.6 rồi bấm Play.
 | `Items/` | C | Thẻ kỹ năng, vật phẩm |
 | `AI/` | D | Bot, giác quan, NavMesh |
 | `UI/` | | Menu, HUD, theo dõi, minimap |
+
+## Tiến độ
+
+Cập nhật mỗi khi merge một phần lớn. Người mới vào đọc mục này để biết làm gì tiếp.
+
+### Đã làm
+
+| Phần | Nội dung | Ở đâu |
+|---|---|---|
+| Kiến trúc | Server có thẩm quyền, offline / host / server riêng chạy cùng code, gửi trạng thái khi đổi, CI chạy test luật + trận offline + trận online 3 máy | `Core/`, `tools/smoke_test.sh` |
+| Người trốn | Di chuyển, cạy rương có vòng căn (vẽ trên sàn), nhặt tiền, đỡ đồng đội gục, 2 cổng mở trễ 3 giây, thoát là thắng riêng | `Player/`, `Objects/`, `UI/qte_ring.gd` |
+| Thợ săn | Súng bắn thẳng (tường chặn), ngắm tay có luồng xanh + nút Hủy, tự ngắm khi chạm nhanh, bắn xong khựng nhẹ, có máu (bị bắn hết máu thì buông người + chạy chậm), túm người gục kéo vào tù | `Player/player_character.gd`, `Core/match/match_rules.gd` |
+| Nhà tù | Tường cao, bị đốt sau 45 giây, cứu bằng túi máu ném qua tường, đệm lò xo bật ra | `Objects/prison.gd` |
+| Bộ bài | Người trốn chọn 5 thẻ ở menu, trả bằng tiền: túi máu (vùng tròn xanh), lựu đạn làm chậm, súng lục, ván trượt, đệm lò xo, bẫy, hộp gỗ. Thợ săn: radar dấu chân, dịch chuyển (chạm minimap chọn chỗ) | `Items/`, `UI/main_menu.gd` |
+| Giao diện | Cần di chuyển, nút BẮN / Cạy, thanh thẻ có giá và hồi chiêu, minimap, bảng kết quả từng người | `UI/` |
+| Nhân vật | Chibi KayKit (CC0) có animation: chạy, đứng, gục, ngồi tù, bay, bắn, bị trúng, ném. Thợ săn có vòng đỏ dưới chân | `Player/models/` |
+| Bot | Bot người trốn cạy rương, chạy trốn, cứu nhau, dùng thẻ; bot thợ săn đuổi, bắn, kéo vào tù, dùng radar / dịch chuyển | `AI/bot_input_source.gd` |
+
+### Còn lại (theo thứ tự nên làm)
+
+1. **Bản đồ thật**: thay khối xám bằng asset miễn phí (gợi ý: KayKit City Builder Bits / Furniture Bits, CC0), dựng trong editor thay vì bằng code, có cỏ / bụi rậm để nấp. Phụ trách: `Objects/`.
+2. **Rương, cổng, tiền, hiệu ứng** dùng model thay khối màu; pool cho đạn và hiệu ứng (luật hiệu năng trong CLAUDE.md). Phụ trách: `Objects/`, `Items/`.
+3. **Kéo thẻ để chọn chỗ ném** (túi máu, lựu đạn) như game gốc; hiện tự chọn chỗ. Phụ trách: `UI/`, `Items/`.
+4. **Xem người khác khi bị nhốt / bị loại**, âm thanh `.ogg`, menu đẹp hơn. Phụ trách: `UI/`.
+5. **Cân bằng** sau khi giao diện ổn: hiện bot thợ săn thắng phần lớn trận (tầm súng, hồi chiêu, tốc độ, giá thẻ đều nằm trong `Core/types/match_config.gd` và `Items/item_catalog.gd`).
+6. **NavMesh cho bot** (bot đang đi thẳng, hay kẹt tường). Phụ trách: `AI/`.
+7. **Xuất bản điện thoại**: export Android, kiểm tra 60 FPS trên máy tầm thấp, nén texture ETC2/ASTC.
+8. **Online qua Internet**: server riêng trên VPS, ghép phòng, bù trễ.
+
+### Asset bên ngoài
+
+| Asset | Tác giả | Giấy phép | Ở đâu |
+|---|---|---|---|
+| KayKit Character Pack: Adventurers 1.0 (Knight, Mage, Rogue, Rogue_Hooded, Barbarian), đã cắt bớt animation | Kay Lousberg | CC0 1.0 (dùng thương mại, không cần ghi công) | `Player/models/`, `Player/models/LICENSE_KayKit.txt` |
+
+Chỉ thêm asset CC0 hoặc giấy phép cho dùng thương mại, và ghi vào bảng này.
 
 ## Lộ trình
 
