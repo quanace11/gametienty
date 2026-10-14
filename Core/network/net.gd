@@ -13,8 +13,9 @@ signal disconnected
 const PORT := 7777
 const MAX_PLAYERS := 5 # 1 thợ săn + 4 người trốn
 
-var players := {} # peer_id -> {"name": String}
+var players := {} # peer_id -> {"name": String, "deck": Array (ItemType người trốn tự chọn)}
 var my_name := "Player"
+var my_deck := [] ## bộ bài người trốn chọn ở menu (rỗng = mặc định). Luật tự lọc thẻ sai.
 var in_match := false
 var bot := false # máy này để bot tự điều khiển nhân vật của mình (test)
 
@@ -51,7 +52,7 @@ func host(port: int = PORT, play: bool = true) -> Error:
 	multiplayer.multiplayer_peer = peer
 	players.clear()
 	if play:
-		players[1] = {"name": my_name}
+		players[1] = {"name": my_name, "deck": my_deck.duplicate()}
 	status.emit("Đã tạo phòng ở cổng %d" % port)
 	players_changed.emit()
 	return OK
@@ -71,7 +72,7 @@ func join(ip: String, port: int = PORT) -> Error:
 ## Chơi một mình với bot. Máy mình vẫn là "server", không mở cổng mạng.
 func start_offline(match_time: float, my_role: int) -> void:
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
-	players = {1: {"name": my_name}}
+	players = {1: {"name": my_name, "deck": my_deck.duplicate()}}
 	start_match(match_time, true, my_role)
 
 
@@ -90,8 +91,11 @@ func start_match(match_time: float = 180.0, fill_bots: bool = false, host_role: 
 	var ids := players.keys()
 	ids.sort()
 	var names := {}
+	var decks := {}
 	for id: int in ids:
 		names[id] = players[id]["name"]
+		if not players[id].get("deck", []).is_empty():
+			decks[id] = players[id]["deck"]
 	if fill_bots:
 		for i in MAX_PLAYERS - ids.size():
 			var bot_id := -(i + 1)
@@ -108,7 +112,7 @@ func start_match(match_time: float = 180.0, fill_bots: bool = false, host_role: 
 	var roles := {}
 	for id: int in ids:
 		roles[id] = GameTypes.Role.HUNTER if id == hunter else GameTypes.Role.ESCAPEE
-	_begin.rpc({"roles": roles, "names": names, "time": match_time})
+	_begin.rpc({"roles": roles, "names": names, "time": match_time, "decks": decks})
 
 
 @rpc("authority", "call_local", "reliable")
@@ -119,18 +123,19 @@ func _begin(info: Dictionary) -> void:
 
 func _on_connected() -> void:
 	status.emit("Đã vào phòng")
-	_register.rpc_id(1, my_name)
+	_register.rpc_id(1, my_name, my_deck)
 
 
 @rpc("any_peer", "reliable")
-func _register(player_name: String) -> void:
+func _register(player_name: String, deck: Array) -> void:
 	if not multiplayer.is_server():
 		return
 	var id := multiplayer.get_remote_sender_id()
 	if in_match or players.size() >= MAX_PLAYERS:
 		multiplayer.multiplayer_peer.disconnect_peer(id)
 		return
-	players[id] = {"name": player_name.strip_edges().left(16)}
+	var clean_deck := deck.slice(0, 8).filter(func(t: Variant) -> bool: return t is int) # luật lọc tiếp khi vào trận
+	players[id] = {"name": player_name.strip_edges().left(16), "deck": clean_deck}
 	_sync_players.rpc(players)
 	players_changed.emit()
 

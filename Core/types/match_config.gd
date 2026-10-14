@@ -54,6 +54,12 @@ extends Resource
 @export var medkit_heal := 1 # máu hồi; người đang gục/bị kéo/bị nhốt thì đứng dậy ngay
 @export var medkit_range := 8.0 # mét, tầm ném (Items kiểm tra khoảng cách)
 
+@export_group("Thợ săn: radar và dịch chuyển")
+@export var teleport_charge := 1.75 # giây đứng tụ lực trước khi dịch chuyển (bị choáng thì hủy)
+@export var radar_time := 4.0 # giây dấu chân hiện trên màn hình thợ săn
+@export var footprint_interval := 0.5 # server ghi vị trí người trốn mỗi chừng này giây
+@export var footprint_history := 6.0 # radar thấy dấu chân trong chừng này giây gần nhất
+
 @export_group("Tốc độ (hệ số)")
 @export var downed_speed := 0.3 # bò
 @export var carrying_speed := 0.85 # thợ săn đang kéo người

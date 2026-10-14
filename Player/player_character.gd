@@ -23,6 +23,7 @@ const DRAG_DISTANCE := 1.1 # mét, người bị kéo nằm sau lưng thợ săn
 const GRAVITY := 20.0
 const TURN_SPEED := 12.0
 const LERP_SPEED := 15.0
+const SNAP_DIST := 6.0 # mét, lệch hơn chừng này (dịch chuyển) thì đặt thẳng vị trí
 
 const HUNTER_COLOR := Color(0.9, 0.25, 0.25)
 const ESCAPEE_COLOR := Color(0.3, 0.6, 1.0)
@@ -225,6 +226,8 @@ func get_snapshot() -> Variant:
 func apply_snapshot(data: Variant) -> void:
 	_target_pos = data[0]
 	_target_yaw = data[1]
+	if position.distance_squared_to(_target_pos) > SNAP_DIST * SNAP_DIST:
+		position = _target_pos # dịch chuyển: nhảy luôn, không trượt ngang bản đồ
 
 
 func client_update(delta: float) -> void:

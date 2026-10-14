@@ -87,6 +87,9 @@ func _initialize() -> void:
 		&"_test_hunter_knockout_releases_and_recovers",
 		&"_test_shots_world_sync",
 		&"_test_damage_scores",
+		&"_test_teleport_charge",
+		&"_test_teleport_rejected_and_cancelled",
+		&"_test_deck_validation",
 	]:
 		call(t)
 	if _failed:
@@ -974,3 +977,59 @@ func _test_damage_scores() -> void:
 	var res := r.results()
 	_check(res["players"][A]["damage"] == 2, "kết quả có sát thương")
 	_check(res["players"][A]["score"] - res["players"][B]["score"] == 2 * r.config.score_damage, "sát thương được cộng điểm")
+
+
+# ---------- Dịch chuyển, bộ bài ----------
+
+func _test_teleport_charge() -> void:
+	var r := _rules()
+	var before := r.record(H).to_dict()
+	_check(r.start_teleport(H, Vector3(10, 0, 5)), "thợ săn bắt đầu tụ lực")
+	_check(not r.can_move(H) and not r.can_attack(H), "đang tụ lực thì đứng yên, không bắn")
+	var ev := PlayerRecord.events_between(H, before, r.record(H).to_dict())
+	_check(&"teleport_started" in _signals(ev), "sự kiện tụ lực")
+	r.tick(r.config.teleport_charge * 0.5)
+	_check(r.take_teleports().is_empty(), "chưa tụ đủ thì chưa đi")
+	r.tick(r.config.teleport_charge)
+	_check(r.take_teleports() == [H] and r.take_teleports().is_empty(), "tụ đủ thì báo dời một lần")
+	_check(r.can_move(H), "tới nơi thì đi lại được")
+	var c := _rules()
+	c.start_teleport(H, Vector3(10, 0, 5))
+	c.tick(c.config.teleport_charge + 0.1, false)
+	_check(c.take_teleports().is_empty(), "client không tự dời")
+
+
+func _test_teleport_rejected_and_cancelled() -> void:
+	var r := _rules()
+	_check(not r.start_teleport(A, Vector3.ZERO), "người trốn không dịch chuyển")
+	r.start_teleport(H, Vector3.ZERO)
+	_check(not r.start_teleport(H, Vector3.ONE), "đang tụ lực thì không bắt đầu lại")
+	r.stun(H, 1.0)
+	_check(r.record(H).teleport_left == 0.0, "bị choáng thì hủy dịch chuyển")
+	r.tick(r.config.teleport_charge + 1.1)
+	_check(r.take_teleports().is_empty(), "đã hủy thì không dời")
+	r.attack(H, [A])
+	r.tick(r.config.attack_cooldown + 0.01)
+	r.attack(H, [A])
+	r.pick_up(H, A)
+	_check(not r.start_teleport(H, Vector3.ZERO), "đang kéo người thì không dịch chuyển")
+
+
+func _test_deck_validation() -> void:
+	var cfg := MatchConfig.new()
+	var roles := {H: GameTypes.Role.HUNTER, A: GameTypes.Role.ESCAPEE, B: GameTypes.Role.ESCAPEE}
+	var r := MatchRules.new(cfg, roles, {}, 3)
+	var M := GameTypes.ItemType.MEDKIT
+	var G := GameTypes.ItemType.STUN_GRENADE
+	var R := GameTypes.ItemType.RADAR
+	var items := {
+		M: {"cost": 1, "cooldown": 1.0, "roles": [GameTypes.Role.ESCAPEE]},
+		G: {"cost": 1, "cooldown": 1.0, "roles": [GameTypes.Role.ESCAPEE]},
+		R: {"cost": 0, "cooldown": 1.0, "roles": [GameTypes.Role.HUNTER]},
+	}
+	var defaults := {GameTypes.Role.ESCAPEE: [M, G], GameTypes.Role.HUNTER: [R]}
+	r.setup_items(items, {A: [G, G, R, 999, "x", M], H: [M, G], B: "rác"}, defaults)
+	_check(r.record(A).deck == [G, M], "bỏ thẻ trùng, thẻ của vai khác, thẻ không có")
+	_check(r.record(H).deck == [R], "thợ săn chọn bài người trốn thì về bộ mặc định")
+	_check(r.record(B).deck == [M, G], "dữ liệu rác thì về bộ mặc định")
+	_check(r.record(A).item_cooldowns.size() == 2, "hồi chiêu theo số ô")

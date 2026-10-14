@@ -35,6 +35,7 @@ var shots := {}
 
 var _next_placed_id := 1
 var _next_shot_id := 1
+var _teleports_done := [] # chỉ server: id thợ săn vừa tụ lực xong, GameState dời nhân vật
 
 var rng := RandomNumberGenerator.new() ## chỉ server dùng (vị trí vùng sáng, giờ hiện vòng căn)
 
@@ -73,10 +74,10 @@ func state_of(id: int) -> GameTypes.PlayerState:
 	return players[id].state if players.has(id) else GameTypes.PlayerState.ELIMINATED
 
 
-## Có được tự di chuyển không (bị kéo, bị nhốt, bị choáng thì không).
+## Có được tự di chuyển không (bị kéo, bị nhốt, bị choáng, đang tụ lực dịch chuyển thì không).
 func can_move(id: int) -> bool:
 	var p := record(id)
-	if p == null or p.stunned_left > 0.0:
+	if p == null or p.stunned_left > 0.0 or p.teleport_left > 0.0:
 		return false
 	return GameTypes.is_active(p.state) or p.state == GameTypes.PlayerState.DOWNED
 
@@ -98,7 +99,7 @@ func speed_factor(id: int) -> float:
 
 func can_attack(id: int) -> bool:
 	var p := record(id)
-	return p != null and p.is_hunter() and p.stunned_left <= 0.0 and p.attack_cooldown_left <= 0.0 \
+	return p != null and p.is_hunter() and p.stunned_left <= 0.0 and p.attack_cooldown_left <= 0.0 and p.teleport_left <= 0.0 \
 		and p.carrying_id == 0 and is_playing()
 
 
@@ -275,20 +276,37 @@ func setup_items(items: Dictionary, decks: Dictionary, defaults: Dictionary) -> 
 	catalog.clear()
 	for type: int in items:
 		var it: Variant = items[type]
-		catalog[type] = {"cost": it.cost, "cooldown": it.cooldown} if it is Resource else it
+		catalog[type] = {"cost": it.cost, "cooldown": it.cooldown, "roles": Array(it.allowed_roles)} if it is Resource else it
 	for id: int in players:
 		var p: PlayerRecord = players[id]
-		var deck: Array = decks.get(id, defaults.get(p.role, []))
-		p.deck = deck.filter(func(t: int) -> bool: return catalog.has(t)).slice(0, config.deck_size)
+		p.deck = _valid_deck(decks.get(id, []), p.role)
+		if p.deck.is_empty():
+			p.deck = _valid_deck(defaults.get(p.role, []), p.role)
 		p.item_cooldowns = []
 		p.item_cooldowns.resize(p.deck.size())
 		p.item_cooldowns.fill(0.0)
 
 
+## Bộ bài người chơi gửi lên: bỏ thẻ không có, thẻ không dành cho vai này, thẻ trùng; tối đa deck_size ô.
+func _valid_deck(deck: Variant, role: GameTypes.Role) -> Array:
+	var out := []
+	if not deck is Array:
+		return out
+	for t: Variant in deck:
+		if not t is int or not catalog.has(t) or t in out:
+			continue
+		if role not in catalog[t].get("roles", [role]):
+			continue
+		out.append(t)
+		if out.size() >= config.deck_size:
+			break
+	return out
+
+
 ## Ô thẻ `slot` của `id` dùng được ngay không (đủ tiền, hết hồi chiêu, đang đứng).
 func can_use_item(id: int, slot: int) -> bool:
 	var p := record(id)
-	if p == null or not is_playing() or not GameTypes.is_active(p.state) or p.stunned_left > 0.0:
+	if p == null or not is_playing() or not GameTypes.is_active(p.state) or p.stunned_left > 0.0 or p.teleport_left > 0.0:
 		return false
 	if slot < 0 or slot >= p.deck.size() or p.item_cooldowns[slot] > 0.0:
 		return false
@@ -392,10 +410,32 @@ func stun(id: int, seconds: float) -> bool:
 	if p == null or seconds <= 0.0 or not is_playing() or GameTypes.is_out(p.state):
 		return false
 	p.stunned_left = maxf(p.stunned_left, seconds)
+	p.teleport_left = 0.0 # bị choáng thì hủy dịch chuyển
 	_mark(id)
 	if p.carrying_id != 0:
 		_release(p)
 	return true
+
+
+## Thợ săn bắt đầu tụ lực dịch chuyển tới `pos` (GameState đã kiểm tra chỗ
+## đứng được). Đứng yên teleport_charge giây rồi mới tới; bị choáng thì hủy.
+func start_teleport(id: int, pos: Vector3) -> bool:
+	var p := record(id)
+	if p == null or not p.is_hunter() or not is_playing() or p.carrying_id != 0:
+		return false
+	if p.stunned_left > 0.0 or p.teleport_left > 0.0:
+		return false
+	p.teleport_left = maxf(config.teleport_charge, 0.001)
+	p.teleport_pos = pos
+	_mark(id)
+	return true
+
+
+## Những thợ săn vừa tụ lực xong (server dời nhân vật tới teleport_pos), rồi xóa danh sách.
+func take_teleports() -> Array:
+	var ids := _teleports_done
+	_teleports_done = []
+	return ids
 
 
 ## Người trốn bước qua cổng đã mở.
@@ -540,6 +580,11 @@ func _tick_player(p: PlayerRecord, delta: float, authoritative: bool) -> void:
 			_mark(p.id)
 	if p.speed_boost_left > 0.0:
 		p.speed_boost_left = maxf(0.0, p.speed_boost_left - delta)
+	if p.teleport_left > 0.0:
+		p.teleport_left = maxf(0.0, p.teleport_left - delta)
+		if p.teleport_left == 0.0 and authoritative:
+			_teleports_done.append(p.id)
+			_mark(p.id)
 	if authoritative and p.is_hunter() and p.hp <= 0 and p.stunned_left <= 0.0:
 		p.hp = p.max_hp # tỉnh lại sau khi bị bắn gục
 		_mark(p.id)

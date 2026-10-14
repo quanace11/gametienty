@@ -35,7 +35,8 @@ enum EscapeeResult { CAUGHT, ESCAPED }
 enum QteResult { NONE, PERFECT, GOOD, FAIL }
 
 ## Thẻ đạo cụ trong bộ bài. Cũng dùng làm loại vật thể đặt xuống đất (TRAP, JUMP_PAD, CRATE).
-enum ItemType { MEDKIT, STUN_GRENADE, TRAP, JUMP_PAD, CRATE, SPEED_BOOST, PISTOL, DISGUISE }
+## Thêm loại mới ở CUỐI để số của loại cũ không đổi.
+enum ItemType { MEDKIT, STUN_GRENADE, TRAP, JUMP_PAD, CRATE, SPEED_BOOST, PISTOL, DISGUISE, TELEPORT, RADAR }
 
 ## Loại đạn bay. Server tính đường bay và điểm rơi, client chỉ vẽ lại.
 ## MORTAR: đạn cối của thợ săn, rơi theo đường cong, nổ trúng người trốn trong vùng.
@@ -48,6 +49,7 @@ const GROUP_SAFES := &"safes"
 const GROUP_EXIT_GATES := &"exit_gates"
 const GROUP_PRISONS := &"prisons"
 const GROUP_COINS := &"coins"
+const GROUP_MAP := &"map" ## bản đồ đang chơi (MapBase), UI minimap và GameState đọc
 const GROUP_JUMP_PADS := &"jump_pads" ## Node3D đệm lò xo (trong nhà tù, đặt từ bộ bài): bot tìm đường thoát
 
 ## Bot dùng id âm (-1, -2, ...), người thật dùng peer id của Godot (luôn dương).

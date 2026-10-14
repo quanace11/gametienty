@@ -38,6 +38,10 @@ signal player_stunned(id: int, seconds: float)
 signal rescue_progress_changed(id: int, progress: float)
 signal coins_changed(id: int, coins: int, gained: int) ## gained < 0 là vừa tiêu
 signal item_used(id: int, type: GameTypes.ItemType, target_id: int, target_pos: Vector3) ## đã trả tiền, hiệu ứng đang chạy
+signal teleport_started(id: int, target: Vector3, seconds: float) ## thợ săn tụ lực, tới `target` sau `seconds` (bị choáng thì hủy)
+## Radar: chỉ phát trên máy của thợ săn dùng radar. Mỗi điểm: x, z là vị trí,
+## y là số giây trước (dấu chân cũ thì mờ hơn).
+signal footprints_revealed(points: PackedVector3Array, seconds: float)
 signal qte_started(id: int, safe_id: int) ## vòng căn hiện ra cho người đang mở rương
 signal qte_resolved(id: int, safe_id: int, result: GameTypes.QteResult) ## FAIL: rương nổ, báo vị trí cho thợ săn
 

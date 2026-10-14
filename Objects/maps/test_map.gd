@@ -119,3 +119,13 @@ func get_safe_count() -> int:
 
 func get_coin_spots() -> Array[Vector3]:
 	return COIN_SPOTS
+
+
+func get_bounds() -> Rect2:
+	return Rect2(Vector2.ZERO, SIZE)
+
+
+func get_walls() -> Array[Rect2]:
+	var out: Array[Rect2] = []
+	out.assign(WALLS)
+	return out
