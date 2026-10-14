@@ -10,6 +10,7 @@ const RING := Color(1, 1, 1, 0.3)
 const GOOD := Color(1, 1, 1, 0.45)
 const PERFECT := Color(1, 1, 1, 1.0)
 const NEEDLE := Color(1, 0.2, 0.15)
+const OUTLINE := Color(0.12, 0.1, 0.16)
 
 var _flash := 0.0
 var _flash_color := Color.WHITE
@@ -46,13 +47,17 @@ func _draw() -> void:
 	var font := get_theme_default_font()
 	var rx := (cam.unproject_position(feet + Vector3(RADIUS_M, 0, 0)) - center).length()
 	var ry := (cam.unproject_position(feet + Vector3(0, 0, RADIUS_M)) - center).length()
-	if _flash > 0.0:
-		draw_string(font, center + Vector2(-100, -ry - 70), _flash_text, HORIZONTAL_ALIGNMENT_CENTER, 200, 24, _flash_color)
+	if _flash > 0.0: # cao hơn dòng "Bấm E" để hai chữ không đè nhau khi vòng mới hiện ngay
+		var p := center + Vector2(-120, -ry - 104)
+		draw_string_outline(font, p, _flash_text, HORIZONTAL_ALIGNMENT_CENTER, 240, 28, 8, OUTLINE)
+		draw_string(font, p, _flash_text, HORIZONTAL_ALIGNMENT_CENTER, 240, 28, _flash_color)
 	var me := rules.record(multiplayer.get_unique_id())
 	if me == null or me.qte_chest < 0 or rx <= 1.0:
 		return
 	var cfg := rules.config
-	draw_string(font, center + Vector2(-100, -ry - 70), "Bấm E / nút xanh!", HORIZONTAL_ALIGNMENT_CENTER, 200, 24)
+	var hint := center + Vector2(-120, -ry - 70)
+	draw_string_outline(font, hint, "Bấm E / nút xanh!", HORIZONTAL_ALIGNMENT_CENTER, 240, 24, 7, OUTLINE)
+	draw_string(font, hint, "Bấm E / nút xanh!", HORIZONTAL_ALIGNMENT_CENTER, 240, 24)
 	# Vòng nằm trên sàn: vẽ hình tròn bán kính rx rồi ép dọc theo phối cảnh camera.
 	draw_set_transform(center, 0.0, Vector2(1.0, ry / rx))
 	draw_arc(Vector2.ZERO, rx, 0, TAU, 64, RING, WIDTH)

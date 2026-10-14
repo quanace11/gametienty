@@ -21,6 +21,8 @@ const PULSE_TIME := 0.15 # giây giữ nút khi chạm (để server kịp nhậ
 const REDRAW_INTERVAL := 0.1
 
 const MOUSE_FINGER := -1
+const INK := Color(0.12, 0.1, 0.16)
+const UiTheme = preload("res://UI/ui_theme.gd")
 
 var _fingers := {} # chỉ số ngón -> "move" | "aim" | "button"
 var _move := Vector2.ZERO
@@ -31,6 +33,10 @@ var _over_cancel := false
 var _redraw_left := 0.0
 var _item_names := {}
 var _touch := false
+var _pie_points := PackedVector2Array()
+
+static var _card_ready: StyleBoxFlat
+static var _card_idle: StyleBoxFlat
 
 
 func _ready() -> void:
@@ -47,18 +53,29 @@ func _process(delta: float) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if GameState.rules == null or GameState.my_role() < 0: # server riêng không chơi
+	if GameState.rules == null or GameState.my_role() < 0: # server riêng không chơi, hoặc hết trận
+		_release_all()
 		return
 	if event is InputEventScreenTouch:
 		_on_touch(event.index, event.position, event.pressed)
 	elif event is InputEventScreenDrag:
 		_on_drag(event.index, event.position)
-	elif _touch:
-		return # trên điện thoại chuột là giả lập từ cảm ứng: bỏ qua cho khỏi tính hai lần
+	elif _touch and event.device == InputEvent.DEVICE_ID_EMULATION:
+		return # chuột giả lập từ cảm ứng: bỏ qua cho khỏi tính hai lần (chuột thật vẫn dùng được)
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		_on_touch(MOUSE_FINGER, event.position, event.pressed)
 	elif event is InputEventMouseMotion and _fingers.has(MOUSE_FINGER):
 		_on_drag(MOUSE_FINGER, event.position)
+
+
+func _exit_tree() -> void:
+	_release_all()
+
+
+## Nhả mọi nút đang giữ (hết trận, rời màn hình) để trận sau không bị kẹt nút.
+func _release_all() -> void:
+	for finger: int in _fingers.keys():
+		_release(finger)
 
 
 func _on_touch(finger: int, pos: Vector2, pressed: bool) -> void:
@@ -119,7 +136,7 @@ func _release(finger: int) -> void:
 			_over_cancel = false
 			for a: StringName in [&"aim_left", &"aim_right", &"aim_up", &"aim_down", &"aim_hold", &"aim_cancel"]:
 				Input.action_release(a)
-			if tap:
+			if tap and GameState.rules != null:
 				_pulse(&"interact") # chạm nhanh: tự nhắm, hoặc túm người đang gục
 		"button":
 			Input.action_release(&"interact")
@@ -162,55 +179,96 @@ func _draw() -> void:
 	var me := _me()
 	if me == null:
 		return
-	var accent := Color(0.35, 0.8, 1.0)
-	# Cần di chuyển.
+	_build_styles()
+	var font := get_theme_default_font()
+	var aiming := false
+	var held := false
+	for kind: String in _fingers.values():
+		aiming = aiming or kind == "aim"
+		held = held or kind == "button"
+	# Cần di chuyển: đế tròn viền đậm, núm có vệt sáng.
 	var mc := _move_center()
-	draw_circle(mc, STICK_R, Color(accent, 0.12))
-	draw_arc(mc, STICK_R, 0, TAU, 48, Color(accent, 0.6), 3.0)
-	draw_circle(mc + _move * STICK_R, KNOB_R, Color(accent, 0.55))
+	draw_circle(mc, STICK_R + 3, Color(INK, 0.5))
+	draw_circle(mc, STICK_R, Color(0.2, 0.3, 0.45, 0.35))
+	draw_arc(mc, STICK_R, 0, TAU, 48, Color(1, 1, 1, 0.5), 3.0)
+	_knob(mc + _move * STICK_R, Color(0.4, 0.75, 1.0))
 	# Nút phải.
 	var ac := _aim_center()
-	var font := get_theme_default_font()
 	if _hunter():
-		var aiming := _fingers.values().has("aim")
-		draw_circle(ac, AIM_R, Color(accent, 0.2 if aiming else 0.12))
-		draw_arc(ac, AIM_R, 0, TAU, 48, Color(accent, 0.7), 3.0)
-		draw_circle(ac + _aim * AIM_R, KNOB_R, Color(1, 0.75, 0.2, 0.85))
-		_text(font, ac + _aim * AIM_R, "BẮN", 18, Color.BLACK)
-		if aiming:
+		draw_circle(ac, AIM_R + 3, Color(INK, 0.5))
+		draw_circle(ac, AIM_R, Color(0.95, 0.35, 0.3, 0.3 if aiming else 0.2))
+		draw_arc(ac, AIM_R, 0, TAU, 48, Color(1, 1, 1, 0.55), 3.0)
+		var k := ac + _aim * AIM_R
+		_knob(k, Color(0.95, 0.4, 0.3))
+		# Tâm ngắm vẽ trên núm.
+		draw_arc(k, 13, 0, TAU, 20, Color.WHITE, 3.0)
+		for d: Vector2 in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
+			draw_line(k + d * 8, k + d * 20, Color.WHITE, 3.0)
+		if not aiming:
+			_text(font, ac + Vector2(0, AIM_R + 18), "BẮN", 18, Color.WHITE)
+		else:
 			var cc := ac + CANCEL_OFFSET
-			draw_circle(cc, CANCEL_R, Color(1, 0.3, 0.25, 0.6 if _over_cancel else 0.3))
-			_text(font, cc, "Hủy", 18, Color.WHITE)
+			draw_circle(cc, CANCEL_R + 3, INK)
+			draw_circle(cc, CANCEL_R, Color(0.95, 0.3, 0.25) if _over_cancel else Color(0.55, 0.2, 0.2, 0.85))
+			draw_line(cc + Vector2(-12, -12), cc + Vector2(12, 12), Color.WHITE, 5.0)
+			draw_line(cc + Vector2(12, -12), cc + Vector2(-12, 12), Color.WHITE, 5.0)
+			_text(font, cc + Vector2(0, CANCEL_R + 16), "Hủy", 16, Color.WHITE)
 	else:
-		var held := _fingers.values().has("button")
-		draw_circle(ac, AIM_R, Color(0.3, 0.9, 0.4, 0.35 if held else 0.2))
-		draw_arc(ac, AIM_R, 0, TAU, 48, Color(0.3, 0.9, 0.4, 0.8), 3.0)
-		_text(font, ac, "E\nCạy / Đỡ", 18, Color.WHITE)
+		draw_circle(ac, AIM_R + 3, INK)
+		draw_circle(ac, AIM_R, Color(0.33, 0.78, 0.4).darkened(0.15 if held else 0.0))
+		draw_circle(ac + Vector2(-AIM_R * 0.3, -AIM_R * 0.35), AIM_R * 0.28, Color(1, 1, 1, 0.25))
+		_text(font, ac, "E\nCạy / Đỡ", 20, Color.WHITE)
 	_draw_cards(me, font)
 
 
-## Thanh thẻ: tên, giá (vàng, đỏ nếu thiếu tiền), số giây hồi chiêu phủ tối.
+func _knob(c: Vector2, color: Color) -> void:
+	draw_circle(c, KNOB_R + 3, INK)
+	draw_circle(c, KNOB_R, color)
+	draw_circle(c + Vector2(-KNOB_R * 0.3, -KNOB_R * 0.35), KNOB_R * 0.32, Color(1, 1, 1, 0.35))
+
+
+## Thanh thẻ: thẻ bo tròn, số ô, tên, giá (vàng, đỏ nếu thiếu tiền); hồi chiêu
+## là phần tối quét dần như kim đồng hồ kèm số giây.
 func _draw_cards(me: PlayerRecord, font: Font) -> void:
 	_load_names()
 	var catalog := GameState.rules.catalog
 	var origin := _cards_origin(me.deck.size())
-	if not me.is_hunter():
-		_text(font, origin + Vector2(60, -16), "● %d xu" % me.coins, 22, Color(1, 0.85, 0.3))
 	for i in me.deck.size():
 		var r := Rect2(origin + Vector2(i * (CARD_SIZE.x + CARD_GAP), 0), CARD_SIZE)
 		var cost: int = catalog[me.deck[i]]["cost"]
 		var cd: float = me.item_cooldowns[i]
-		draw_rect(r, Color(0.08, 0.1, 0.13, 0.85))
-		draw_rect(r, Color(0.35, 0.8, 1.0, 0.5), false, 2.0)
-		draw_string(font, r.position + Vector2(6, 18), str(i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 1, 1, 0.5))
-		draw_multiline_string(font, r.position + Vector2(4, 38), _item_names.get(me.deck[i], "?"),
-			HORIZONTAL_ALIGNMENT_CENTER, CARD_SIZE.x - 8, 15, 2, Color.WHITE)
+		var usable := cd <= 0.0 and me.coins >= cost
+		draw_style_box(_card_ready if usable else _card_idle, r)
+		draw_circle(r.position + Vector2(14, 14), 11, INK)
+		draw_string(font, r.position + Vector2(3, 19), str(i + 1), HORIZONTAL_ALIGNMENT_CENTER, 22, 15, Color.WHITE)
+		if cd > 0.0: # đang hồi chiêu: chỉ hiện quạt tối + số giây cho dễ đọc
+			var total: float = maxf(catalog[me.deck[i]].get("cooldown", cd), cd)
+			_pie(r.get_center(), CARD_SIZE.y * 0.42, cd / total)
+			_text(font, r.get_center(), "%d" % ceili(cd), 30, Color.WHITE)
+			continue
+		draw_multiline_string(font, r.position + Vector2(6, 42), _item_names.get(me.deck[i], "?"),
+			HORIZONTAL_ALIGNMENT_CENTER, CARD_SIZE.x - 12, 16, 2, Color.WHITE)
 		if cost > 0:
-			_text(font, r.position + Vector2(CARD_SIZE.x / 2, CARD_SIZE.y - 14), "● %d" % cost, 16,
-				Color(1, 0.85, 0.3) if me.coins >= cost else Color(1, 0.35, 0.3))
-		if cd > 0.0:
-			draw_rect(r, Color(0, 0, 0, 0.6))
-			_text(font, r.get_center(), "%d" % ceili(cd), 28, Color.WHITE)
+			_text(font, r.position + Vector2(CARD_SIZE.x / 2, CARD_SIZE.y - 14), "● %d" % cost, 17,
+				INK if me.coins >= cost else Color(1, 0.45, 0.4))
+
+
+## Hình quạt tối phủ lên thẻ đang hồi chiêu (phần còn lại theo tỉ lệ `left`).
+func _pie(c: Vector2, radius: float, left: float) -> void:
+	var steps := 24
+	_pie_points.resize(steps + 2)
+	_pie_points[0] = c
+	for k in steps + 1:
+		var a := -PI / 2 + TAU * left * k / steps
+		_pie_points[k + 1] = c + Vector2(cos(a), sin(a)) * radius
+	draw_colored_polygon(_pie_points, Color(0, 0, 0, 0.55))
+
+
+func _build_styles() -> void:
+	if _card_ready:
+		return
+	_card_ready = UiTheme.panel(Color(0.98, 0.6, 0.2), 14, 3)
+	_card_idle = UiTheme.panel(Color(0.3, 0.33, 0.42, 0.9), 14, 3)
 
 
 func _text(font: Font, center: Vector2, text: String, size_px: int, color: Color) -> void:
