@@ -36,6 +36,9 @@ var _effects := {} # ItemType -> ItemEffect (chỉ server dùng)
 var _aim_points := {} # chỉ server: id -> Vector3, điểm người chơi chọn trên minimap
 var _footprints := {} # chỉ server: id người trốn -> [Vector3 (y = elapsed lúc ghi)]
 var _footprint_timer := 0.0
+var _bush_of := {} # chỉ server: id -> chỉ số bụi cây đang đứng trong, -1 nếu không
+var _bushes: Array[Vector3] = [] # mọi máy: bụi cây của bản đồ (x, z, bán kính)
+var _bushes_loaded := false
 
 
 func _ready() -> void:
@@ -59,6 +62,9 @@ func begin(info: Dictionary, total_safes: int, floor_coins: int = 0) -> void:
 	_aim_points.clear()
 	_footprints.clear()
 	_footprint_timer = 0.0
+	_bush_of.clear()
+	_bushes.clear()
+	_bushes_loaded = false
 	_world_applied = rules.world_dict()
 	_world_sent = _world_applied
 	EventBus.match_state_changed.emit(rules.state)
@@ -187,10 +193,40 @@ func server_after_move(entities: Array) -> void:
 			if e.peer_id == id:
 				e.global_position = rules.record(id).teleport_pos
 				e.velocity = Vector3.ZERO
+	for e: EntityBase in entities:
+		_bush_of[e.peer_id] = bush_at(e.global_position)
 	_footprint_timer -= get_physics_process_delta_time()
 	if _footprint_timer <= 0.0:
 		_footprint_timer = rules.config.footprint_interval
 		_record_footprints(entities)
+
+
+## Bụi cây chứa điểm `pos` (chỉ số trong MapBase.get_bushes()), -1 nếu không có. Mọi máy dùng được.
+func bush_at(pos: Vector3) -> int:
+	if not _bushes_loaded:
+		var map := get_tree().get_first_node_in_group(GameTypes.GROUP_MAP) as MapBase
+		if map == null:
+			return -1
+		_bushes = map.get_bushes()
+		_bushes_loaded = true
+	for i in _bushes.size():
+		var b := _bushes[i]
+		if Vector2(pos.x, pos.z).distance_to(Vector2(b.x, b.y)) <= b.z:
+			return i
+	return -1
+
+
+## Chỉ server: `viewer_id` có thấy `target_id` không. Đứng trong bụi cây thì
+## phe kia không thấy, trừ khi người nhìn đứng cùng bụi; đồng đội luôn thấy nhau.
+## Server không gửi vị trí người không thấy xuống máy đó (Match), bot và súng
+## tự nhắm cũng dùng hàm này.
+func can_see(viewer_id: int, target_id: int) -> bool:
+	if viewer_id == target_id or rules == null:
+		return true
+	var bush: int = _bush_of.get(target_id, -1)
+	if bush < 0 or rules.roles.get(viewer_id, -1) == rules.roles.get(target_id, -2):
+		return true
+	return _bush_of.get(viewer_id, -1) == bush
 
 
 ## Đạn tới nơi: trúng người đầu tiên (gần chỗ bắn nhất) mà đường đạn đi qua

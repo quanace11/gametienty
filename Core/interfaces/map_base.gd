@@ -20,6 +20,12 @@ func get_walls() -> Array[Rect2]:
 	return []
 
 
+## Bụi cây: Vector3(x, z, bán kính) trên mặt sàn. Ai đứng trong bụi thì phe
+## kia không thấy (GameState.can_see), trừ khi cũng đứng trong cùng bụi đó.
+func get_bushes() -> Array[Vector3]:
+	return []
+
+
 func get_hunter_spawn() -> Vector3:
 	return Vector3.ZERO
 

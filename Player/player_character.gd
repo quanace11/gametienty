@@ -12,7 +12,7 @@ extends EntityBase
 ## tung (server_launch) khi giẫm đệm lò xo.
 ## Mọi quyết định đúng/sai nằm ở GameState; file này chỉ chọn điểm ngắm và vị trí.
 ## Hình: nhân vật chibi KayKit Adventurers (CC0, Player/models/), thợ săn là
-## Rogue trùm đầu cầm nỏ, người trốn là Knight / Mage / Rogue / Barbarian.
+## Rogue trùm đầu cầm nỏ (vòng đỏ dưới chân), người trốn là hiệp sĩ Knight.
 ## Animation chọn trên mọi máy theo trạng thái + tốc độ, không gửi qua mạng.
 
 const HUNTER_SPEED := 4.8 # m/s
@@ -33,10 +33,7 @@ const AIM_MIN := 0.2 # độ dài hướng ngắm tối thiểu để bắn theo
 const BEAM_HEIGHT := 1.1 # ngang nòng súng (GameState.SHOT_HEIGHT), để raycast luồng ngắm
 
 const HUNTER_MODEL := "res://Player/models/rogue_hooded.glb"
-const ESCAPEE_MODELS := [
-	"res://Player/models/knight.glb", "res://Player/models/mage.glb",
-	"res://Player/models/rogue.glb", "res://Player/models/barbarian.glb",
-]
+const ESCAPEE_MODEL := "res://Player/models/knight.glb"
 const HUNTER_PROP := "1H_Crossbow" # đồ cầm tay duy nhất được giữ lại (nỏ của thợ săn)
 const MODEL_SCALE := 0.72 # model KayKit cao ~2.4 m, thu về ~1.75 m
 const LOOP_ANIMS := ["Idle", "Running_A", "Lie_Idle", "Sit_Floor_Idle", "Jump_Idle"]
@@ -50,6 +47,7 @@ var _anim_name := ""
 var _oneshot_left := 0.0 # đang phát anim một lần (bắn, bị trúng, ném)
 var _last_pos := Vector3.ZERO
 var _speed := 0.0 # m/s trên mặt sàn, đo từ vị trí (client không có velocity thật)
+var _concealed := false # máy này không được thấy (đứng trong bụi cây phe kia)
 var _air_velocity := Vector3.ZERO # chỉ server: đang bay vì đệm lò xo
 var _flying := false
 
@@ -103,7 +101,7 @@ func _build_body() -> void:
 
 
 func _build_model() -> void:
-	var path: String = HUNTER_MODEL if is_hunter() else ESCAPEE_MODELS[absi(peer_id) % ESCAPEE_MODELS.size()]
+	var path := HUNTER_MODEL if is_hunter() else ESCAPEE_MODEL
 	var model: Node3D = (load(path) as PackedScene).instantiate()
 	model.scale = Vector3.ONE * MODEL_SCALE * (1.1 if is_hunter() else 1.0)
 	model.rotation.y = PI # model nhìn về +Z, nhân vật nhìn về -Z
@@ -247,7 +245,7 @@ func _hunter_shoot(aim_dir: Vector2) -> void:
 	var best_d := cfg.rifle_range
 	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
 		var e := node as EntityBase
-		if e == self or not rules.is_hittable(e.peer_id):
+		if e == self or not rules.is_hittable(e.peer_id) or not GameState.can_see(peer_id, e.peer_id):
 			continue
 		var to := e.global_position - global_position
 		to.y = 0.0
@@ -389,9 +387,19 @@ func client_update(delta: float) -> void:
 	rotation.y = lerp_angle(rotation.y, _target_yaw, t)
 
 
-func _on_state_changed(new_state: GameTypes.PlayerState) -> void:
-	visible = new_state != GameTypes.PlayerState.ESCAPED and new_state != GameTypes.PlayerState.ELIMINATED
+func _on_state_changed(_new_state: GameTypes.PlayerState) -> void:
+	_refresh_visible()
 	_oneshot_left = 0.0 # đổi trạng thái (gục, bị nhốt...) thì bỏ anim đang phát dở
+
+
+func set_concealed(concealed: bool) -> void:
+	if concealed != _concealed:
+		_concealed = concealed
+		_refresh_visible()
+
+
+func _refresh_visible() -> void:
+	visible = not _concealed and state != GameTypes.PlayerState.ESCAPED and state != GameTypes.PlayerState.ELIMINATED
 
 
 func _on_hit(id: int, _attacker_id: int, _hp_left: int) -> void:
