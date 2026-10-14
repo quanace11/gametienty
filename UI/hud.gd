@@ -8,6 +8,7 @@ var _label: Label
 var _result := ""
 var _alert := ""
 var _alert_left := 0.0
+var _item_names := {} # ItemType -> tên thẻ (đọc một lần)
 
 
 func _ready() -> void:
@@ -79,8 +80,22 @@ func _my_status(me: PlayerRecord) -> String:
 			return "Bạn đã bị loại"
 		GameTypes.PlayerState.ESCAPED:
 			return "Bạn đã thoát!"
-	return "Máu: %d/%d   Tiền: %d   Túi máu: %d (Q)   Giữ E gần đồng đội gục để đỡ dậy" % [
-		me.hp, me.max_hp, me.coins, me.items.get(GameTypes.ItemType.MEDKIT, 0)]
+	return "Máu: %d/%d   Tiền: %d   Giữ E gần đồng đội gục để đỡ dậy\n%s" % [me.hp, me.max_hp, me.coins, _deck_line(me)]
+
+
+## Bộ bài: "1 Túi cứu thương (10) | 2 Lựu đạn choáng (hồi 4s) ...". Tên thẻ lấy từ Items qua ModuleRegistry.
+func _deck_line(me: PlayerRecord) -> String:
+	if _item_names.is_empty():
+		var items: Dictionary = load(ModuleRegistry.ITEM_CATALOG).call(&"all")
+		for type: int in items:
+			_item_names[type] = items[type].display_name
+	var parts: PackedStringArray = []
+	for i in me.deck.size():
+		var cd: float = me.item_cooldowns[i]
+		var cost: int = GameState.rules.catalog[me.deck[i]]["cost"]
+		var state := "hồi %ds" % ceili(cd) if cd > 0.0 else ("%d xu" % cost if me.coins >= cost else "thiếu tiền")
+		parts.append("%d %s (%s)" % [i + 1, _item_names.get(me.deck[i], "?"), state])
+	return " | ".join(parts)
 
 
 func _show_alert(text: String) -> void:

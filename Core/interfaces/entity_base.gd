@@ -30,6 +30,19 @@ func server_move(_input: InputSource, _delta: float) -> void:
 	pass
 
 
+## Chỉ server: bị hất tung (đệm lò xo...). `velocity` tính bằng m/s. Lớp con
+## cài đặt việc bay (bay qua tường, rơi xuống).
+func server_launch(_velocity: Vector3) -> void:
+	pass
+
+
+## Hướng nhân vật đang nhìn trên mặt sàn (đã chuẩn hóa).
+func facing() -> Vector3:
+	var f := -global_transform.basis.z
+	f.y = 0.0
+	return f.normalized() if f.length_squared() > 0.0001 else Vector3.FORWARD
+
+
 ## Core gọi trên server mỗi physics frame, trước server_move().
 func server_read_input(input: InputSource) -> void:
 	var b := input.get_buttons()

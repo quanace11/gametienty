@@ -28,6 +28,10 @@ var gate_open := false
 var gate_opening_left := 0.0 ## > 0: cổng đang rung, chưa qua được
 var coins := {} # coin_id -> giá trị, những cọc tiền còn trên sàn
 var coins_taken := {} # coin_id -> id người nhặt
+var placed := {} # obj_id -> {"type": ItemType, "pos": Vector3, "yaw": float, "owner": id, "expires": elapsed}
+var catalog := {} ## ItemType -> {"cost": int, "cooldown": float}, Items khai báo (setup_items)
+
+var _next_placed_id := 1
 
 var rng := RandomNumberGenerator.new() ## chỉ server dùng (vị trí vùng sáng, giờ hiện vòng căn)
 
@@ -47,8 +51,7 @@ func _init(cfg: MatchConfig, p_roles: Dictionary, p_names: Dictionary, total_saf
 	for id: int in roles:
 		var hp := 0 if roles[id] == GameTypes.Role.HUNTER else cfg.max_hp
 		players[id] = PlayerRecord.new(id, roles[id], hp)
-		if roles[id] == GameTypes.Role.ESCAPEE and cfg.medkits_per_escapee > 0:
-			players[id].items[GameTypes.ItemType.MEDKIT] = cfg.medkits_per_escapee
+		players[id].coins = cfg.start_coins
 	for i in total_safes:
 		safe_progress[i] = 0.0
 
@@ -87,7 +90,7 @@ func speed_factor(id: int) -> float:
 			return config.rescuing_speed
 	if p.carrying_id != 0:
 		return config.carrying_speed
-	return 1.0
+	return p.speed_boost_factor if p.speed_boost_left > 0.0 else 1.0
 
 
 func can_attack(id: int) -> bool:
@@ -183,7 +186,7 @@ func imprison(hunter_id: int, prison_id: int) -> bool:
 ## Người trốn `rescuer_id` đỡ `target_id` (đang gục dưới đất) thêm `delta`
 ## giây. Gọi mỗi physics frame khi đang giữ nút E. Nhiều người cứu cùng lúc
 ## thì cộng dồn. Trả về true nếu lần này đỡ dậy xong. Người bị kéo hoặc bị
-## nhốt không đỡ tay được, phải dùng túi máu (use_medkit).
+## nhốt không đỡ tay được, phải dùng túi máu (heal).
 func channel_rescue(rescuer_id: int, target_id: int, delta: float) -> bool:
 	var r := record(rescuer_id)
 	var p := record(target_id)
@@ -213,45 +216,121 @@ func channel_rescue(rescuer_id: int, target_id: int, delta: float) -> bool:
 	return true
 
 
-## Còn bao nhiêu vật phẩm `type`.
-func item_count(id: int, type: GameTypes.ItemType) -> int:
+## Gán bảng giá thẻ (`items`: ItemType -> ItemData hoặc {"cost", "cooldown"}) và
+## bộ bài từng người (`decks`: id -> Array[ItemType]; thiếu thì dùng `defaults`:
+## Role -> Array). Gọi một lần lúc vào trận, trên mọi máy giống nhau.
+func setup_items(items: Dictionary, decks: Dictionary, defaults: Dictionary) -> void:
+	catalog.clear()
+	for type: int in items:
+		var it: Variant = items[type]
+		catalog[type] = {"cost": it.cost, "cooldown": it.cooldown} if it is Resource else it
+	for id: int in players:
+		var p: PlayerRecord = players[id]
+		var deck: Array = decks.get(id, defaults.get(p.role, []))
+		p.deck = deck.filter(func(t: int) -> bool: return catalog.has(t)).slice(0, config.deck_size)
+		p.item_cooldowns = []
+		p.item_cooldowns.resize(p.deck.size())
+		p.item_cooldowns.fill(0.0)
+
+
+## Ô thẻ `slot` của `id` dùng được ngay không (đủ tiền, hết hồi chiêu, đang đứng).
+func can_use_item(id: int, slot: int) -> bool:
 	var p := record(id)
-	return p.items.get(type, 0) if p else 0
+	if p == null or not is_playing() or not GameTypes.is_active(p.state) or p.stunned_left > 0.0:
+		return false
+	if slot < 0 or slot >= p.deck.size() or p.item_cooldowns[slot] > 0.0:
+		return false
+	return p.coins >= catalog[p.deck[slot]]["cost"]
 
 
-## Người trốn `thrower_id` dùng một túi máu cho `target_id` (có thể là chính
-## mình khi đang đứng). Module tự kiểm tra tầm ném (config.medkit_range).
-## Người đang gục, bị kéo hoặc bị nhốt thì đứng dậy ngay; đang đứng thì hồi máu.
-## Trả về true nếu đã dùng (mất một túi). Mục tiêu đầy máu thì không dùng.
-func use_medkit(thrower_id: int, target_id: int) -> bool:
-	var t := record(thrower_id)
+## Trả tiền và tính hồi chiêu cho ô thẻ `slot`, ghi lại để mọi máy phát
+## item_used. Hiệu ứng do Items làm sau đó. Trả về false nếu không dùng được.
+func use_item(id: int, slot: int, target_id: int = 0, target_pos: Vector3 = Vector3.ZERO) -> bool:
+	if not can_use_item(id, slot):
+		return false
+	var p := record(id)
+	var info: Dictionary = catalog[p.deck[slot]]
+	p.coins -= info["cost"]
+	p.item_cooldowns[slot] = info["cooldown"]
+	p.item_seq += 1
+	p.item_last_type = p.deck[slot]
+	p.item_target_id = target_id
+	p.item_target_pos = target_pos
+	_mark(id)
+	return true
+
+
+## Có hồi máu / cứu được `target_id` bằng túi máu của `healer_id` không.
+func can_heal(healer_id: int, target_id: int) -> bool:
+	var t := record(healer_id)
 	var p := record(target_id)
 	if t == null or p == null or t.is_hunter() or p.is_hunter() or not is_playing():
 		return false
-	if not GameTypes.is_active(t.state) or t.stunned_left > 0.0 or item_count(thrower_id, GameTypes.ItemType.MEDKIT) <= 0:
+	if not GameTypes.is_active(t.state) or t.stunned_left > 0.0:
 		return false
-	var heal := maxi(config.medkit_heal, 1)
 	match p.state:
 		GameTypes.PlayerState.DOWNED, GameTypes.PlayerState.CARRIED, GameTypes.PlayerState.IMPRISONED:
-			if p.carrier_id != 0:
-				_detach(record(p.carrier_id), p)
-			p.state = GameTypes.PlayerState.IDLE
-			p.hp = mini(heal, p.max_hp)
-			p.prison_id = -1
-			p.prison_time_left = 0.0
-			p.rescue_progress = 0.0
-			p.invulnerable_left = config.hit_invulnerable_time
-			if thrower_id != target_id:
-				t.rescues += 1
-		_:
-			if not GameTypes.is_active(p.state) or p.hp >= p.max_hp:
-				return false
-			p.hp = mini(p.hp + heal, p.max_hp)
-	t.items[GameTypes.ItemType.MEDKIT] = item_count(thrower_id, GameTypes.ItemType.MEDKIT) - 1
-	p.last_rescuer_id = thrower_id
+			return true
+	return GameTypes.is_active(p.state) and p.hp < p.max_hp
+
+
+## Túi máu của `healer_id` trúng `target_id` (có thể là chính mình khi đang
+## đứng). Người đang gục, bị kéo hoặc bị nhốt thì đứng dậy ngay; đang đứng thì
+## hồi máu. Tiền đã trả khi dùng thẻ (use_item). Trả về false nếu không có tác dụng.
+func heal(healer_id: int, target_id: int) -> bool:
+	if not can_heal(healer_id, target_id):
+		return false
+	var t := record(healer_id)
+	var p := record(target_id)
+	var amount := maxi(config.medkit_heal, 1)
+	if GameTypes.is_active(p.state):
+		p.hp = mini(p.hp + amount, p.max_hp)
+	else:
+		if p.carrier_id != 0:
+			_detach(record(p.carrier_id), p)
+		p.state = GameTypes.PlayerState.IDLE
+		p.hp = mini(amount, p.max_hp)
+		p.prison_id = -1
+		p.prison_time_left = 0.0
+		p.rescue_progress = 0.0
+		p.invulnerable_left = config.hit_invulnerable_time
+		if healer_id != target_id:
+			t.rescues += 1
+	p.last_rescuer_id = healer_id
 	p.heal_seq += 1
-	_mark(thrower_id)
+	_mark(healer_id)
 	_mark(target_id)
+	return true
+
+
+## Tăng tốc (xe / ván trượt): nhân tốc độ chạy với `factor` trong `seconds` giây.
+func speed_boost(id: int, seconds: float, factor: float) -> bool:
+	var p := record(id)
+	if p == null or seconds <= 0.0 or factor <= 0.0 or not is_playing() or GameTypes.is_out(p.state):
+		return false
+	p.speed_boost_left = seconds
+	p.speed_boost_factor = factor
+	_mark(id)
+	return true
+
+
+## Đặt vật thể xuống đất (bẫy, đệm lò xo, hộp gỗ). Tự biến mất sau `lifetime`
+## giây (0 = tới hết trận). Trả về id vật thể, 0 nếu không đặt được.
+func place(type: GameTypes.ItemType, pos: Vector3, yaw: float, owner_id: int, lifetime: float) -> int:
+	if not is_playing():
+		return 0
+	var obj_id := _next_placed_id
+	_next_placed_id += 1
+	placed[obj_id] = {"type": type, "pos": pos, "yaw": yaw, "owner": owner_id,
+		"expires": elapsed + lifetime if lifetime > 0.0 else INF}
+	_world_dirty = true
+	return obj_id
+
+
+func remove_placed(obj_id: int) -> bool:
+	if not placed.erase(obj_id):
+		return false
+	_world_dirty = true
 	return true
 
 
@@ -391,6 +470,10 @@ func tick(delta: float, authoritative: bool = true) -> void:
 					_world_dirty = true
 			for p: PlayerRecord in players.values():
 				_tick_player(p, delta, authoritative)
+			if authoritative:
+				for obj_id: int in placed.keys():
+					if placed[obj_id]["expires"] <= elapsed:
+						remove_placed(obj_id)
 
 
 func _tick_player(p: PlayerRecord, delta: float, authoritative: bool) -> void:
@@ -403,6 +486,11 @@ func _tick_player(p: PlayerRecord, delta: float, authoritative: bool) -> void:
 		p.stunned_left = maxf(0.0, p.stunned_left - delta)
 		if p.stunned_left == 0.0:
 			_mark(p.id)
+	if p.speed_boost_left > 0.0:
+		p.speed_boost_left = maxf(0.0, p.speed_boost_left - delta)
+	for i in p.item_cooldowns.size():
+		if p.item_cooldowns[i] > 0.0:
+			p.item_cooldowns[i] = maxf(0.0, p.item_cooldowns[i] - delta)
 	if not authoritative:
 		if p.state == GameTypes.PlayerState.IMPRISONED:
 			p.prison_time_left = maxf(0.0, p.prison_time_left - delta)
@@ -554,6 +642,7 @@ func world_dict() -> Dictionary:
 	return {
 		"safes": safe_progress.duplicate(), "gate_open": gate_open, "gate_opening": gate_opening_left > 0.0,
 		"gate_opening_left": gate_opening_left, "coins_taken": coins_taken.duplicate(),
+		"placed": placed.duplicate(true),
 	}
 
 
@@ -563,6 +652,7 @@ func apply_world_dict(d: Dictionary) -> void:
 	gate_open = d["gate_open"]
 	gate_opening_left = d["gate_opening_left"]
 	coins_taken = d["coins_taken"].duplicate()
+	placed = d["placed"].duplicate(true)
 	for safe_id: int in safe_progress:
 		if safe_progress[safe_id] >= 1.0:
 			for c: int in chest_coin_ids(safe_id):

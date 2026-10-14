@@ -34,7 +34,8 @@ enum EscapeeResult { CAUGHT, ESCAPED }
 ## Kết quả một lần căn vòng khi mở rương.
 enum QteResult { NONE, PERFECT, GOOD, FAIL }
 
-enum ItemType { DISGUISE, BARRIER, SPEED_SHOES, GUN, MEDKIT }
+## Thẻ đạo cụ trong bộ bài. Cũng dùng làm loại vật thể đặt xuống đất (TRAP, JUMP_PAD, CRATE).
+enum ItemType { MEDKIT, STUN_GRENADE, TRAP, JUMP_PAD, CRATE, SPEED_BOOST, PISTOL, DISGUISE }
 
 ## Group mà các module dùng để tìm nhau mà không cần biết class cụ thể.
 const GROUP_ENTITIES := &"entities"
