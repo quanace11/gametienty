@@ -4,7 +4,9 @@ extends RefCounted
 ## Nhân vật chỉ đọc InputSource, không biết ai đang điều khiển mình.
 
 ## Các nút hành động, theo thứ tự bit khi gửi qua mạng.
-const ACTIONS := [&"interact", &"dash", &"skill_1", &"skill_2", &"skill_3", &"skill_4", &"skill_5"]
+## "shoot": thợ săn bắn theo hướng get_aim() (cần ngắm thả tay, hoặc chuột phải);
+## get_aim() = 0 thì tự nhắm như nút tương tác.
+const ACTIONS := [&"interact", &"dash", &"skill_1", &"skill_2", &"skill_3", &"skill_4", &"skill_5", &"shoot"]
 const SKILL_ACTIONS := [&"skill_1", &"skill_2", &"skill_3", &"skill_4", &"skill_5"] ## nút ô thẻ 1..5 trong bộ bài
 
 ## Nhân vật đang được điều khiển (Match gán khi tạo).
@@ -31,6 +33,12 @@ func get_move() -> Vector2:
 ## Có sẵn trong gói input gửi lên server để sau này xoay camera không phải sửa mạng.
 func get_aim_yaw() -> float:
 	return 0.0
+
+
+## Hướng ngắm (cần ngắm bên phải / chuột phải), cùng hệ trục với get_move(),
+## độ dài tối đa 1. Vector2.ZERO = không ngắm tay (súng tự nhắm).
+func get_aim() -> Vector2:
+	return Vector2.ZERO
 
 
 func is_pressed(_action: StringName) -> bool:

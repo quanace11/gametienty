@@ -4,8 +4,10 @@ extends EntityBase
 ## quay mặt theo hướng chạy.
 ## Nút tương tác (E/Space): thợ săn túm người đang gục (kéo lê phía sau) hoặc
 ## bắn súng theo đường thẳng (tự nhắm người gần nhất phía trước, ngắm đón đầu,
-## tường chặn đạn); người trốn giữ
-## để đỡ đồng đội đang gục.
+## tường chặn đạn); người trốn giữ để đỡ đồng đội đang gục.
+## Nút "shoot" (thả cần ngắm / chuột phải): thợ săn bắn theo hướng đã ngắm.
+## Trên máy người chơi, lúc đang ngắm thì vẽ luồng xanh chỉ hướng và tầm bắn
+## (dừng ở tường), chỉ máy đó thấy.
 ## Nút thẻ đạo cụ (skill_1..4) do Core + Items xử lý, file này chỉ lo bị hất
 ## tung (server_launch) khi giẫm đệm lò xo.
 ## Mọi quyết định đúng/sai nằm ở GameState; file này chỉ chọn điểm ngắm và vị trí.
@@ -25,6 +27,8 @@ const GRAVITY := 20.0
 const TURN_SPEED := 12.0
 const LERP_SPEED := 15.0
 const SNAP_DIST := 6.0 # mét, lệch hơn chừng này (dịch chuyển) thì đặt thẳng vị trí
+const AIM_MIN := 0.2 # độ dài hướng ngắm tối thiểu để bắn theo tay, ngắn hơn thì tự nhắm
+const BEAM_HEIGHT := 1.1 # ngang nòng súng (GameState.SHOT_HEIGHT), để raycast luồng ngắm
 
 const HUNTER_COLOR := Color(0.9, 0.25, 0.25)
 const ESCAPEE_COLOR := Color(0.3, 0.6, 1.0)
@@ -37,9 +41,15 @@ var _material: StandardMaterial3D
 var _air_velocity := Vector3.ZERO # chỉ server: đang bay vì đệm lò xo
 var _flying := false
 
+## Chỉ máy người chơi: nguồn input của nhân vật này (LocalInputSource tự gán), để vẽ luồng ngắm.
+var aim_input: InputSource
+var _beam: Node3D
+var _beam_mesh: MeshInstance3D
+
 # Hình đạn dùng chung cho mọi nhân vật (đỡ tốn bộ nhớ, đỡ draw call trên điện thoại).
 static var _rifle_mesh: SphereMesh
 static var _bullet_mesh: SphereMesh
+static var _beam_box: BoxMesh
 
 
 func setup(id: int, p_role: GameTypes.Role, p_name: String, pos: Vector3, local: bool) -> void:
@@ -53,6 +63,7 @@ func setup(id: int, p_role: GameTypes.Role, p_name: String, pos: Vector3, local:
 	EventBus.shot_fired.connect(_on_shot_fired)
 	if local:
 		add_child(load("res://Player/follow_camera.gd").new())
+	set_process(local and is_hunter()) # chỉ để vẽ luồng ngắm
 
 
 func _build_body() -> void:
@@ -120,6 +131,8 @@ func server_move(input: InputSource, delta: float) -> void:
 	if dir.length_squared() > 0.01 and speed > 0.0:
 		rotation.y = lerp_angle(rotation.y, atan2(-dir.x, -dir.z), minf(1.0, delta * TURN_SPEED))
 
+	if is_hunter() and input.is_pressed(&"shoot"):
+		_hunter_shoot(input.get_aim().rotated(-input.get_aim_yaw()))
 	if not input.is_pressed(&"interact"):
 		return
 	if is_hunter():
@@ -135,10 +148,20 @@ func _hunter_interact() -> void:
 	if downed:
 		GameState.server_pick_up(peer_id, downed.peer_id)
 		return
+	_hunter_shoot(Vector2.ZERO)
+
+
+## Thợ săn bắn: `aim` (hướng trên mặt sàn x, z) đủ dài thì bắn theo hướng đó
+## hết tầm (tường chặn), không thì tự nhắm người trốn gần nhất phía trước.
+func _hunter_shoot(aim_dir: Vector2) -> void:
 	var rules := GameState.rules
 	if not rules.can_attack(peer_id):
 		return
 	var cfg := rules.config
+	if aim_dir.length() >= AIM_MIN:
+		var d := aim_dir.normalized() * cfg.rifle_range
+		_fire_at(global_position + Vector3(d.x, 0.0, d.y))
+		return
 	var forward := facing()
 	var aim := global_position + forward * BLIND_SHOT_DIST
 	var best_d := cfg.rifle_range
@@ -153,6 +176,10 @@ func _hunter_interact() -> void:
 			best_d = d
 			# Đón đầu: đạn bay d / rifle_speed giây.
 			aim = e.global_position + Vector3(e.velocity.x, 0.0, e.velocity.z) * (d / cfg.rifle_speed)
+	_fire_at(aim)
+
+
+func _fire_at(aim: Vector3) -> void:
 	aim.y = 0.0
 	if GameState.server_fire_rifle(self, aim) != 0:
 		var to_aim := aim - global_position
@@ -166,6 +193,50 @@ func _escapee_interact(delta: float) -> void:
 		return not e.is_hunter() and e.state == GameTypes.PlayerState.DOWNED)
 	if downed:
 		GameState.server_channel_rescue(peer_id, downed.peer_id, delta)
+
+
+## Máy người chơi (thợ săn): đang kéo cần ngắm thì hiện luồng xanh từ chân tới
+## hết tầm, dừng ở tường. Một raycast mỗi frame, chỉ lúc đang ngắm.
+func _process(_delta: float) -> void:
+	var dir := Vector2.ZERO
+	if aim_input is LocalInputSource and GameTypes.is_active(state):
+		dir = (aim_input as LocalInputSource).aiming_direction().rotated(-aim_input.get_aim_yaw())
+	if dir == Vector2.ZERO or GameState.rules == null:
+		if _beam:
+			_beam.visible = false
+		return
+	if _beam == null:
+		_build_beam()
+	var range_m := GameState.rules.config.rifle_range
+	var from := global_position + Vector3(0, BEAM_HEIGHT, 0)
+	var to := from + Vector3(dir.x, 0, dir.y) * range_m
+	var hit := get_world_3d().direct_space_state.intersect_ray(PhysicsRayQueryParameters3D.create(from, to, 1))
+	var length := range_m
+	if not hit.is_empty():
+		length = Vector2(hit["position"].x - from.x, hit["position"].z - from.z).length()
+	_beam.visible = true
+	_beam.global_position = global_position + Vector3(0, 0.06, 0)
+	_beam.global_rotation = Vector3(0, atan2(-dir.x, -dir.y), 0)
+	_beam_mesh.scale.z = maxf(length, 0.1)
+	_beam_mesh.position.z = -_beam_mesh.scale.z / 2.0
+
+
+func _build_beam() -> void:
+	if _beam_box == null:
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(0.45, 0.9, 1.0, 0.55)
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_beam_box = BoxMesh.new()
+		_beam_box.size = Vector3(GameState.rules.config.rifle_radius * 2.0, 0.04, 1.0)
+		_beam_box.material = m
+	_beam = Node3D.new()
+	_beam.top_level = true
+	_beam_mesh = MeshInstance3D.new()
+	_beam_mesh.mesh = _beam_box
+	_beam_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_beam.add_child(_beam_mesh)
+	add_child(_beam)
 
 
 func server_launch(v: Vector3) -> void:

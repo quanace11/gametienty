@@ -65,7 +65,7 @@ Bot luôn chạy trên server, giống hệt người chơi, chỉ khác nguồn
 
 **Hóa trang (Items):** người chơi bấm `skill_1`, server kiểm tra cooldown, đổi trạng thái hóa trang, gửi xuống. Client nhận và đổi model thành cái thùng. Không client nào tự đổi model của mình trước khi server đồng ý.
 
-**Thợ săn bắn (Player):** server chọn điểm ngắm tại thời điểm nhận input rồi gọi `GameState.server_fire_rifle(hunter, target)`; Core raycast một lần tìm tường, ghi viên đạn, tới giờ thì xét người đầu tiên trên đường bay theo vị trí trên server, trừ máu, ngã (xem [LUAT_TRAN.md](LUAT_TRAN.md#8-bắn-súng-của-thợ-săn-súng-lục-của-người-trốn)). Đạn chỉ gửi xuống client hai lần (lúc bắn, lúc tới); client tự vẽ đường bay.
+**Thợ săn bắn (Player):** client gửi hướng ngắm trong gói input (`InputSource.get_aim()`, 2 số float, 0 = tự nhắm) cùng nút `shoot`; server chọn điểm ngắm tại thời điểm nhận input rồi gọi `GameState.server_fire_rifle(hunter, target)`; Core raycast một lần tìm tường, ghi viên đạn, tới giờ thì xét người đầu tiên trên đường bay theo vị trí trên server, trừ máu, ngã (xem [LUAT_TRAN.md](LUAT_TRAN.md#8-bắn-súng-của-thợ-săn-súng-lục-của-người-trốn)). Đạn chỉ gửi xuống client hai lần (lúc bắn, lúc tới); client tự vẽ đường bay.
 
 **Bot (AI):** bot là `InputSource`. Nó đọc thế giới (vị trí, két, `GameState.rules`) và trả về hướng đi + nút bấm. Nó không bao giờ tự dịch chuyển nhân vật hay đổi trạng thái.
 

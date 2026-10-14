@@ -1,7 +1,7 @@
 extends Node3D
 ## Phần hiển thị của thẻ đạo cụ trên mọi máy: dựng vật thể đặt xuống đất
 ## (bẫy, đệm lò xo, hộp gỗ) theo EventBus.object_placed / object_removed, và
-## hiệu ứng ném (túi máu, lựu đạn) theo item_used. Phần luật của vật thể (bẫy
+## hiệu ứng ném (túi máu rơi thành vùng xanh, lựu đạn) theo item_used. Phần luật của vật thể (bẫy
 ## kẹp, đệm hất) chạy trong chính node đó trên server.
 
 const T := GameTypes.ItemType
@@ -10,7 +10,8 @@ const PLACED_SCRIPTS := {
 	T.JUMP_PAD: preload("res://Items/placed/jump_pad_node.gd"),
 	T.CRATE: preload("res://Items/placed/crate_node.gd"),
 }
-const MEDKIT_FLIGHT := 0.3
+const Medkit = preload("res://Items/effects/medkit.gd")
+const MEDKIT_FLIGHT := Medkit.FLIGHT_TIME
 const GRENADE_FLIGHT := 0.6
 const GRENADE_RADIUS := 2.5
 
@@ -19,6 +20,7 @@ var _placed := {} # obj_id -> Node3D
 static var _kit_mesh: BoxMesh
 static var _grenade_mesh: SphereMesh
 static var _blast_mesh: CylinderMesh
+static var _heal_mesh: CylinderMesh
 static var _pillar_mesh: CylinderMesh
 
 
@@ -57,9 +59,10 @@ func _on_item_used(id: int, type: GameTypes.ItemType, target_id: int, target_pos
 		return
 	match type:
 		T.MEDKIT:
-			if target_id != id:
-				var to: Variant = _entity_pos(target_id)
-				_throw(_kit_mesh, from, to if to != null else target_pos, MEDKIT_FLIGHT, Callable())
+			if target_id == id:
+				_heal_area(target_pos)
+			else:
+				_throw(_kit_mesh, from, target_pos, MEDKIT_FLIGHT, _heal_area.bind(target_pos))
 		T.STUN_GRENADE:
 			_throw(_grenade_mesh, from, target_pos, GRENADE_FLIGHT, _blast.bind(target_pos))
 
@@ -111,6 +114,21 @@ func _blast(pos: Vector3) -> void:
 	tween.tween_callback(mi.queue_free)
 
 
+## Vùng tròn xanh nơi túi máu rơi (đúng bán kính cứu của túi).
+func _heal_area(pos: Vector3) -> void:
+	var mi := MeshInstance3D.new()
+	mi.mesh = _heal_mesh
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
+	mi.global_position = pos + Vector3(0, 0.05, 0)
+	mi.scale = Vector3(0.3, 1, 0.3)
+	var tween := mi.create_tween()
+	tween.tween_property(mi, "scale", Vector3.ONE, 0.15)
+	tween.tween_interval(0.5)
+	tween.tween_property(mi, "transparency", 1.0, 0.4)
+	tween.tween_callback(mi.queue_free)
+
+
 func _entity_pos(id: int) -> Variant:
 	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
 		if (node as EntityBase).peer_id == id:
@@ -137,6 +155,17 @@ func _build_meshes() -> void:
 	_blast_mesh.radial_segments = 16
 	var m := _glow(Color(0.9, 0.9, 0.5))
 	_blast_mesh.material = m
+	_heal_mesh = CylinderMesh.new()
+	_heal_mesh.top_radius = Medkit.AREA_RADIUS
+	_heal_mesh.bottom_radius = Medkit.AREA_RADIUS
+	_heal_mesh.height = 0.04
+	_heal_mesh.radial_segments = 24
+	_heal_mesh.rings = 1
+	var heal_mat := StandardMaterial3D.new()
+	heal_mat.albedo_color = Color(0.35, 1.0, 0.4, 0.45)
+	heal_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	heal_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_heal_mesh.material = heal_mat
 	_pillar_mesh = CylinderMesh.new()
 	_pillar_mesh.top_radius = 0.6
 	_pillar_mesh.bottom_radius = 0.6
