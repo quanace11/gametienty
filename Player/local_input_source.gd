@@ -2,7 +2,8 @@ class_name LocalInputSource
 extends InputSource
 ## Đọc bàn phím, chuột và nút cảm ứng (UI bấm qua InputMap) của người ngồi máy này.
 ## Ngắm bắn: kéo cần ngắm (aim_*) hoặc giữ chuột phải, thả ra là bắn theo hướng
-## đó. Kéo về giữa cần (hoặc chạm nút hủy, aim_cancel) rồi thả thì không bắn.
+## đó. Kéo về giữa cần hoặc thả tay trên nút hủy (aim_cancel) thì không bắn. Lướt
+## ngang qua nút hủy rồi kéo ra thì vẫn ngắm tiếp (không khóa hủy cả lần kéo).
 
 const KEYS := {
 	&"move_left": [KEY_A, KEY_LEFT],
@@ -29,7 +30,6 @@ const SHOOT_HOLD := 0.15 ## giây giữ nút "shoot" sau khi thả cần, để 
 
 var _aim := Vector2.ZERO
 var _aiming := false
-var _cancelled := false
 var _shoot_left := 0.0
 var _shot_aim := Vector2.ZERO
 
@@ -55,8 +55,7 @@ func update(delta: float) -> void:
 	_shoot_left = maxf(0.0, _shoot_left - delta)
 	var held := Input.is_action_pressed(&"aim_hold") or Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT)
 	if held:
-		_cancelled = _cancelled or Input.is_action_pressed(&"aim_cancel")
-		_aim = Vector2.ZERO if _cancelled else _read_aim()
+		_aim = Vector2.ZERO if Input.is_action_pressed(&"aim_cancel") else _read_aim()
 		_aiming = true
 		return
 	# Thả tay: còn kéo xa thì bắn; đã kéo về giữa hoặc bấm hủy thì thôi.
@@ -64,7 +63,6 @@ func update(delta: float) -> void:
 		_shot_aim = _aim.normalized()
 		_shoot_left = SHOOT_HOLD
 	_aiming = false
-	_cancelled = false
 	_aim = Vector2.ZERO
 
 

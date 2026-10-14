@@ -2,7 +2,7 @@ extends Control
 ## Điều khiển cảm ứng (chơi được cả bằng chuột): cần di chuyển bên trái, nút
 ## lớn bên phải, thanh thẻ đạo cụ có giá tiền ở giữa dưới.
 ## Thợ săn: nút phải là cần ngắm. Kéo ra thì máy mình hiện luồng xanh chỉ
-## hướng bắn, thả tay là bắn; kéo về giữa hoặc kéo vào nút "Hủy" thì không bắn;
+## hướng bắn, thả tay là bắn; kéo về giữa hoặc thả tay trên nút "Hủy" thì không bắn;
 ## chạm nhanh là tự nhắm / túm người gục. Người trốn: giữ nút phải để cạy rương,
 ## đỡ đồng đội.
 ## Chỉ bấm các action trong InputMap (move_*, aim_*, interact, skill_N) mà
@@ -135,8 +135,10 @@ func _set_aim(pos: Vector2) -> void:
 	_aim = ((pos - _aim_center()) / AIM_R).limit_length(1.0)
 	_aim_max = maxf(_aim_max, _aim.length())
 	_over_cancel = pos.distance_to(_aim_center() + CANCEL_OFFSET) <= CANCEL_R * 1.3
-	if _over_cancel:
+	if _over_cancel: # chỉ hủy khi ngón tay đang nằm trên nút; kéo ra khỏi nút thì ngắm tiếp
 		Input.action_press(&"aim_cancel")
+	else:
+		Input.action_release(&"aim_cancel")
 	_press_axis(&"aim_left", &"aim_right", &"aim_up", &"aim_down", _aim)
 
 

@@ -80,9 +80,9 @@ Thêm thẻ mới: thêm giá trị vào `GameTypes.ItemType` (Lead), viết `It
 Thợ săn không đánh cận chiến. Bấm E / Space (không có người gục để túm) là **bắn súng**:
 
 - Ngắm tay: kéo cần ngắm (hoặc giữ chuột phải), máy mình hiện luồng xanh chỉ hướng và tầm bắn (dừng ở tường), thả tay thì client gửi nút `shoot` kèm hướng ngắm (`InputSource.get_aim()`), server bắn theo hướng đó hết tầm. Kéo về giữa hoặc vào nút Hủy rồi thả thì không bắn.
-- Tự nhắm (E / chạm nhanh nút BẮN): người trốn gần nhất trong tầm `rifle_range` (12 m) ở phía trước (góc 150°), ngắm đón đầu theo hướng chạy. Không có ai thì bắn thẳng về phía trước.
-- Đạn bay **đường thẳng** ngang tầm ngực, tốc độ `rifle_speed` (25 m/s, 10 m mất 0.4 giây). Server raycast một lần lúc bắn: gặp tường / vật cản (layer 1, kể cả hộp gỗ) thì đạn dừng ở đó.
-- Đạn tới nơi thì xét cả đoạn bay: người trốn đầu tiên nằm trong `rifle_radius` (0.5 m, cộng thân người) tính từ nòng súng bị trúng, mất 1 máu (2 lần là gục). Một viên chỉ trúng một người. Hồi chiêu `attack_cooldown`.
+- Tự nhắm (E / chạm nhanh nút BẮN): người trốn gần nhất trong tầm `rifle_range` (12 m) ở phía trước (góc 150°), nhắm vào chỗ người đó đang đứng (không đón đầu, người đang chạy vẫn né được; muốn trúng người chạy thì tự kéo cần ngắm canh góc). Không có ai thì bắn thẳng về phía trước.
+- Đạn bay **đường thẳng** ngang tầm ngực, tốc độ `rifle_speed` (15 m/s, 10 m mất gần 0.7 giây, thấy tên lửa bay tới thì kịp né). Server raycast một lần lúc bắn: gặp tường / vật cản (layer 1, kể cả hộp gỗ) thì đạn dừng ở đó.
+- Đạn bay thật: mỗi frame server xét đoạn đạn vừa bay qua, chạm người trốn đầu tiên nằm trong `rifle_radius` (0.3 m, cộng thân người, bằng bề rộng luồng ngắm) thì nổ ở đó, người đó mất 1 máu (2 lần là gục). Bước ra khỏi đường bay trước khi đạn tới là né được. Súng lục cũng bay và trúng theo cách này. Một viên chỉ trúng một người. Hồi chiêu `attack_cooldown`.
 - Bắn xong thì người bắn khựng lại `shoot_flinch_time` (0.25 giây, đi chậm còn `flinch_speed` = 20%); người trốn trúng đạn khựng `hit_flinch_time` (0.35 giây). Súng lục cũng làm người bắn khựng, nhưng thợ săn trúng đạn thì không khựng. Khựng chỉ tính trên server (di chuyển do server quyết), không gửi thêm dữ liệu.
 
 Người trốn có **súng lục** (thẻ trong bộ bài), đạn cũng bay thẳng và bị tường chặn. Thợ săn có `hunter_max_hp` (6) máu. **Người trốn không làm choáng được thợ săn**: hết máu thì thợ săn buông người đang kéo, chạy chậm `hunter_knockout_slow_factor` (một nửa) trong `hunter_knockout_slow` (3 giây), và hồi đầy máu ngay. Mỗi máu bắn mất được `score_damage` điểm.

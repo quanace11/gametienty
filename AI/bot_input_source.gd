@@ -6,7 +6,7 @@ extends InputSource
 ## Bot chỉ chọn hướng đi và nút bấm; đúng/sai do GameState quyết như người thật.
 ##
 ## Thợ săn: kéo người thì mang về nhà tù gần nhất; thấy người gục thì tới túm;
-## còn lại đuổi người gần nhất, vào tầm thì bắn súng (nhân vật tự ngắm đón đầu);
+## còn lại đuổi người gần nhất, vào tầm thì bắn súng (nhân vật tự nhắm chỗ người đó đang đứng);
 ## người gần nhất còn xa thì dịch chuyển tới (chọn điểm như chạm minimap), bật radar.
 ## Người trốn: bị kéo thì chịu (bị khóa); cổng mở thì chạy ra cổng; đồng đội
 ## gục mà thợ săn ở xa thì tới đỡ; còn túi máu và có người bị kéo / bị nhốt
