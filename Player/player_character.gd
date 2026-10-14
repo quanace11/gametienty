@@ -3,7 +3,7 @@ extends EntityBase
 ## Nhân vật mặc định (3D): di chuyển 8 hướng trên mặt sàn, có trọng lực,
 ## quay mặt theo hướng chạy.
 ## Nút tương tác (E/Space): thợ săn túm người đang gục (kéo lê phía sau) hoặc
-## bắn súng theo đường thẳng (tự nhắm người gần nhất phía trước, ngắm đón đầu,
+## bắn súng theo đường thẳng (tự nhắm chỗ người gần nhất phía trước đang đứng,
 ## tường chặn đạn); người trốn giữ để đỡ đồng đội đang gục.
 ## Nút "shoot" (thả cần ngắm / chuột phải): thợ săn bắn theo hướng đã ngắm.
 ## Trên máy người chơi, lúc đang ngắm thì vẽ luồng xanh chỉ hướng và tầm bắn
@@ -16,7 +16,7 @@ extends EntityBase
 ## Animation chọn trên mọi máy theo trạng thái + tốc độ, không gửi qua mạng.
 
 const HUNTER_SPEED := 4.8 # m/s
-const ESCAPEE_SPEED := 4.2
+const ESCAPEE_SPEED := 4.5
 const HUNTER_RADIUS := 0.4
 const ESCAPEE_RADIUS := 0.32 # người trốn chậm hơn nhưng hitbox nhỏ hơn
 const HEIGHT := 1.7
@@ -253,8 +253,9 @@ func _hunter_shoot(aim_dir: Vector2) -> void:
 		var d := to.length()
 		if d < best_d and (d < 1.0 or forward.angle_to(to) <= deg_to_rad(AIM_ANGLE / 2.0)):
 			best_d = d
-			# Đón đầu: đạn bay d / rifle_speed giây.
-			aim = e.global_position + Vector3(e.velocity.x, 0.0, e.velocity.z) * (d / cfg.rifle_speed)
+			# Nhắm vào chỗ người đó đang đứng, không đón đầu: người đang chạy
+			# vẫn né được, muốn trúng thì phải tự kéo cần ngắm canh góc.
+			aim = e.global_position
 	_fire_at(aim)
 
 

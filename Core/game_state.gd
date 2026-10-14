@@ -37,6 +37,7 @@ var _aim_points := {} # chỉ server: id -> Vector3, điểm người chơi ch�
 var _footprints := {} # chỉ server: id người trốn -> [Vector3 (y = elapsed lúc ghi)]
 var _footprint_timer := 0.0
 var _bush_of := {} # chỉ server: id -> chỉ số bụi cây đang đứng trong, -1 nếu không
+var _shot_progress := {} # chỉ server: shot_id -> phần đường đạn (0..1) đã xét va chạm
 var _bushes: Array[Vector3] = [] # mọi máy: bụi cây của bản đồ (x, z, bán kính)
 var _bushes_loaded := false
 
@@ -63,6 +64,7 @@ func begin(info: Dictionary, total_safes: int, floor_coins: int = 0) -> void:
 	_footprints.clear()
 	_footprint_timer = 0.0
 	_bush_of.clear()
+	_shot_progress.clear()
 	_bushes.clear()
 	_bushes_loaded = false
 	_world_applied = rules.world_dict()
@@ -229,13 +231,22 @@ func can_see(viewer_id: int, target_id: int) -> bool:
 	return _bush_of.get(viewer_id, -1) == bush
 
 
-## Đạn tới nơi: trúng người đầu tiên (gần chỗ bắn nhất) mà đường đạn đi qua
-## (theo mặt sàn). Người không trúng được (đang gục, bất tử...) không chặn đạn.
+## Đạn bay thật: mỗi physics frame xét đoạn đạn vừa bay qua (theo mặt sàn),
+## chạm người đầu tiên trúng được thì nổ ở đó; tới cuối đường (tường / hết tầm)
+## mà không chạm ai thì trượt. Người thấy đạn tới và bước ra khỏi đường bay thì
+## né được. Người không trúng được (đang gục, bất tử...) không chặn đạn.
 func _land_shots(entities: Array) -> void:
-	for shot_id: int in rules.due_shots():
+	if rules.shots.is_empty():
+		return
+	for shot_id: int in rules.shots.keys():
 		var s: Dictionary = rules.shots[shot_id]
-		var a := Vector2(s["from"].x, s["from"].z)
-		var b := Vector2(s["to"].x, s["to"].z)
+		var span: float = s["lands"] - s["fired"]
+		var t_now := clampf((rules.elapsed - s["fired"]) / span, 0.0, 1.0) if span > 0.0 else 1.0
+		var t_prev: float = _shot_progress.get(shot_id, 0.0)
+		var from := Vector2(s["from"].x, s["from"].z)
+		var to := Vector2(s["to"].x, s["to"].z)
+		var a := from.lerp(to, t_prev)
+		var b := from.lerp(to, t_now)
 		var r := rules.shot_radius(s["kind"]) + HIT_PADDING
 		var first_id := 0
 		var first_d := INF
@@ -247,7 +258,11 @@ func _land_shots(entities: Array) -> void:
 			if p.distance_squared_to(q) <= r * r and a.distance_squared_to(q) < first_d:
 				first_d = a.distance_squared_to(q)
 				first_id = e.peer_id
-		rules.land_shot(shot_id, [first_id] if first_id != 0 else [])
+		if first_id != 0 or t_now >= 1.0:
+			_shot_progress.erase(shot_id)
+			rules.land_shot(shot_id, [first_id] if first_id != 0 else [])
+		else:
+			_shot_progress[shot_id] = t_now
 
 
 func server_pick_up(hunter_id: int, target_id: int) -> bool:
