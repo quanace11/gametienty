@@ -24,7 +24,15 @@ enum PlayerState {
 
 enum MatchState { LOBBY, COUNTDOWN, PLAYING, ENDED }
 
-enum Winner { NONE, HUNTER, ESCAPEES }
+## Kết quả của thợ săn khi hết trận, theo số người trốn bị bắt (không thoát được).
+## Với 4 người trốn: 0-1 thua, 2-3 thắng một phần, 4 thắng tuyệt đối.
+enum HunterResult { LOSE, PARTIAL, TOTAL }
+
+## Kết quả riêng từng người trốn.
+enum EscapeeResult { CAUGHT, ESCAPED }
+
+## Kết quả một lần căn vòng khi mở rương.
+enum QteResult { NONE, PERFECT, GOOD, FAIL }
 
 enum ItemType { DISGUISE, BARRIER, SPEED_SHOES, GUN, MEDKIT }
 
@@ -33,6 +41,7 @@ const GROUP_ENTITIES := &"entities"
 const GROUP_SAFES := &"safes"
 const GROUP_EXIT_GATES := &"exit_gates"
 const GROUP_PRISONS := &"prisons"
+const GROUP_COINS := &"coins"
 
 ## Bot dùng id âm (-1, -2, ...), người thật dùng peer id của Godot (luôn dương).
 static func is_bot_id(id: int) -> bool:

@@ -3,18 +3,19 @@ extends Node
 ##
 ## Mô hình: server giữ bản gốc (MatchRules), module gọi lệnh server_*(),
 ## lệnh hợp lệ thì MatchRules đổi dữ liệu và đánh dấu người chơi bị đổi.
-## Cuối mỗi physics frame, flush() gửi NGUYÊN bản dữ liệu của những người đó
-## xuống mọi máy (kể cả chính server). Mỗi máy so bản cũ với bản mới để tự
-## sinh sự kiện EventBus. Vì gửi trạng thái chứ không gửi lệnh, client không
-## bao giờ lệch dù gói tin bị gộp; offline đi đúng đường này.
+## Cuối mỗi physics frame, flush() gửi những trường đã đổi của những người đó
+## (PlayerRecord.diff, kênh reliable có thứ tự) xuống mọi máy, kể cả chính
+## server. Mỗi máy dựng lại bản đầy đủ, so bản cũ với bản mới để tự sinh sự
+## kiện EventBus. Vì gửi trạng thái chứ không gửi lệnh, client không bao giờ
+## lệch dù gói tin bị gộp; offline đi đúng đường này.
 ##
 ## Gọi server_*() trên client sẽ bị bỏ qua (trả về false), nên module cứ gọi.
 
 const TIME_SYNC_INTERVAL := 0.5
+const INPUT_SEND_HALF_INTERVAL := 1.0 / 60.0 ## client gửi input 30 lần/giây: trung bình trễ thêm nửa nhịp
 const PROGRESS_SYNC_INTERVAL := 0.1 ## tiến độ cứu, máu trong tù chỉ gửi 10 lần/giây
-const SAFE_PROGRESS_STEP := 0.05 ## chỉ gửi tiến độ két khi đổi ít nhất 5%
 ## Các trường đổi liên tục; chỉ đổi những trường này thì gửi thưa hơn.
-const _CONTINUOUS_KEYS := ["rescue_progress", "prison_time_left", "invulnerable_left", "attack_cooldown_left", "stunned_left"]
+const _CONTINUOUS_KEYS := ["rescue_progress", "prison_time_left", "invulnerable_left", "attack_cooldown_left", "stunned_left", "chest_work"]
 
 var rules: MatchRules = null
 
@@ -23,16 +24,19 @@ var _progress_sync_timer := 0.0
 var _pending := {} # chỉ server: id -> true, người chơi có dữ liệu chưa gửi
 var _sent := {} # chỉ server: id -> dict đã gửi lần cuối
 var _applied := {} # mọi máy: id -> dict đã áp dụng lần cuối (để sinh sự kiện)
+var _world_pending := false # chỉ server
+var _world_sent := {} # chỉ server
+var _world_applied := {} # mọi máy
 
 
 func _ready() -> void:
 	Net.player_left.connect(_on_player_left)
 
 
-func begin(info: Dictionary, total_safes: int) -> void:
+func begin(info: Dictionary, total_safes: int, floor_coins: int = 0) -> void:
 	var cfg := MatchConfig.new()
 	cfg.duration = info["time"]
-	rules = MatchRules.new(cfg, info["roles"], info["names"], total_safes)
+	rules = MatchRules.new(cfg, info["roles"], info["names"], total_safes, floor_coins)
 	_time_sync_timer = 0.0
 	_progress_sync_timer = 0.0
 	_pending.clear()
@@ -41,6 +45,9 @@ func begin(info: Dictionary, total_safes: int) -> void:
 	for id: int in rules.players:
 		_applied[id] = rules.players[id].to_dict()
 		_sent[id] = _applied[id]
+	_world_pending = false
+	_world_applied = rules.world_dict()
+	_world_sent = _world_applied
 	EventBus.match_state_changed.emit(rules.state)
 
 
@@ -84,16 +91,27 @@ func flush(delta: float) -> void:
 	var batch := {}
 	for id: int in _pending.keys():
 		var d: Dictionary = rules.players[id].to_dict()
-		if send_continuous or _is_significant(_sent.get(id, {}), d):
-			batch[id] = d
+		var old: Dictionary = _sent.get(id, {})
+		if send_continuous or _is_significant(old, d):
+			var changes := PlayerRecord.diff(old, d)
+			if not changes.is_empty():
+				batch[id] = changes
 			_sent[id] = d
 			_pending.erase(id)
 	if not batch.is_empty():
 		_sync_players.rpc(batch)
-	if rules.is_playing():
-		var w := rules.evaluate()
-		if w != GameTypes.Winner.NONE:
-			_end(w)
+	if rules.take_world_dirty():
+		_world_pending = true
+	if _world_pending:
+		var w := rules.world_dict()
+		if send_continuous or _world_significant(_world_sent, w):
+			var changes := WorldRecord.diff(_world_sent, w)
+			_world_sent = w
+			_world_pending = false
+			if not changes.is_empty():
+				_sync_world.rpc(changes)
+	if rules.is_over():
+		_apply_match_end.rpc(rules.results())
 
 
 # ---------- API cho server (module gọi) ----------
@@ -133,15 +151,24 @@ func server_escape(id: int) -> bool:
 	return _can_mutate() and rules.escape(id)
 
 
-func server_set_safe_progress(safe_id: int, progress: float) -> void:
-	if not _can_mutate() or not rules.safe_progress.has(safe_id):
-		return
-	var old: float = rules.safe_progress[safe_id]
-	if old >= 1.0:
-		return
-	if progress < 1.0 and absf(progress - old) < SAFE_PROGRESS_STEP:
-		return
-	_apply_safe_progress.rpc(safe_id, progress)
+## Người trốn đang đứng ở rương: gọi mỗi physics frame.
+func server_channel_chest(id: int, safe_id: int, delta: float) -> bool:
+	return _can_mutate() and rules.channel_chest(id, safe_id, delta)
+
+
+## Người chơi bấm nút trong lúc vòng căn đang chạy.
+func server_resolve_qte(id: int) -> GameTypes.QteResult:
+	if not _can_mutate():
+		return GameTypes.QteResult.NONE
+	# Nút đi từ client lên mất một chiều trễ + nửa nhịp gửi input.
+	var lag := Net.latency_of(id)
+	if lag > 0.0:
+		lag += INPUT_SEND_HALF_INTERVAL
+	return rules.resolve_qte(id, lag)
+
+
+func server_take_coin(id: int, coin_id: int) -> bool:
+	return _can_mutate() and rules.take_coin(id, coin_id)
 
 
 func _can_mutate() -> bool:
@@ -160,10 +187,18 @@ func _is_significant(old: Dictionary, new: Dictionary) -> bool:
 	return new["rescue_progress"] != old["rescue_progress"] and (new["rescue_progress"] == 0.0 or new["rescue_progress"] >= 1.0)
 
 
-func _end(w: GameTypes.Winner) -> void:
-	var summary := rules.summary()
-	summary["winner"] = w
-	_apply_match_end.rpc(w, summary)
+## Rương xong, về 0, cổng, tiền: gửi ngay; tiến độ rương bình thường gửi 10 lần/giây.
+func _world_significant(old: Dictionary, new: Dictionary) -> bool:
+	if old.is_empty() or old["gate_open"] != new["gate_open"] or old["gate_opening"] != new["gate_opening"]:
+		return true
+	if old["coins_taken"].size() != new["coins_taken"].size():
+		return true
+	for safe_id: int in new["safes"]:
+		var a: float = old["safes"].get(safe_id, 0.0)
+		var b: float = new["safes"][safe_id]
+		if b < a or (b >= 1.0 and a < 1.0):
+			return true
+	return false
 
 
 func _on_player_left(id: int) -> void:
@@ -171,10 +206,8 @@ func _on_player_left(id: int) -> void:
 		return
 	if rules.state == GameTypes.MatchState.ENDED:
 		return
-	var was_hunter := rules.remove_player(id)
-	flush(0.0)
-	if was_hunter:
-		_end(GameTypes.Winner.ESCAPEES)
+	rules.remove_player(id)
+	flush(0.0) # thợ săn rời trận thì flush thấy is_over() và kết thúc
 
 
 # ---------- Server -> mọi máy ----------
@@ -185,9 +218,9 @@ func _sync_players(batch: Dictionary) -> void:
 		return
 	var server := multiplayer.is_server()
 	for id: int in batch:
-		var d: Dictionary = batch[id]
 		if not rules.players.has(id):
 			continue
+		var d := PlayerRecord.apply_diff(_applied.get(id, {}), batch[id])
 		if not server:
 			rules.players[id].apply_dict(d)
 		var events := PlayerRecord.events_between(id, _applied.get(id, {}), d)
@@ -199,34 +232,41 @@ func _sync_players(batch: Dictionary) -> void:
 
 
 @rpc("authority", "call_local", "reliable")
-func _apply_safe_progress(safe_id: int, progress: float) -> void:
+func _sync_world(changes: Dictionary) -> void:
 	if rules == null:
 		return
-	var was_open := rules.gate_open
-	var unlocked_now := rules.set_safe_progress(safe_id, progress)
-	EventBus.safe_progress_changed.emit(safe_id, rules.safe_progress[safe_id])
-	if unlocked_now:
-		EventBus.safe_unlocked.emit(safe_id, rules.safes_unlocked(), rules.safes_required())
-		_log("Mở két %d (%d/%d)" % [safe_id, rules.safes_unlocked(), rules.safes_required()])
-	if rules.gate_open and not was_open:
-		EventBus.gate_opened.emit()
-		_log("Cổng thoát đã mở")
+	var w := WorldRecord.apply_diff(_world_applied, changes)
+	if not multiplayer.is_server():
+		rules.apply_world_dict(w)
+	var events := WorldRecord.events_between(_world_applied, w, rules.safes_required())
+	_world_applied = w
+	for e: Dictionary in events:
+		EventBus.emit_signal.callv([e["signal"]] + e["args"])
+		match e["signal"]:
+			&"safe_unlocked":
+				_log("Mở rương %d (%d/%d chìa)" % e["args"])
+			&"gate_opening":
+				_log("Đủ chìa, 2 cổng đang mở")
+			&"gate_opened":
+				_log("Cổng thoát đã mở")
 
 
 @rpc("authority", "unreliable_ordered")
 func _sync_time(t: float) -> void:
 	if rules:
 		rules.time_left = t
+		rules.elapsed = rules.config.duration - t
 
 
 @rpc("authority", "call_local", "reliable")
-func _apply_match_end(w: int, summary: Dictionary) -> void:
+func _apply_match_end(res: Dictionary) -> void:
 	if rules == null or rules.state == GameTypes.MatchState.ENDED:
 		return
-	rules.finish(w)
+	rules.finish(res)
 	EventBus.match_state_changed.emit(rules.state)
-	EventBus.match_ended.emit(w, summary)
-	_log("Hết trận: %s thắng, %d/%d người trốn thoát" % [GameTypes.Winner.keys()[w], summary["escaped"], summary["escapees"]])
+	EventBus.match_ended.emit(res)
+	_log("Hết trận: thợ săn %s, bắt %d/%d, thoát %d/%d" % [
+		GameTypes.HunterResult.keys()[res["hunter_result"]], res["caught"], res["escapees"], res["escaped"], res["escapees"]])
 
 
 func _log(msg: String) -> void:

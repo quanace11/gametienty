@@ -71,7 +71,7 @@ func _on_match_started(info: Dictionary) -> void:
 	menu.visible = false
 
 
-func _on_match_ended(_winner: GameTypes.Winner, _summary: Dictionary) -> void:
+func _on_match_ended(_result: Dictionary) -> void:
 	await get_tree().create_timer(RESULT_SCREEN_TIME).timeout
 	_close_match()
 	if args.has("quit-after-match"):

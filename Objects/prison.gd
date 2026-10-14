@@ -39,7 +39,8 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
-	_refresh() # máu người trong tù tụt liên tục
+	if Engine.get_process_frames() % 10 == 0: # chữ đổi theo giây, không cần vẽ lại mỗi frame
+		_refresh()
 
 
 func can_interact(entity: EntityBase) -> bool:
@@ -63,10 +64,11 @@ func _inmates() -> Array:
 
 func _refresh() -> void:
 	var inmates := _inmates()
-	if inmates.is_empty():
-		_label.text = "Nhà tù"
-		return
-	var least := INF
-	for id: int in inmates:
-		least = minf(least, GameState.rules.players[id].prison_time_left)
-	_label.text = "Nhà tù: %d người (cháy sau %d giây)" % [inmates.size(), ceili(least)]
+	var text := "Nhà tù"
+	if not inmates.is_empty():
+		var least := INF
+		for id: int in inmates:
+			least = minf(least, GameState.rules.players[id].prison_time_left)
+		text = "Nhà tù: %d người (cháy sau %d giây)" % [inmates.size(), ceili(least)]
+	if _label.text != text:
+		_label.text = text

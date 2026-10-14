@@ -8,6 +8,8 @@ extends RefCounted
 ## "dirty" để GameState gửi xuống client.
 
 const RESCUE_CHANNEL_GRACE := 0.25 ## ngừng cứu chừng này giây thì hết trạng thái RESCUING
+const CHEST_CHANNEL_GRACE := 0.25 ## rời rương chừng này giây thì vòng căn đang chạy bị hủy (không phạt)
+const CHEST_COIN_BASE := 10000 ## id cọc tiền văng từ rương: CHEST_COIN_BASE + rương * 100 + k
 
 var config: MatchConfig
 var state: GameTypes.MatchState = GameTypes.MatchState.COUNTDOWN
@@ -16,19 +18,32 @@ var time_left := 0.0
 var roles := {} # id -> GameTypes.Role
 var names := {} # id -> String
 var players := {} # id -> PlayerRecord
+var elapsed := 0.0 ## giây đã chơi (đồng hồ chung cho vòng căn)
+var hunter_left := false ## thợ săn thoát game giữa trận
+var result := {} ## kết quả cuối trận (results()), có khi state = ENDED
+
+## Thế giới (đồng bộ bằng WorldRecord): rương, cổng, tiền trên sàn.
 var safe_progress := {} # safe_id -> 0.0..1.0
 var gate_open := false
-var winner: GameTypes.Winner = GameTypes.Winner.NONE
+var gate_opening_left := 0.0 ## > 0: cổng đang rung, chưa qua được
+var coins := {} # coin_id -> giá trị, những cọc tiền còn trên sàn
+var coins_taken := {} # coin_id -> id người nhặt
+
+var rng := RandomNumberGenerator.new() ## chỉ server dùng (vị trí vùng sáng, giờ hiện vòng căn)
 
 var _dirty := {} # id -> true
+var _world_dirty := false
 
 
-func _init(cfg: MatchConfig, p_roles: Dictionary, p_names: Dictionary, total_safes: int) -> void:
+func _init(cfg: MatchConfig, p_roles: Dictionary, p_names: Dictionary, total_safes: int, floor_coins: int = 0) -> void:
 	config = cfg
 	roles = p_roles
 	names = p_names
 	countdown_left = cfg.countdown
 	time_left = cfg.duration
+	rng.randomize()
+	for i in floor_coins:
+		coins[i] = cfg.floor_coin_value
 	for id: int in roles:
 		var hp := 0 if roles[id] == GameTypes.Role.HUNTER else cfg.max_hp
 		players[id] = PlayerRecord.new(id, roles[id], hp)
@@ -194,6 +209,7 @@ func channel_rescue(rescuer_id: int, target_id: int, delta: float) -> bool:
 	p.state = GameTypes.PlayerState.IDLE
 	p.rescue_progress = 0.0
 	p.invulnerable_left = config.hit_invulnerable_time
+	r.rescues += 1
 	return true
 
 
@@ -225,6 +241,8 @@ func use_medkit(thrower_id: int, target_id: int) -> bool:
 			p.prison_time_left = 0.0
 			p.rescue_progress = 0.0
 			p.invulnerable_left = config.hit_invulnerable_time
+			if thrower_id != target_id:
+				t.rescues += 1
 		_:
 			if not GameTypes.is_active(p.state) or p.hp >= p.max_hp:
 				return false
@@ -267,6 +285,7 @@ func remove_player(id: int) -> bool:
 	if p.is_hunter():
 		if p.carrying_id != 0:
 			_release(p)
+		hunter_left = true
 		return true
 	if p.carrier_id != 0:
 		_detach(record(p.carrier_id), p)
@@ -276,16 +295,79 @@ func remove_player(id: int) -> bool:
 	return false
 
 
-## Trả về true nếu lần cập nhật này làm két mở xong.
-func set_safe_progress(safe_id: int, p: float) -> bool:
-	if not safe_progress.has(safe_id):
+## Người trốn `id` mở rương `safe_id` thêm `delta` giây. Gọi mỗi physics
+## frame khi đang đứng ở rương. Nhiều người mở cùng lúc thì cộng dồn. Trong
+## lúc mở, vòng căn hiện ra theo nhịp (qte_*): xem resolve_qte(). Trả về true
+## nếu lần này mở xong rương.
+func channel_chest(id: int, safe_id: int, delta: float) -> bool:
+	var p := record(id)
+	if p == null or p.is_hunter() or not GameTypes.is_active(p.state) or p.stunned_left > 0.0 or not is_playing():
 		return false
-	var was_done: bool = safe_progress[safe_id] >= 1.0
-	safe_progress[safe_id] = clampf(p, 0.0, 1.0)
-	var done_now: bool = safe_progress[safe_id] >= 1.0 and not was_done
-	if safes_unlocked() >= safes_required():
-		gate_open = true
-	return done_now
+	if not safe_progress.has(safe_id) or safe_progress[safe_id] >= 1.0:
+		return false
+	if p.chest_id != safe_id:
+		_cancel_qte(p)
+		p.chest_id = safe_id
+		p.qte_next_left = rng.randf_range(config.qte_interval_min, config.qte_interval_max)
+	p.chest_channel_left = CHEST_CHANNEL_GRACE
+	var gain := minf(delta / maxf(config.chest_open_time, 0.01), 1.0 - safe_progress[safe_id])
+	p.chest_work += gain
+	_mark(id)
+	if p.qte_chest < 0:
+		p.qte_next_left -= delta
+		if p.qte_next_left <= 0.0:
+			p.qte_chest = safe_id
+			p.qte_started = elapsed
+			p.qte_zone = rng.randf_range(config.qte_zone_min, config.qte_zone_max)
+	return _add_chest_progress(safe_id, gain)
+
+
+## Vị trí kim trên vòng căn của `id` (0..1, quá 1 là đã chạy hết vòng), -1 nếu không có vòng.
+func qte_needle(id: int) -> float:
+	var p := record(id)
+	if p == null or p.qte_chest < 0:
+		return -1.0
+	return (elapsed - p.qte_started) * config.qte_speed
+
+
+## Người chơi bấm nút khi vòng căn đang chạy. Vùng sáng đậm: rương mở thêm
+## một đoạn + tiền; vùng mờ: ít tiền hơn; ngoài vùng: hỏng, rương về 0 và
+## nổ báo vị trí. `lag` (giây) là độ trễ từ lúc người chơi bấm tới lúc server
+## nhận, do server tự đo (không tin client), kẹp tối đa qte_grace.
+## Trả về kết quả (NONE nếu không có vòng căn).
+func resolve_qte(id: int, lag: float = 0.0) -> GameTypes.QteResult:
+	var p := record(id)
+	if p == null or p.qte_chest < 0 or not is_playing():
+		return GameTypes.QteResult.NONE
+	var needle := qte_needle(id) - clampf(lag, 0.0, config.qte_grace) * config.qte_speed
+	var dist := absf(needle - p.qte_zone)
+	var res := GameTypes.QteResult.FAIL
+	if dist <= config.qte_perfect_width:
+		res = GameTypes.QteResult.PERFECT
+	elif dist <= config.qte_good_width:
+		res = GameTypes.QteResult.GOOD
+	_finish_qte(p, res)
+	return res
+
+
+## Người trốn `id` nhặt cọc tiền `coin_id`. Trả về true nếu nhặt được.
+func take_coin(id: int, coin_id: int) -> bool:
+	var p := record(id)
+	if p == null or p.is_hunter() or not GameTypes.is_active(p.state) or not coins.has(coin_id) or not is_playing():
+		return false
+	_add_coins(p, coins[coin_id])
+	coins.erase(coin_id)
+	coins_taken[coin_id] = id
+	_world_dirty = true
+	return true
+
+
+## Id các cọc tiền văng ra từ rương `safe_id` khi mở xong (mọi máy tính ra như nhau).
+func chest_coin_ids(safe_id: int) -> Array:
+	var ids := []
+	for k in config.chest_coins:
+		ids.append(CHEST_COIN_BASE + safe_id * 100 + k)
+	return ids
 
 
 # ---------- Thời gian ----------
@@ -301,6 +383,12 @@ func tick(delta: float, authoritative: bool = true) -> void:
 				state = GameTypes.MatchState.PLAYING
 		GameTypes.MatchState.PLAYING:
 			time_left = maxf(0.0, time_left - delta)
+			elapsed += delta
+			if gate_opening_left > 0.0:
+				gate_opening_left = maxf(0.0, gate_opening_left - delta)
+				if gate_opening_left == 0.0 and authoritative:
+					gate_open = true
+					_world_dirty = true
 			for p: PlayerRecord in players.values():
 				_tick_player(p, delta, authoritative)
 
@@ -319,6 +407,14 @@ func _tick_player(p: PlayerRecord, delta: float, authoritative: bool) -> void:
 		if p.state == GameTypes.PlayerState.IMPRISONED:
 			p.prison_time_left = maxf(0.0, p.prison_time_left - delta)
 		return
+
+	if p.chest_id >= 0:
+		p.chest_channel_left -= delta
+		if p.chest_channel_left <= 0.0 or not GameTypes.is_active(p.state):
+			_cancel_qte(p)
+			p.chest_id = -1
+	if p.qte_chest >= 0 and qte_needle(p.id) > 1.0 + config.qte_grace * config.qte_speed:
+		_finish_qte(p, GameTypes.QteResult.FAIL) # kim chạy hết vòng mà không bấm
 
 	if p.state == GameTypes.PlayerState.RESCUING:
 		p.channel_left -= delta
@@ -374,39 +470,67 @@ func active_escapees() -> int:
 	return escapee_ids().filter(func(id: int) -> bool: return not GameTypes.is_out(state_of(id))).size()
 
 
-func escapees_to_win() -> int:
-	var total := escapee_ids().size()
-	if config.escapees_to_win > 0:
-		return mini(config.escapees_to_win, total)
-	return ceili(total / 2.0)
-
-
-## NONE nếu trận chưa kết thúc. Trận kết thúc khi không còn người trốn nào
-## ở ngoài (bị nhốt hết, bị loại hoặc đã thoát) hoặc hết giờ.
-func evaluate() -> GameTypes.Winner:
+## Trận kết thúc khi không còn người trốn nào ở ngoài (bị nhốt, bị loại
+## hoặc đã thoát), hết giờ, hoặc thợ săn rời trận.
+func is_over() -> bool:
 	if state != GameTypes.MatchState.PLAYING:
-		return GameTypes.Winner.NONE
-	if active_escapees() > 0 and time_left > 0.0:
-		return GameTypes.Winner.NONE
-	if count_escapees(GameTypes.PlayerState.ESCAPED) >= escapees_to_win():
-		return GameTypes.Winner.ESCAPEES
-	return GameTypes.Winner.HUNTER
+		return false
+	return active_escapees() == 0 or time_left <= 0.0 or hunter_left
 
 
-func finish(w: GameTypes.Winner) -> void:
-	winner = w
-	state = GameTypes.MatchState.ENDED
+## Người trốn này tính là "bị bắt" khi hết trận: không thoát qua cổng
+## (trừ khi thợ săn bỏ trận: ai chưa bị nhốt/loại coi như thoát).
+func is_caught(id: int) -> bool:
+	var s := state_of(id)
+	if s == GameTypes.PlayerState.ESCAPED:
+		return false
+	if hunter_left:
+		return s == GameTypes.PlayerState.IMPRISONED or s == GameTypes.PlayerState.ELIMINATED
+	return true
 
 
-func summary() -> Dictionary:
+func hunter_result(caught: int, total: int) -> GameTypes.HunterResult:
+	if total > 0 and caught >= total:
+		return GameTypes.HunterResult.TOTAL
+	if caught >= ceili(total / 2.0) and caught > 0:
+		return GameTypes.HunterResult.PARTIAL
+	return GameTypes.HunterResult.LOSE
+
+
+## Kết quả và điểm từng người. Chỉ server tính, rồi gửi nguyên bản xuống mọi máy.
+func results() -> Dictionary:
+	var ids := escapee_ids()
+	var caught := ids.filter(func(id: int) -> bool: return is_caught(id)).size()
+	var per_player := {}
+	for id: int in players:
+		var p: PlayerRecord = players[id]
+		var row := {
+			"name": names.get(id, str(id)), "role": p.role, "coins": p.coins_earned,
+			"rescues": p.rescues, "qte_perfect": p.qte_perfect, "chests": snappedf(p.chest_work, 0.01),
+		}
+		if p.is_hunter():
+			row["result"] = hunter_result(caught, ids.size())
+			row["score"] = caught * config.score_hunter_catch
+		else:
+			var escaped := not is_caught(id)
+			row["result"] = GameTypes.EscapeeResult.ESCAPED if escaped else GameTypes.EscapeeResult.CAUGHT
+			row["score"] = (config.score_escape if escaped else 0) + roundi(p.chest_work * config.score_chest) \
+				+ p.rescues * config.score_rescue + p.qte_perfect * config.score_perfect_qte + p.coins_earned * config.score_per_coin
+		per_player[id] = row
 	return {
-		"escapees": escapee_ids().size(),
-		"escaped": count_escapees(GameTypes.PlayerState.ESCAPED),
-		"imprisoned": count_escapees(GameTypes.PlayerState.IMPRISONED),
-		"eliminated": count_escapees(GameTypes.PlayerState.ELIMINATED),
+		"hunter_result": hunter_result(caught, ids.size()),
+		"caught": caught,
+		"escaped": ids.size() - caught,
+		"escapees": ids.size(),
 		"safes_unlocked": safes_unlocked(),
 		"time_left": time_left,
+		"players": per_player,
 	}
+
+
+func finish(res: Dictionary) -> void:
+	result = res
+	state = GameTypes.MatchState.ENDED
 
 
 # ---------- Dirty tracking ----------
@@ -416,6 +540,36 @@ func take_dirty() -> Array:
 	var ids := _dirty.keys()
 	_dirty.clear()
 	return ids
+
+
+## true nếu rương / cổng / tiền đã đổi kể từ lần hỏi trước.
+func take_world_dirty() -> bool:
+	var d := _world_dirty
+	_world_dirty = false
+	return d
+
+
+## Trạng thái thế giới để gửi xuống client (WorldRecord).
+func world_dict() -> Dictionary:
+	return {
+		"safes": safe_progress.duplicate(), "gate_open": gate_open, "gate_opening": gate_opening_left > 0.0,
+		"gate_opening_left": gate_opening_left, "coins_taken": coins_taken.duplicate(),
+	}
+
+
+## Client áp bản thế giới server gửi. Tiền văng từ rương cũng tự thêm như server.
+func apply_world_dict(d: Dictionary) -> void:
+	safe_progress = d["safes"].duplicate()
+	gate_open = d["gate_open"]
+	gate_opening_left = d["gate_opening_left"]
+	coins_taken = d["coins_taken"].duplicate()
+	for safe_id: int in safe_progress:
+		if safe_progress[safe_id] >= 1.0:
+			for c: int in chest_coin_ids(safe_id):
+				if not coins_taken.has(c):
+					coins[c] = config.chest_coin_value
+	for c: int in coins_taken:
+		coins.erase(c)
 
 
 func _mark(id: int) -> void:
@@ -429,6 +583,63 @@ func _detach(hunter: PlayerRecord, p: PlayerRecord) -> void:
 		_mark(hunter.id)
 	if p:
 		p.carrier_id = 0
+		_mark(p.id)
+
+
+func _add_coins(p: PlayerRecord, amount: int) -> void:
+	p.coins += amount
+	p.coins_earned += amount
+	_mark(p.id)
+
+
+## Cộng tiến độ rương; đủ 100% thì nhả tiền, đủ chìa thì cổng bắt đầu mở.
+func _add_chest_progress(safe_id: int, amount: float) -> bool:
+	var was_done: bool = safe_progress[safe_id] >= 1.0
+	safe_progress[safe_id] = clampf(safe_progress[safe_id] + amount, 0.0, 1.0)
+	if is_equal_approx(safe_progress[safe_id], 1.0):
+		safe_progress[safe_id] = 1.0
+	_world_dirty = true
+	if was_done or safe_progress[safe_id] < 1.0:
+		return false
+	for c: int in chest_coin_ids(safe_id):
+		coins[c] = config.chest_coin_value
+	for p: PlayerRecord in players.values():
+		if p.chest_id == safe_id:
+			_cancel_qte(p)
+			p.chest_id = -1
+	if safes_unlocked() >= safes_required() and not gate_open and gate_opening_left <= 0.0:
+		gate_opening_left = maxf(config.gate_open_delay, 0.001)
+	return true
+
+
+func _finish_qte(p: PlayerRecord, res: GameTypes.QteResult) -> void:
+	var safe_id := p.qte_chest
+	p.qte_chest = -1
+	p.qte_seq += 1
+	p.qte_result = res
+	p.qte_result_chest = safe_id
+	p.qte_next_left = rng.randf_range(config.qte_interval_min, config.qte_interval_max)
+	_mark(p.id)
+	match res:
+		GameTypes.QteResult.PERFECT:
+			p.qte_perfect += 1
+			_add_coins(p, config.qte_perfect_coins)
+			if safe_progress.has(safe_id) and safe_progress[safe_id] < 1.0:
+				var gain := minf(config.qte_perfect_bonus, 1.0 - safe_progress[safe_id])
+				p.chest_work += gain
+				_add_chest_progress(safe_id, gain)
+		GameTypes.QteResult.GOOD:
+			_add_coins(p, config.qte_good_coins)
+		GameTypes.QteResult.FAIL:
+			if safe_progress.has(safe_id) and safe_progress[safe_id] < 1.0:
+				safe_progress[safe_id] = 0.0 # hỏng: mở lại từ đầu
+				_world_dirty = true
+
+
+## Rời rương: vòng căn đang chạy biến mất, không phạt.
+func _cancel_qte(p: PlayerRecord) -> void:
+	if p.qte_chest >= 0:
+		p.qte_chest = -1
 		_mark(p.id)
 
 

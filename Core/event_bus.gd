@@ -9,10 +9,12 @@ extends Node
 
 # --- Nhóm 1: trận ---
 signal match_state_changed(state: GameTypes.MatchState)
-signal match_ended(winner: GameTypes.Winner, summary: Dictionary)
-signal safe_progress_changed(safe_id: int, progress: float)
-signal safe_unlocked(safe_id: int, unlocked: int, required: int)
-signal gate_opened
+signal match_ended(result: Dictionary) ## MatchRules.results(): kết quả + điểm từng người
+signal safe_progress_changed(safe_id: int, progress: float) ## tiến độ rương (về 0 khi căn hỏng)
+signal safe_unlocked(safe_id: int, unlocked: int, required: int) ## rương nhả chìa khóa và tiền
+signal gate_opening(seconds: float) ## đủ chìa: cả 2 cổng rung, nháy đèn, mở sau `seconds` giây
+signal gate_opened ## cổng mở hẳn tới hết trận
+signal coin_taken(coin_id: int, by_id: int)
 
 # --- Nhóm 1: người chơi ---
 signal player_state_changed(id: int, old_state: GameTypes.PlayerState, new_state: GameTypes.PlayerState)
@@ -29,8 +31,10 @@ signal player_eliminated(id: int)
 signal player_escaped(id: int)
 signal player_stunned(id: int, seconds: float)
 signal rescue_progress_changed(id: int, progress: float)
+signal coins_changed(id: int, coins: int, gained: int)
+signal qte_started(id: int, safe_id: int) ## vòng căn hiện ra cho người đang mở rương
+signal qte_resolved(id: int, safe_id: int, result: GameTypes.QteResult) ## FAIL: rương nổ, báo vị trí cho thợ săn
 
 # --- Nhóm 2: cục bộ ---
-## Tiếng động cho AI "nghe": bước chân, va chạm, fail QTE...
+## Tiếng động cho AI "nghe": bước chân, va chạm, rương nổ...
 signal noise_made(position: Vector3, loudness: float)
-signal qte_failed(safe_id: int, position: Vector3)
