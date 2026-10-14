@@ -70,7 +70,7 @@ Cả 3 chạy **cùng một đường code**. Quy tắc:
 | `ItemEffect` | `Core/interfaces/item_effect.gd` | Hiệu ứng một loại thẻ đạo cụ (Items cài đặt, khai báo trong `Items/item_catalog.gd`) |
 | `MapBase` | `Core/interfaces/map_base.gd` | Lớp cha của bản đồ |
 
-Group để tìm nhau (hằng trong `GameTypes`): `entities`, `safes` (rương), `exit_gates`, `prisons`, `coins`.
+Group để tìm nhau (hằng trong `GameTypes`): `entities`, `safes` (rương), `exit_gates`, `prisons`, `coins`, `jump_pads`.
 
 Layer va chạm: 1 = sàn/tường/vật cản, 2 = nhân vật. Nhân vật không chặn nhau.
 Gốc nhân vật đặt dưới chân. `EntityBase.flat_position()` trả vị trí trên mặt sàn (x, z) để tính khoảng cách.

@@ -12,7 +12,8 @@ extends InputSource
 ## thì tới gần để ném; tiền gần mà thợ săn xa thì nhặt; còn lại đi cạy rương
 ## và căn vòng (không phải lúc nào cũng trúng). Thợ săn lại gần thì né. Ai cần
 ## cứu lọt vào tầm ném thì ném luôn. Thợ săn đang kéo người hoặc đuổi sát
-## thì bắn súng lục.
+## thì bắn súng lục. Được cứu mà còn kẹt trong tường nhà tù thì bước lên
+## đệm lò xo để bật ra.
 
 const FLEE_DIST := 3.6 # mét
 const SAFE_TO_RESCUE_DIST := 6.0 # thợ săn xa hơn chừng này mới đi cứu
@@ -23,6 +24,7 @@ const DETOUR_TIME := 0.8
 const THINK_INTERVAL := 0.1 # bot nghĩ 10 lần/giây (đỡ tốn CPU server), giữa hai lần giữ nguyên nút
 const COIN_GRAB_DIST := 5.0 # tiền trong bán kính này thì ghé nhặt
 const SHOOT_DIST := 8.0 # thợ săn bắn cối khi người trốn gần hơn chừng này
+const PRISON_INSIDE := 1.7 # mét từ giữa nhà tù: đang kẹt trong tường
 ## Tỉ lệ bot căn vòng: trúng vùng đậm / vùng mờ, còn lại trượt.
 const QTE_PERFECT_CHANCE := 0.65
 const QTE_GOOD_CHANCE := 0.25
@@ -82,11 +84,12 @@ func _think(rules: MatchRules, rec: PlayerRecord, delta: float) -> void:
 
 	var target := me
 	var act := false # tới nơi thì bấm nút
+	var arrive := ARRIVE_DIST
 	if entity.is_hunter():
 		if rec.carrying_id != 0:
 			target = _nearest(_positions(GameTypes.GROUP_PRISONS), me)
 		else:
-			var downed := _escapees_in(GameTypes.PlayerState.DOWNED)
+			var downed := _reachable_downed()
 			var victims := downed if not downed.is_empty() else _escapees_where(func(e: EntityBase) -> bool:
 				return GameTypes.is_active(e.state))
 			target = _nearest(victims.map(func(e: EntityBase) -> Vector2: return e.flat_position()), me)
@@ -97,7 +100,7 @@ func _think(rules: MatchRules, rec: PlayerRecord, delta: float) -> void:
 				_interact = true # bắn cối; người gục trong tầm túm thì nhân vật ưu tiên túm
 	else:
 		var hunter_dist := _hunter_distance(me)
-		var downed := _escapees_in(GameTypes.PlayerState.DOWNED).filter(func(e: EntityBase) -> bool: return e != entity)
+		var downed := _reachable_downed().filter(func(e: EntityBase) -> bool: return e != entity)
 		var medkit_slot := rec.deck.find(GameTypes.ItemType.MEDKIT)
 		var has_medkit: bool = medkit_slot >= 0 and rec.coins >= rules.catalog[GameTypes.ItemType.MEDKIT]["cost"]
 		var captured := _escapees_where(func(e: EntityBase) -> bool:
@@ -111,6 +114,9 @@ func _think(rules: MatchRules, rec: PlayerRecord, delta: float) -> void:
 			_use_items(rules, rec, not in_range.is_empty(), hunter_dist)
 		if entity.state == GameTypes.PlayerState.DOWNED:
 			target = me # đang ngã thì chỉ bò né thợ săn
+		elif _inside_prison(me):
+			target = _nearest(_positions(GameTypes.GROUP_JUMP_PADS), me)
+			arrive = 0.05 # phải giẫm hẳn lên đệm
 		elif rules.gate_open or rules.gate_opening_left > 0.0:
 			target = _nearest(_positions(GameTypes.GROUP_EXIT_GATES), me)
 		elif not downed.is_empty() and hunter_dist > SAFE_TO_RESCUE_DIST:
@@ -126,7 +132,7 @@ func _think(rules: MatchRules, rec: PlayerRecord, delta: float) -> void:
 			target = _nearest(safes.map(func(s: Node3D) -> Vector2: return _flat(s.global_position)), me)
 
 	var to_target := target - me
-	var dir := to_target.normalized() if to_target.length() > ARRIVE_DIST else Vector2.ZERO
+	var dir := to_target.normalized() if to_target.length() > arrive else Vector2.ZERO
 	if act and to_target.length() <= ACT_DIST:
 		_interact = true
 		dir = to_target.normalized() * 0.2 # quay mặt về mục tiêu để đòn trúng
@@ -191,6 +197,19 @@ func _play_qte(rules: MatchRules, rec: PlayerRecord) -> void:
 	if not _qte_done and rules.qte_needle(entity.peer_id) >= rec.qte_zone + _qte_offset:
 		_interact = true
 		_qte_done = true
+
+
+## Người gục mà đi bộ tới được (không nằm trong tường nhà tù).
+func _reachable_downed() -> Array:
+	return _escapees_in(GameTypes.PlayerState.DOWNED).filter(func(e: EntityBase) -> bool:
+		return not _inside_prison(e.flat_position()))
+
+
+func _inside_prison(me: Vector2) -> bool:
+	for p: Vector2 in _positions(GameTypes.GROUP_PRISONS):
+		if me.distance_to(p) < PRISON_INSIDE:
+			return true
+	return false
 
 
 func _near_coins(me: Vector2) -> Array:

@@ -14,6 +14,7 @@ var _last_launch := {} # chỉ server: peer_id -> giây
 
 func _ready() -> void:
 	super()
+	add_to_group(GameTypes.GROUP_JUMP_PADS)
 	var shape := CollisionShape3D.new()
 	var cyl := CylinderShape3D.new()
 	cyl.radius = RADIUS
