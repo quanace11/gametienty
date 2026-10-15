@@ -9,10 +9,10 @@ extends Resource
 @export var gate_open_delay := 3.0 # đủ chìa thì cổng rung 3 giây rồi mới mở
 
 @export_group("Rương và vòng căn")
-@export var chest_open_time := 8.0 # giây mở xong một rương khi một người mở, không tính vòng căn
+@export var chest_open_time := 14.0 # giây mở xong một rương khi một người mở, không tính vòng căn
 @export var qte_interval_min := 1.5 # giây giữa hai lần vòng căn hiện ra
 @export var qte_interval_max := 3.5
-@export var qte_speed := 0.8 # vòng/giây kim chạy
+@export var qte_speed := 0.5 # vòng/giây kim chạy
 @export var qte_zone_min := 0.3 # vị trí vùng sáng trên vòng (0..1), random trong khoảng này
 @export var qte_zone_max := 0.85
 @export var qte_perfect_width := 0.035 # nửa bề rộng vùng sáng đậm (phần vòng)
@@ -37,7 +37,7 @@ extends Resource
 @export var hunter_knockout_slow_factor := 0.5
 @export var rifle_range := 12.0 # mét, tầm súng thợ săn (tường chặn đạn)
 @export var rifle_speed := 15.0 # m/s, đạn bay thẳng, đủ chậm để người trốn thấy thì né được
-@export var rifle_radius := 0.3 # mét, đạn đi qua gần chừng này (cộng thân người) là trúng; bằng nửa bề rộng luồng ngắm
+@export var rifle_radius := 0.4 # mét, đạn đi qua gần chừng này (cộng thân người) là trúng; bằng nửa bề rộng luồng ngắm
 @export var bullet_range := 10.0 # mét, tầm súng lục
 @export var bullet_speed := 30.0
 @export var bullet_radius := 0.8

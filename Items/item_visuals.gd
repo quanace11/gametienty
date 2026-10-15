@@ -1,24 +1,24 @@
 extends Node3D
 ## Phần hiển thị của thẻ đạo cụ trên mọi máy: dựng vật thể đặt xuống đất
-## (bẫy, đệm lò xo, hộp gỗ) theo EventBus.object_placed / object_removed, và
+## (bẫy, đệm lò xo, hộp gỗ, túi cứu nằm chờ) theo EventBus.object_placed / object_removed, và
 ## hiệu ứng ném (túi máu rơi thành vùng xanh, lựu đạn) theo item_used. Phần luật của vật thể (bẫy
 ## kẹp, đệm hất) chạy trong chính node đó trên server.
 ## Hiệu ứng ném, nổ, vùng xanh, cột sáng lấy từ pool (không tạo / xóa node mỗi lần).
 
 const T := GameTypes.ItemType
+const MedkitMesh = preload("res://Items/medkit_mesh.gd")
 const PLACED_SCRIPTS := {
+	T.MEDKIT: preload("res://Items/placed/medkit_node.gd"), # túi cứu nằm chờ người tới đón
 	T.TRAP: preload("res://Items/placed/trap_node.gd"),
 	T.JUMP_PAD: preload("res://Items/placed/jump_pad_node.gd"),
 	T.CRATE: preload("res://Items/placed/crate_node.gd"),
 }
 const Medkit = preload("res://Items/effects/medkit.gd")
-const MEDKIT_FLIGHT := Medkit.FLIGHT_TIME
 const GRENADE_FLIGHT := 0.6
 
 var _placed := {} # obj_id -> Node3D
 var _pool := {} # Mesh -> Array[MeshInstance3D] đang rảnh
 
-static var _kit_mesh: BoxMesh
 static var _grenade_mesh: SphereMesh
 static var _blast_mesh: CylinderMesh
 static var _heal_mesh: CylinderMesh
@@ -65,10 +65,7 @@ func _on_item_used(id: int, type: GameTypes.ItemType, _target_id: int, target_po
 	match type:
 		T.MEDKIT:
 			var flat := Vector2((from as Vector3).x - target_pos.x, (from as Vector3).z - target_pos.z)
-			if flat.length() < 0.3: # chạm nhanh: thả ngay dưới chân
-				_heal_area(target_pos)
-			else:
-				_throw(_kit_mesh, from, target_pos, MEDKIT_FLIGHT, _heal_area.bind(target_pos))
+			_throw(MedkitMesh.get_mesh(), from, target_pos, Medkit.flight_time(flat.length()), _heal_area.bind(target_pos))
 		T.STUN_GRENADE:
 			_throw(_grenade_mesh, from, target_pos, GRENADE_FLIGHT, _blast.bind(target_pos))
 
@@ -87,14 +84,17 @@ func _on_teleport_started(id: int, target: Vector3, seconds: float) -> void:
 		tween.tween_callback(_give.bind(mi))
 
 
-## Vật bay theo đường cong từ `from` tới `to` rồi gọi `on_land`.
+## Vật bay theo đường cong từ `from` tới `to` (ném xa thì vòng cao hơn), lộn
+## vòng trên không, rơi xuống thì gọi `on_land`.
 func _throw(mesh: Mesh, from: Vector3, to: Vector3, time: float, on_land: Callable) -> void:
 	var mi := _take(mesh)
 	var start := from + Vector3(0, 1.2, 0)
-	var end := to + Vector3(0, 0.4, 0)
+	var end := to + Vector3(0, 0.25, 0)
+	var height := 1.2 + 0.2 * Vector2(to.x - from.x, to.z - from.z).length()
 	var tween := mi.create_tween()
 	tween.tween_method(func(t: float) -> void:
-		mi.global_position = start.lerp(end, t) + Vector3(0, sin(t * PI) * 1.5, 0), 0.0, 1.0, time)
+		mi.global_position = start.lerp(end, t) + Vector3(0, sin(t * PI) * height, 0)
+		mi.rotation = Vector3(t * TAU, t * PI, 0.0), 0.0, 1.0, time)
 	tween.tween_callback(func() -> void:
 		_give(mi)
 		if on_land.is_valid():
@@ -134,6 +134,7 @@ func _take(mesh: Mesh) -> MeshInstance3D:
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(mi)
 	mi.visible = true
+	mi.rotation = Vector3.ZERO
 	mi.scale = Vector3.ONE
 	mi.transparency = 0.0
 	return mi
@@ -154,11 +155,8 @@ func _entity_pos(id: int) -> Variant:
 
 
 func _build_meshes() -> void:
-	if _kit_mesh:
+	if _grenade_mesh:
 		return
-	_kit_mesh = BoxMesh.new()
-	_kit_mesh.size = Vector3(0.3, 0.3, 0.3)
-	_kit_mesh.material = _glow(Color(1, 0.2, 0.3))
 	_grenade_mesh = SphereMesh.new()
 	_grenade_mesh.radius = 0.15
 	_grenade_mesh.height = 0.3

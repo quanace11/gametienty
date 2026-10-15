@@ -55,7 +55,7 @@ Mỗi người có bộ bài 5 ô (`MatchConfig.deck_size`), bấm nút `skill_1
 
 | Thẻ | Giá | Hồi | Tác dụng |
 |---|---|---|---|
-| Túi cứu thương | 10 | 6 s | Kéo thẻ chọn chỗ ném trong 8 m (chạm nhanh: dưới chân). Rơi thành vùng tròn xanh bán kính 2 m: mọi người trốn trong vùng (cả người ném) được cứu / hồi máu; người cần cứu nhất trong vùng lúc ném (bị kéo, rồi bị nhốt, rồi gục) vẫn được cứu dù bị kéo đi trong lúc túi bay. Ném vào chỗ không ai cần cứu thì vẫn mất tiền |
+| Túi cứu thương | 10 | 6 s | Kéo thẻ chọn chỗ ném trong 8 m (chạm nhanh: dưới chân). Túi bay 6 m/s (ít nhất 0,4 giây). Rơi thành vùng tròn xanh bán kính 1,2 m: mọi người trốn trong vùng (cả người ném) được cứu / hồi máu; người được nhắm lúc ném lệch thêm 0,6 m vẫn được cứu. Lúc rơi không ai cần cứu thì túi nằm chờ 8 giây, người trốn cần cứu chạy tới đón là được cứu (người bị nhốt không tự ra đón được). Hết giờ thì mất, vẫn mất tiền |
 | Lựu đạn làm chậm | 10 | 12 s | Kéo thẻ chọn chỗ ném trong 8 m (chạm nhanh: dưới chân), nổ bán kính 2.5 m, thợ săn chạy chậm một nửa trong 2 giây (không choáng, không buông người) |
 | Súng lục | 4 | 1.5 s | Tự nhắm thợ săn trong 10 m, ngắm đón đầu; trúng thì thợ săn mất 1 máu (xem mục 8). Không có thợ săn trong tầm thì không bắn, không mất tiền |
 | Ván trượt | 5 | 12 s | Chạy nhanh x1.7 trong 3.5 giây |

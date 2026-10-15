@@ -123,7 +123,7 @@ func _set_gate(text: String, color: Color) -> void:
 func _hint_text() -> String:
 	if GameState.my_role() == GameTypes.Role.HUNTER:
 		return "Kéo nút BẮN để ngắm, thả tay là bắn. Bắn gục người trốn rồi kéo vào nhà tù!"
-	return "Cạy rương lấy chìa (bấm E khi kim vào vùng sáng), đủ chìa thì chạy ra cổng!"
+	return "Đứng ở rương để cạy, kim tới vùng sáng thì chạm màn hình (hoặc E). Đủ chìa thì chạy ra cổng!"
 
 
 ## Dòng trạng thái của mình; chuỗi rỗng là không có gì đặc biệt (ẩn dải).

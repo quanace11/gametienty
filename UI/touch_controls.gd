@@ -3,7 +3,8 @@ extends Control
 ## lớn bên phải, thanh thẻ đạo cụ có giá tiền ở giữa dưới.
 ## Thợ săn: nút phải là cần ngắm. Kéo ra thì máy mình hiện luồng xanh chỉ
 ## hướng bắn, thả tay là bắn; kéo về giữa hoặc thả tay trên nút "Hủy" thì không bắn;
-## chạm nhanh là tự nhắm / túm người gục. Người trốn: giữ nút phải để cạy rương,
+## chạm nhanh là tự nhắm / túm người gục. Người trốn: vòng căn hiện ra thì chạm
+## bất kỳ chỗ trống nào trên màn hình để căn; giữ nút phải để cạy rương,
 ## đỡ đồng đội; đã thoát / bị loại thì nút phải thành nút đổi người xem.
 ## Thẻ ném được (túi cứu, lựu đạn, đệm lò xo, bẫy, hộp gỗ: ItemData.aim_range > 0)
 ## dùng kiểu kỹ năng định hướng: giữ thẻ rồi kéo, dưới đất hiện vòng tầm xa nhất
@@ -111,6 +112,9 @@ func _on_touch(finger: int, pos: Vector2, pressed: bool) -> void:
 	else:
 		var slot := -1 if _spectating() else _card_at(pos)
 		if slot < 0:
+			if _in_qte(): # vòng căn đang chạy: chạm bất kỳ đâu là căn (như bấm E)
+				_pulse(&"interact")
+				get_viewport().set_input_as_handled()
 			return
 		get_viewport().set_input_as_handled()
 		if _card_slot >= 0: # đang kéo một thẻ: ngón khác chạm thẻ thì bỏ qua
@@ -449,6 +453,11 @@ func _aim_center() -> Vector2:
 
 func _me() -> PlayerRecord:
 	return GameState.rules.record(multiplayer.get_unique_id()) if GameState.rules else null
+
+
+func _in_qte() -> bool:
+	var me := _me()
+	return me != null and me.qte_chest >= 0
 
 
 ## Mình đã thoát / bị loại: nút phải thành nút đổi người xem (camera đọc spectate_next).
