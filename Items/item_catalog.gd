@@ -10,7 +10,7 @@ static func all() -> Dictionary:
 	var items := {}
 	for it: ItemData in [
 		# Kéo thẻ để chọn chỗ ném (tầm, bán kính vùng); chạm nhanh thì dưới chân.
-		_aimed(ItemData.new(T.MEDKIT, "Túi cứu thương", 10, 6.0, "res://Items/effects/medkit.gd"), 8.0, 2.0),
+		_aimed(ItemData.new(T.MEDKIT, "Túi cứu thương", 10, 6.0, "res://Items/effects/medkit.gd"), 8.0, 1.2),
 		_aimed(ItemData.new(T.STUN_GRENADE, "Lựu đạn làm chậm", 10, 12.0, "res://Items/effects/stun_grenade.gd"), 8.0, 2.5),
 		ItemData.new(T.SPEED_BOOST, "Ván trượt", 5, 12.0, "res://Items/effects/speed_boost.gd"),
 		_aimed(ItemData.new(T.JUMP_PAD, "Đệm lò xo", 6, 8.0, "res://Items/effects/jump_pad.gd"), 6.0, 0.6),

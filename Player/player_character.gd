@@ -42,10 +42,20 @@ const MODEL_SCALE := 0.72 # model KayKit cao ~2.4 m, thu về ~1.75 m
 const LOOP_ANIMS := ["Idle", "Running_A", "Lie_Idle", "Sit_Floor_Idle", "Jump_Idle"]
 const RUN_SPEED_MIN := 0.6 # m/s, chậm hơn thì đứng yên
 const BLEND := 0.15
+# Cạy rương: lặp đoạn ngồi xổm của anim PickUp tới lui, tay mò mẫm ở ổ khóa.
+const LOCK_ANIM := "PickUp"
+const LOCK_FROM := 0.4 # giây trong anim: đã ngồi xuống
+const LOCK_TO := 0.85 # giây: tay với ra
+const LOCK_SPEED := 0.7
+const CHEST_CHECK := 0.1 # giây giữa hai lần xem có đứng ở rương không
 
 var _target_pos := Vector3.ZERO
 var _target_yaw := 0.0
 var _anim: AnimationPlayer
+var _model: Node3D
+var _safes: Array[Node] = [] # rương trên bản đồ (lấy một lần)
+var _chest: Node3D # rương đang cạy (đứng yên trong vùng rương chưa mở xong), null = không
+var _chest_check_left := 0.0
 var _anim_name := ""
 var _oneshot_left := 0.0 # đang phát anim một lần (bắn, bị trúng, ném)
 var _last_pos := Vector3.ZERO
@@ -145,6 +155,7 @@ func _build_body() -> void:
 func _build_model() -> void:
 	var path := HUNTER_MODEL if is_hunter() else ESCAPEE_MODEL
 	var model: Node3D = (load(path) as PackedScene).instantiate()
+	_model = model
 	model.scale = Vector3.ONE * MODEL_SCALE * (1.1 if is_hunter() else 1.0)
 	model.rotation.y = PI # model nhìn về +Z, nhân vật nhìn về -Z
 	_visual.add_child(model)
@@ -217,12 +228,56 @@ func _update_anim(delta: float) -> void:
 		GameTypes.PlayerState.IMPRISONED:
 			_play("Sit_Floor_Idle")
 			return
+	_chest_check_left -= delta
+	if _chest_check_left <= 0.0:
+		_chest_check_left = CHEST_CHECK
+		_chest = _chest_here()
+	_face_chest(delta)
 	if _flying or pos.y > 0.4:
 		_play("Jump_Idle")
+	elif _chest != null:
+		_play_lockpick()
 	elif _speed > RUN_SPEED_MIN:
 		_play("Running_A", clampf(_speed / ESCAPEE_SPEED, 0.6, 1.6))
 	else:
 		_play("Idle")
+
+
+## Người trốn đang đứng yên trong vùng một rương chưa mở xong (đúng lúc luật
+## đang cho cạy, trên mọi máy) thì trả rương đó. Vùng rương do Area3D của rương.
+func _chest_here() -> Node3D:
+	if is_hunter() or _speed > RUN_SPEED_MIN or not GameTypes.is_active(state) or GameState.rules == null:
+		return null
+	if _safes.is_empty():
+		_safes = get_tree().get_nodes_in_group(GameTypes.GROUP_SAFES)
+	for node in _safes:
+		var safe := node as Interactable
+		if safe and GameState.rules.safe_progress.get(safe.interactable_id, 1.0) < 1.0 and safe.overlaps_body(self):
+			return safe
+	return null
+
+
+## Ngồi xổm, tay mò tới lui ở ổ khóa (đoạn giữa anim PickUp chạy xuôi rồi ngược).
+func _play_lockpick() -> void:
+	if _anim_name != LOCK_ANIM:
+		_play(LOCK_ANIM, LOCK_SPEED)
+		return
+	var t := _anim.current_animation_position
+	if t >= LOCK_TO and _anim.speed_scale > 0.0:
+		_anim.speed_scale = -LOCK_SPEED
+	elif t <= LOCK_FROM and _anim.speed_scale < 0.0:
+		_anim.speed_scale = LOCK_SPEED
+
+
+## Đang cạy thì xoay hình quay mặt vào rương (chỉ hình, không đổi hướng thật).
+func _face_chest(delta: float) -> void:
+	if _model == null:
+		return
+	var yaw := PI # model nhìn về +Z
+	if _chest:
+		var d := _chest.global_position - _visual.global_position
+		yaw = PI + atan2(-d.x, -d.z) - _visual.global_rotation.y
+	_model.rotation.y = lerp_angle(_model.rotation.y, yaw, minf(1.0, delta * TURN_SPEED))
 
 
 func server_move(input: InputSource, delta: float) -> void:
