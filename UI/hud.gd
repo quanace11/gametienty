@@ -144,9 +144,9 @@ func _my_status(me: PlayerRecord) -> String:
 		GameTypes.PlayerState.IMPRISONED:
 			return "Trong tù: bị đốt sau %d giây!" % ceili(me.prison_time_left)
 		GameTypes.PlayerState.ELIMINATED:
-			return "Bạn đã bị loại"
+			return "Bạn đã bị loại. Đang xem người khác (Tab / nút xanh để đổi)"
 		GameTypes.PlayerState.ESCAPED:
-			return "Bạn đã thoát!"
+			return "Bạn đã thoát! Đang xem người khác (Tab / nút xanh để đổi)"
 	return ""
 
 

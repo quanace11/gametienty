@@ -3,6 +3,7 @@ extends Node3D
 ## (bẫy, đệm lò xo, hộp gỗ) theo EventBus.object_placed / object_removed, và
 ## hiệu ứng ném (túi máu rơi thành vùng xanh, lựu đạn) theo item_used. Phần luật của vật thể (bẫy
 ## kẹp, đệm hất) chạy trong chính node đó trên server.
+## Hiệu ứng ném, nổ, vùng xanh, cột sáng lấy từ pool (không tạo / xóa node mỗi lần).
 
 const T := GameTypes.ItemType
 const PLACED_SCRIPTS := {
@@ -15,6 +16,7 @@ const MEDKIT_FLIGHT := Medkit.FLIGHT_TIME
 const GRENADE_FLIGHT := 0.6
 
 var _placed := {} # obj_id -> Node3D
+var _pool := {} # Mesh -> Array[MeshInstance3D] đang rảnh
 
 static var _kit_mesh: BoxMesh
 static var _grenade_mesh: SphereMesh
@@ -77,61 +79,71 @@ func _on_teleport_started(id: int, target: Vector3, seconds: float) -> void:
 	for pos: Variant in [from, target]:
 		if pos == null:
 			continue
-		var mi := MeshInstance3D.new()
-		mi.mesh = _pillar_mesh
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(mi)
+		var mi := _take(_pillar_mesh)
 		mi.global_position = (pos as Vector3) + Vector3(0, 1.5, 0)
 		mi.scale = Vector3(0.3, 1, 0.3)
 		var tween := mi.create_tween()
 		tween.tween_property(mi, "scale", Vector3.ONE, seconds)
-		tween.tween_callback(mi.queue_free)
+		tween.tween_callback(_give.bind(mi))
 
 
 ## Vật bay theo đường cong từ `from` tới `to` rồi gọi `on_land`.
 func _throw(mesh: Mesh, from: Vector3, to: Vector3, time: float, on_land: Callable) -> void:
-	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(mi)
+	var mi := _take(mesh)
 	var start := from + Vector3(0, 1.2, 0)
 	var end := to + Vector3(0, 0.4, 0)
 	var tween := mi.create_tween()
 	tween.tween_method(func(t: float) -> void:
 		mi.global_position = start.lerp(end, t) + Vector3(0, sin(t * PI) * 1.5, 0), 0.0, 1.0, time)
 	tween.tween_callback(func() -> void:
-		mi.queue_free()
+		_give(mi)
 		if on_land.is_valid():
 			on_land.call())
 
 
 func _blast(pos: Vector3) -> void:
-	var mi := MeshInstance3D.new()
-	mi.mesh = _blast_mesh
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(mi)
+	var mi := _take(_blast_mesh)
 	mi.global_position = pos + Vector3(0, 0.05, 0)
 	mi.scale = Vector3(0.2, 1, 0.2)
 	var tween := mi.create_tween()
 	var r := _area(T.STUN_GRENADE)
 	tween.tween_property(mi, "scale", Vector3(r, 1, r), 0.15)
 	tween.tween_property(mi, "transparency", 1.0, 0.35)
-	tween.tween_callback(mi.queue_free)
+	tween.tween_callback(_give.bind(mi))
 
 
 ## Vùng tròn xanh nơi túi máu rơi (đúng bán kính cứu của túi).
 func _heal_area(pos: Vector3) -> void:
-	var mi := MeshInstance3D.new()
-	mi.mesh = _heal_mesh
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(mi)
+	var mi := _take(_heal_mesh)
 	mi.global_position = pos + Vector3(0, 0.05, 0)
 	mi.scale = Vector3(0.3, 1, 0.3)
 	var tween := mi.create_tween()
 	tween.tween_property(mi, "scale", Vector3.ONE, 0.15)
 	tween.tween_interval(0.5)
 	tween.tween_property(mi, "transparency", 1.0, 0.4)
-	tween.tween_callback(mi.queue_free)
+	tween.tween_callback(_give.bind(mi))
+
+
+## Lấy một hình rảnh trong pool (hoặc tạo mới), đặt lại về trạng thái gốc.
+func _take(mesh: Mesh) -> MeshInstance3D:
+	var free: Array = _pool.get(mesh, [])
+	var mi: MeshInstance3D = free.pop_back() if not free.is_empty() else null
+	if mi == null:
+		mi = MeshInstance3D.new()
+		mi.mesh = mesh
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(mi)
+	mi.visible = true
+	mi.scale = Vector3.ONE
+	mi.transparency = 0.0
+	return mi
+
+
+func _give(mi: MeshInstance3D) -> void:
+	mi.visible = false
+	if not _pool.has(mi.mesh):
+		_pool[mi.mesh] = []
+	_pool[mi.mesh].append(mi)
 
 
 func _entity_pos(id: int) -> Variant:

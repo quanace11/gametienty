@@ -56,17 +56,21 @@ Cập nhật mỗi khi merge một phần lớn. Người mới vào đọc mụ
 | Nhân vật | 2 nhân vật chibi KayKit (CC0): thợ săn là Rogue trùm đầu cầm nỏ (vòng đỏ dưới chân), người trốn là hiệp sĩ. Có animation chạy, đứng, gục, ngồi tù, bay, bắn, bị trúng, ném | `Player/models/` |
 | Bản đồ | Phong cách chibi dựng bằng code: sân cỏ, tường thấp mái ngói, hàng rào cây ở viền, nhà tù ở chính giữa, rương có nắp và đai vàng | `Objects/maps/test_map.gd`, `Objects/safe.gd` |
 | Bụi cây | Đứng trong bụi thì phe kia không thấy, trừ khi đứng cùng bụi; đồng đội vẫn thấy nhau. Server không gửi vị trí người nấp xuống máy phe kia; bot và súng tự nhắm cũng không thấy | `Objects/bush.gd`, `GameState.can_see()` |
-| Bot | Bot người trốn cạy rương, chạy trốn, cứu nhau, dùng thẻ; bot thợ săn đuổi, bắn, kéo vào tù, dùng radar / dịch chuyển | `AI/bot_input_source.gd` |
+| Bot | Bot người trốn cạy rương, chạy trốn, cứu nhau, ném túi máu / lựu đạn đúng chỗ, dùng thẻ; bot thợ săn đuổi, bắn, kéo vào tù, dùng radar / dịch chuyển | `AI/bot_input_source.gd` |
+| Thẻ kéo-thả | Túi máu, lựu đạn, đệm lò xo, bẫy, hộp gỗ: giữ thẻ kéo để chọn chỗ như kỹ năng Liên Quân (vòng tầm + vòng chỗ rơi, nút Hủy, chạm nhanh thì dưới chân). Không thêm dữ liệu mạng | `UI/touch_controls.gd`, `Items/effects/aim_point.gd` |
+| Xem người khác | Đã thoát hoặc bị loại thì camera xem đồng đội còn chơi; Tab hoặc nút xanh để đổi người (cả thợ săn) | `Player/follow_camera.gd` |
+| Hiệu năng | Đạn, tên lửa, vụ nổ, túi máu, lựu đạn, vùng xanh, cột sáng dùng pool; vật giống nhau dùng chung mesh/material; server riêng không tạo hình; texture nén ETC2/ASTC cho điện thoại | `Player/shot_fx.gd`, `Items/item_visuals.gd`, `project.godot` |
 
 ### Còn lại (theo thứ tự nên làm)
 
-1. **Bản đồ dựng trong editor** (thay vì bằng code), thêm nhà cửa / đồ vật chibi (gợi ý: KayKit City Builder Bits / Furniture Bits, CC0), nhiều bản đồ. Phụ trách: `Objects/`.
-2. **Cổng, tiền, hiệu ứng** dùng model đẹp hơn; pool cho đạn và hiệu ứng (luật hiệu năng trong CLAUDE.md). Phụ trách: `Objects/`, `Items/`.
-3. **Xem người khác khi bị nhốt / bị loại**, âm thanh `.ogg`, menu đẹp hơn. Phụ trách: `UI/`.
-4. **Cân bằng** sau khi giao diện ổn: hiện bot thợ săn thắng phần lớn trận (tầm súng, hồi chiêu, tốc độ, giá thẻ đều nằm trong `Core/types/match_config.gd` và `Items/item_catalog.gd`).
-5. **NavMesh cho bot** (bot đang đi thẳng, hay kẹt tường). Phụ trách: `AI/`.
-6. **Xuất bản điện thoại**: export Android, kiểm tra 60 FPS trên máy tầm thấp, nén texture ETC2/ASTC.
-7. **Online qua Internet**: server riêng trên VPS, ghép phòng, bù trễ.
+1. **Thử trên điện thoại thật**: tạo export preset Android (cần Android SDK, export template, keystore trên máy dev), đo 60 FPS trên máy tầm thấp, chỉnh cỡ nút cảm ứng cho tay thật. Texture đã bật nén ETC2/ASTC. Đây là việc cần làm sớm nhất vì mọi thứ khác chỉ mới thử trên máy tính.
+2. **Âm thanh** `.ogg` (bắn, nổ, mở rương, cổng mở, bị gục, nhạc nền), chạy theo tín hiệu `EventBus`. Cần chọn bộ âm thanh CC0 (gợi ý: Kenney). Phụ trách: `UI/` hoặc người làm hiệu ứng.
+3. **Bản đồ dựng trong editor** (thay vì bằng code), thêm nhà cửa / đồ vật chibi (gợi ý: KayKit City Builder Bits / Furniture Bits, CC0), nhiều bản đồ. Phụ trách: `Objects/`.
+4. **Cổng, tiền** dùng model đẹp hơn (hiện là khối đơn giản). Phụ trách: `Objects/`.
+5. **NavMesh cho bot** (bot đang đi thẳng tới mục tiêu, kẹt tường thì rẽ ngẫu nhiên). Phụ trách: `AI/`.
+6. **Cân bằng với người thật**: 10 trận bot đo ngày 15/10 cho thợ săn thắng một phần 6/10, thua 4/10, trung bình bắt 1,7/4 người, chưa trận nào thắng tuyệt đối. Bot chưa giống người nên cần chơi thật rồi chỉnh (`Core/types/match_config.gd`, `Items/item_catalog.gd`).
+7. **Online qua Internet**: server riêng trên VPS, ghép phòng, bù trễ. LAN đã chạy.
+8. Việc nhỏ cần Lead xem: đệm lò xo trong nhà tù (`Objects/prison.gd`) và thẻ đệm lò xo (`Items/placed/jump_pad_node.gd`) đang lặp code hất tung; server tính lại dữ liệu rương gửi xuống mỗi frame khi có người đang cạy (`Core/game_state.gd`), nên gộp 10 lần/giây.
 
 ### Asset bên ngoài
 

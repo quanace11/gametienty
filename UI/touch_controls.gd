@@ -4,7 +4,7 @@ extends Control
 ## Thợ săn: nút phải là cần ngắm. Kéo ra thì máy mình hiện luồng xanh chỉ
 ## hướng bắn, thả tay là bắn; kéo về giữa hoặc thả tay trên nút "Hủy" thì không bắn;
 ## chạm nhanh là tự nhắm / túm người gục. Người trốn: giữ nút phải để cạy rương,
-## đỡ đồng đội.
+## đỡ đồng đội; đã thoát / bị loại thì nút phải thành nút đổi người xem.
 ## Thẻ ném được (túi cứu, lựu đạn, đệm lò xo, bẫy, hộp gỗ: ItemData.aim_range > 0)
 ## dùng kiểu kỹ năng định hướng: giữ thẻ rồi kéo, dưới đất hiện vòng tầm xa nhất
 ## quanh nhân vật và vòng chỗ sẽ rơi (đúng bán kính vùng tác dụng); thả tay mới
@@ -103,9 +103,13 @@ func _on_touch(finger: int, pos: Vector2, pressed: bool) -> void:
 	if pos.distance_to(_move_center()) <= STICK_R * 1.6:
 		kind = "move"
 	elif pos.distance_to(_aim_center()) <= AIM_R * 1.4:
+		if _spectating():
+			_pulse(&"spectate_next")
+			get_viewport().set_input_as_handled()
+			return
 		kind = "aim" if _hunter() else "button"
 	else:
-		var slot := _card_at(pos)
+		var slot := -1 if _spectating() else _card_at(pos)
 		if slot < 0:
 			return
 		get_viewport().set_input_as_handled()
@@ -228,6 +232,13 @@ func _draw() -> void:
 	for kind: String in _fingers.values():
 		aiming = aiming or kind == "aim"
 		held = held or kind == "button"
+	if _spectating(): # đã ra khỏi trận: chỉ còn nút đổi người xem
+		var sc := _aim_center()
+		draw_circle(sc, AIM_R + 3, INK)
+		draw_circle(sc, AIM_R, UiTheme.BLUE)
+		draw_circle(sc + Vector2(-AIM_R * 0.3, -AIM_R * 0.35), AIM_R * 0.28, Color(1, 1, 1, 0.25))
+		_text(font, sc, "Tab\nĐổi người xem", 20, Color.WHITE)
+		return
 	# Cần di chuyển: đế tròn viền đậm, núm có vệt sáng.
 	var mc := _move_center()
 	draw_circle(mc, STICK_R + 3, Color(INK, 0.5))
@@ -438,6 +449,12 @@ func _aim_center() -> Vector2:
 
 func _me() -> PlayerRecord:
 	return GameState.rules.record(multiplayer.get_unique_id()) if GameState.rules else null
+
+
+## Mình đã thoát / bị loại: nút phải thành nút đổi người xem (camera đọc spectate_next).
+func _spectating() -> bool:
+	var me := _me()
+	return me != null and (me.state == GameTypes.PlayerState.ESCAPED or me.state == GameTypes.PlayerState.ELIMINATED)
 
 
 func _hunter() -> bool:

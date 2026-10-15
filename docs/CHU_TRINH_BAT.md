@@ -18,7 +18,7 @@
 - Bị kéo (`CARRIED`): người trốn nằm sau lưng thợ săn, bị khóa hoàn toàn, không nút nào có tác dụng, không tự thoát.
 - Cứu người đang gục dưới đất: đứng gần giữ E, hoặc ném túi máu.
 - Cứu người đang bị kéo hoặc trong tù: chỉ túi máu (hoặc bắn hết máu thợ săn khi đang bị kéo).
-- Túi máu là vật phẩm mang theo. Tạm thời mỗi người trốn có `medkits_per_escapee` túi; sau này lấy từ bộ bài.
+- Túi máu là một thẻ trong bộ bài (trả tiền, có hồi chiêu), kéo thẻ để chọn chỗ ném. Xem [LUAT_TRAN.md](LUAT_TRAN.md).
 
 Thợ săn luôn `IDLE`, có thêm `carrying_id` (đang kéo ai) và `stunned_left` (đang choáng).
 
@@ -36,7 +36,7 @@ Tất cả trả về `true` nếu lệnh hợp lệ và đã thực hiện. G�
 | `GameState.server_drop(hunter_id)` | Player | Thợ săn thả người đang kéo |
 | `GameState.server_imprison(hunter_id, prison_id)` | Objects (nhà tù) | Thợ săn đang kéo người tới sát tường nhà tù (trong 1 m) |
 | `GameState.server_channel_rescue(rescuer_id, target_id, delta)` | Player | **Mỗi physics frame** khi đang giữ E gần người đang gục. Nhiều người cùng đỡ thì nhanh hơn. Không dùng được cho người bị kéo / bị nhốt |
-| `GameState.server_use_medkit(thrower_id, target_id)` | Player, Items | Ném túi máu (module tự kiểm tra tầm `medkit_range` và đường bay). Người đang gục / bị kéo / bị nhốt đứng dậy ngay; đang đứng thì hồi máu. `target_id = thrower_id` là tự dùng |
+| `GameState.server_heal(healer_id, target_id)` | Items (túi máu) | Túi máu rơi trúng `target_id`. Người đang gục / bị kéo / bị nhốt đứng dậy ngay; đang đứng thì hồi máu. `target_id = healer_id` là tự dùng. Tiền và hồi chiêu đã tính lúc dùng thẻ (`server_use_item`) |
 | `GameState.server_stun(id, seconds)` | (dự phòng) | Làm choáng. Thợ săn đang kéo người mà bị choáng thì buông tay. Hiện người trốn không có thẻ nào làm choáng thợ săn; lựu đạn và bẫy dùng `server_speed_boost` với hệ số < 1 để làm chậm |
 | `GameState.server_escape(id)` | Objects (cổng) | Người trốn bước vào cổng đã mở |
 
@@ -46,7 +46,8 @@ Tất cả trả về `true` nếu lệnh hợp lệ và đã thực hiện. G�
 var rules := GameState.rules
 var me := rules.record(peer_id)        # PlayerRecord: state, hp, carrier_id, carrying_id,
                                        # prison_id, prison_time_left (máu còn trong tù, giây), rescue_progress, items...
-rules.item_count(peer_id, GameTypes.ItemType.MEDKIT)  # còn bao nhiêu túi máu
+rules.can_use_item(peer_id, slot)      # ô thẻ `slot` dùng được không (đủ tiền, hết hồi chiêu)
+rules.can_heal(healer_id, target_id)   # túi máu có tác dụng lên người này không
 rules.can_move(peer_id)                # có được tự đi không
 rules.speed_factor(peer_id)            # nhân với tốc độ chạy: gục thì bò, đang kéo người thì chậm, đang cứu thì đứng
 rules.can_attack(peer_id)              # thợ săn: hết hồi chiêu, không choáng, không đang kéo người

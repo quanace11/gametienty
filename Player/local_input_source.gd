@@ -19,6 +19,7 @@ const KEYS := {
 	&"skill_3": [KEY_3, KEY_F],
 	&"skill_4": [KEY_4, KEY_G],
 	&"skill_5": [KEY_5, KEY_T],
+	&"spectate_next": [KEY_TAB], # đã thoát / bị loại: xem người khác (chỉ camera đọc)
 	# Cần ngắm cảm ứng (UI bấm với độ mạnh 0..1), không có phím.
 	&"aim_left": [],
 	&"aim_right": [],
