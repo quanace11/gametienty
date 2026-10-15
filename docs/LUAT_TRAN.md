@@ -55,13 +55,15 @@ Mỗi người có bộ bài 5 ô (`MatchConfig.deck_size`), bấm nút `skill_1
 
 | Thẻ | Giá | Hồi | Tác dụng |
 |---|---|---|---|
-| Túi cứu thương | 10 | 6 s | Ném về đồng đội đang bị kéo / bị nhốt / gục gần nhất trong 8 m, không có ai thì ném dưới chân nếu mất máu. Rơi thành vùng tròn xanh bán kính 2 m: người được nhắm và mọi người trốn trong vùng (cả người ném) được cứu / hồi máu |
-| Lựu đạn làm chậm | 10 | 12 s | Tự nhắm thợ săn gần nhất trong 8 m, nổ bán kính 2.5 m, thợ săn chạy chậm một nửa trong 2 giây (không choáng, không buông người) |
+| Túi cứu thương | 10 | 6 s | Kéo thẻ chọn chỗ ném trong 8 m (chạm nhanh: dưới chân). Rơi thành vùng tròn xanh bán kính 2 m: mọi người trốn trong vùng (cả người ném) được cứu / hồi máu; người cần cứu nhất trong vùng lúc ném (bị kéo, rồi bị nhốt, rồi gục) vẫn được cứu dù bị kéo đi trong lúc túi bay. Ném vào chỗ không ai cần cứu thì vẫn mất tiền |
+| Lựu đạn làm chậm | 10 | 12 s | Kéo thẻ chọn chỗ ném trong 8 m (chạm nhanh: dưới chân), nổ bán kính 2.5 m, thợ săn chạy chậm một nửa trong 2 giây (không choáng, không buông người) |
 | Súng lục | 4 | 1.5 s | Tự nhắm thợ săn trong 10 m, ngắm đón đầu; trúng thì thợ săn mất 1 máu (xem mục 8). Không có thợ săn trong tầm thì không bắn, không mất tiền |
 | Ván trượt | 5 | 12 s | Chạy nhanh x1.7 trong 3.5 giây |
-| Đệm lò xo | 6 | 8 s | Đặt trước mặt, bước lên là bật vút qua tường cao (vào / ra nhà tù) |
-| Bẫy kẹp | 6 | 10 s | Đặt dưới chân, thợ săn dẫm vào thì chạy chậm một nửa trong 2.5 giây; thợ săn thấy mờ |
-| Hộp gỗ | 5 | 10 s | Vật cản chắn đường, chắn đạn trong 15 giây |
+| Đệm lò xo | 6 | 8 s | Kéo thẻ đặt xa tới 6 m (chạm nhanh: dưới chân), bước lên là bật vút theo hướng ném, qua được tường cao (vào / ra nhà tù) |
+| Bẫy kẹp | 6 | 10 s | Kéo thẻ đặt xa tới 4 m (chạm nhanh: dưới chân), thợ săn dẫm vào thì chạy chậm một nửa trong 2.5 giây; thợ săn thấy mờ |
+| Hộp gỗ | 5 | 10 s | Kéo thẻ đặt xa tới 4 m (chạm nhanh: trước mặt), vật cản chắn đường, chắn đạn trong 15 giây |
+
+Thẻ kéo-thả (`ItemData.aim_range > 0`): giữ thẻ rồi kéo, dưới đất hiện vòng tầm xa nhất quanh nhân vật và vòng chỗ rơi (bán kính `area_radius`); thả tay mới dùng, kéo tới nút Hủy rồi thả thì thôi. Máy người chơi gửi chỗ ném trong `aim` của gói input sẵn có (không thêm dữ liệu mạng); server đọc qua `EntityBase.aim_offset()` (hướng x, z thế giới, độ xa 0..1).
 
 Bộ bài mặc định của người trốn: túi cứu thương, lựu đạn, súng lục, ván trượt, đệm lò xo. Người chơi chọn bộ bài ở menu (thứ tự chọn = ô 1..5), gửi lên server khi vào phòng, đi kèm `info["decks"]`. Luật tự lọc: bỏ thẻ không có, thẻ không dành cho vai mình (`allowed_roles`), thẻ trùng, quá 5 ô; lọc xong rỗng thì dùng bộ mặc định. Thợ săn luôn dùng bộ của thợ săn (mục 9).
 

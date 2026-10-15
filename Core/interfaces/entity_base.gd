@@ -11,6 +11,7 @@ var state: GameTypes.PlayerState = GameTypes.PlayerState.IDLE
 
 var _held_buttons := 0 # chỉ server: nút đang giữ (bit theo InputSource.ACTIONS)
 var _pressed_buttons := 0 # chỉ server: nút vừa bấm xuống trong frame này
+var _aim := Vector2.ZERO # chỉ server: hướng ngắm trên mặt sàn (x, z thế giới), dài 0..1
 
 
 ## Lớp con override thì phải gọi super(...).
@@ -48,6 +49,15 @@ func server_read_input(input: InputSource) -> void:
 	var b := input.get_buttons()
 	_pressed_buttons = b & ~_held_buttons
 	_held_buttons = b
+	var aim := input.get_aim()
+	_aim = aim.limit_length(1.0).rotated(-input.get_aim_yaw()) if aim.is_finite() else Vector2.ZERO
+
+
+## Chỉ server: hướng ngắm lúc này trên mặt sàn (x, z thế giới), dài 0..1. Thẻ
+## kéo-thả (ItemData.aim_range > 0) đọc khi dùng: chỗ rơi = vị trí + aim * tầm;
+## Vector2.ZERO = chạm nhanh, dùng ngay dưới chân.
+func aim_offset() -> Vector2:
+	return _aim
 
 
 ## Chỉ server: nút `action` đang được giữ. Dùng cho vật thể (két, cổng...) cần biết người chơi bấm gì.

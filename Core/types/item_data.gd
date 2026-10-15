@@ -8,6 +8,10 @@ extends Resource
 @export var icon: Texture2D
 @export var cost := 0 ## tiền mỗi lần kích hoạt
 @export var cooldown := 10.0 ## giây
+## Kéo thẻ để chọn chỗ ném / đặt (kiểu kỹ năng định hướng): tầm xa nhất, mét.
+## 0 = không kéo được, chạm là dùng (radar, ván trượt...).
+@export var aim_range := 0.0
+@export var area_radius := 0.0 ## bán kính vùng tác dụng chỗ rơi, mét (vòng vẽ khi kéo)
 @export var allowed_roles: Array[GameTypes.Role] = [GameTypes.Role.ESCAPEE]
 @export_file("*.gd") var effect_script := "" ## extends ItemEffect
 
