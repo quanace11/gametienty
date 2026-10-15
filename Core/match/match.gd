@@ -87,8 +87,8 @@ func _physics_process(delta: float) -> void:
 		GameState.flush(delta)
 		_send_snapshot(delta)
 	else:
-		for e: EntityBase in entities.values():
-			e.client_update(delta)
+		for id: int in entities:
+			entities[id].client_update(delta)
 
 
 ## Nút ô thẻ vừa bấm thì dùng thẻ (GameState kiểm tra tiền, hồi chiêu).
@@ -123,9 +123,9 @@ func _submit_input(move: Vector2, buttons: int, aim_yaw: float, aim: Vector2) ->
 		return
 	var src = input_sources.get(multiplayer.get_remote_sender_id())
 	if src is NetworkInputSource:
-		src.move = move.limit_length(1.0) # không tin client
+		src.move = move.limit_length(1.0) if move.is_finite() else Vector2.ZERO # không tin client
 		src.buttons = buttons
-		src.aim_yaw = wrapf(aim_yaw, -PI, PI)
+		src.aim_yaw = wrapf(aim_yaw, -PI, PI) if is_finite(aim_yaw) else 0.0
 		src.aim = aim.limit_length(1.0) if aim.is_finite() else Vector2.ZERO
 
 

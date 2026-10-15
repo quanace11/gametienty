@@ -26,12 +26,15 @@ var _last_launch := {} # chỉ server: peer_id -> giây
 # Dùng chung cho mọi nhà tù.
 static var _wall_material: StandardMaterial3D
 static var _pad_mesh: CylinderMesh
+static var _wall_meshes := {} # kích thước (Vector3) -> BoxMesh, mọi nhà tù chỉ có 2 cỡ tường
 
 
 func _ready() -> void:
 	super()
 	add_to_group(GameTypes.GROUP_PRISONS)
-	_build_shared()
+	var headless := DisplayServer.get_name() == "headless" # server riêng: chỉ dựng va chạm và đệm
+	if not headless:
+		_build_shared()
 	exit_side = Vector3(exit_side.x, 0, exit_side.z).normalized()
 	var reach := INNER + WALL_THICK * 2 + REACH * 2
 	var shape := CollisionShape3D.new()
@@ -48,13 +51,21 @@ func _ready() -> void:
 	_add_wall(Vector3(-half, 0, 0), Vector3(WALL_THICK, WALL_HEIGHT, INNER))
 	_add_wall(Vector3(half, 0, 0), Vector3(WALL_THICK, WALL_HEIGHT, INNER))
 
-	_pad = MeshInstance3D.new()
-	(_pad as MeshInstance3D).mesh = _pad_mesh
-	(_pad as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	# Đệm lò xo: server cần vị trí (interact_tick, bot tìm group), máy có hình thì vẽ.
+	if headless:
+		_pad = Node3D.new()
+	else:
+		var pad_mi := MeshInstance3D.new()
+		pad_mi.mesh = _pad_mesh
+		pad_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_pad = pad_mi
 	_pad.position = exit_side * PAD_OFFSET + Vector3(0, 0.12, 0)
 	_pad.add_to_group(GameTypes.GROUP_JUMP_PADS)
 	add_child(_pad)
 
+	if headless:
+		set_process(false)
+		return
 	_label = Label3D.new()
 	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_label.position.y = WALL_HEIGHT + 0.5
@@ -71,14 +82,18 @@ func _add_wall(center: Vector3, size: Vector3) -> void:
 	box.size = size
 	shape.shape = box
 	body.add_child(shape)
-	var mesh := BoxMesh.new()
-	mesh.size = size
-	mesh.material = _wall_material
+	add_child(body)
+	if _wall_material == null: # server riêng: không vẽ
+		return
+	if not _wall_meshes.has(size):
+		var mesh := BoxMesh.new()
+		mesh.size = size
+		mesh.material = _wall_material
+		_wall_meshes[size] = mesh
 	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
+	mi.mesh = _wall_meshes[size]
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	body.add_child(mi)
-	add_child(body)
 
 
 static func _build_shared() -> void:

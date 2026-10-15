@@ -42,6 +42,7 @@ var _qte_for := -1.0 # qte_started của vòng căn đang tính
 var _qte_offset := 0.0 # bot định bấm lệch vùng sáng chừng này
 var _qte_done := false
 var _think_left := 0.0
+var _qte_pressed := false # vừa bấm trong vòng căn: thả nút ngay khi vòng căn kết thúc
 
 
 func get_move() -> Vector2:
@@ -66,7 +67,11 @@ func update(delta: float) -> void:
 		_move = Vector2.ZERO
 		_interact = false
 		_play_qte(rules, rec)
+		_qte_pressed = _interact
 		return
+	if _qte_pressed: # không giữ nút căn sang lúc chờ nghĩ (đỡ đồng đội thì vẫn giữ như cũ)
+		_qte_pressed = false
+		_interact = false
 	_think_left -= delta
 	if _think_left > 0.0:
 		return
@@ -84,33 +89,39 @@ func _think(rules: MatchRules, rec: PlayerRecord, delta: float) -> void:
 				GameTypes.PlayerState.ESCAPED, GameTypes.PlayerState.ELIMINATED:
 			return
 
+	# Quét group một lần mỗi lần nghĩ, các hàm bên dưới dùng lại.
+	var ents := _entities()
+	var prisons := _positions(GameTypes.GROUP_PRISONS)
+	var hunter_pos := Vector2.ZERO
+	var hunter_dist := INF
 	var target := me
 	var act := false # tới nơi thì bấm nút
 	var arrive := ARRIVE_DIST
 	if entity.is_hunter():
 		if rec.carrying_id != 0:
-			target = _nearest(_positions(GameTypes.GROUP_PRISONS), me)
+			target = _nearest(prisons, me, me)
 		else:
-			var downed := _reachable_downed()
-			var victims := downed if not downed.is_empty() else _escapees_where(func(e: EntityBase) -> bool:
+			var downed := _reachable_downed(ents, prisons)
+			var victims := downed if not downed.is_empty() else _escapees_where(ents, func(e: EntityBase) -> bool:
 				return GameTypes.is_active(e.state))
-			target = _nearest(victims.map(func(e: EntityBase) -> Vector2: return e.flat_position()), me)
+			target = _nearest(_flat_positions(victims), me, me)
 			act = not victims.is_empty()
-			var runners := _escapees_where(func(e: EntityBase) -> bool: return rules.is_hittable(e.peer_id))
-			var prey := _nearest(runners.map(func(e: EntityBase) -> Vector2: return e.flat_position()), me + Vector2(1000, 0))
+			var runners := _escapees_where(ents, func(e: EntityBase) -> bool: return rules.is_hittable(e.peer_id))
+			var prey := _nearest(_flat_positions(runners), me, me + Vector2(1000, 0))
 			if rules.can_attack(entity.peer_id) and me.distance_to(prey) <= SHOOT_DIST:
 				_interact = true # bắn súng; người gục trong tầm túm thì nhân vật ưu tiên túm
 			elif not runners.is_empty() and me.distance_to(prey) > TELEPORT_DIST:
 				_use_slot_of(rules, rec, GameTypes.ItemType.TELEPORT, func() -> void:
-					GameState.server_set_aim_point(entity.peer_id, Vector3(prey.x, 0, prey.y)))
+					_set_aim_point(Vector3(prey.x, 0, prey.y)))
 			elif runners.is_empty() or me.distance_to(prey) > SHOOT_DIST * 1.5:
 				_use_slot_of(rules, rec, GameTypes.ItemType.RADAR, Callable())
 	else:
-		var hunter_dist := _hunter_distance(me)
-		var downed := _reachable_downed().filter(func(e: EntityBase) -> bool: return e != entity)
+		hunter_pos = _nearest_hunter_pos(ents, me)
+		hunter_dist = me.distance_to(hunter_pos)
+		var downed := _reachable_downed(ents, prisons).filter(func(e: EntityBase) -> bool: return e != entity)
 		var medkit_slot := rec.deck.find(GameTypes.ItemType.MEDKIT)
 		var has_medkit: bool = medkit_slot >= 0 and rec.coins >= rules.catalog[GameTypes.ItemType.MEDKIT]["cost"]
-		var captured := _escapees_where(func(e: EntityBase) -> bool:
+		var captured := _escapees_where(ents, func(e: EntityBase) -> bool:
 			return e.state == GameTypes.PlayerState.CARRIED or e.state == GameTypes.PlayerState.IMPRISONED)
 		var throw_range := rules.config.medkit_range * 0.9
 		if entity.state != GameTypes.PlayerState.DOWNED:
@@ -121,30 +132,32 @@ func _think(rules: MatchRules, rec: PlayerRecord, delta: float) -> void:
 			_use_items(rules, rec, not in_range.is_empty(), hunter_dist)
 		if entity.state == GameTypes.PlayerState.DOWNED:
 			target = me # đang ngã thì chỉ bò né thợ săn
-		elif _inside_prison(me):
-			target = _nearest(_positions(GameTypes.GROUP_JUMP_PADS), me)
+		elif _inside_prison(me, prisons):
+			target = _nearest(_positions(GameTypes.GROUP_JUMP_PADS), me, me)
 			arrive = 0.05 # phải giẫm hẳn lên đệm
 		elif rules.gate_open or rules.gate_opening_left > 0.0:
-			target = _nearest(_positions(GameTypes.GROUP_EXIT_GATES), me)
+			target = _nearest(_positions(GameTypes.GROUP_EXIT_GATES), me, me)
 		elif not downed.is_empty() and hunter_dist > SAFE_TO_RESCUE_DIST:
-			target = _nearest(downed.map(func(e: EntityBase) -> Vector2: return e.flat_position()), me)
+			target = _nearest(_flat_positions(downed), me, me)
 			act = true
 		elif has_medkit and not captured.is_empty() and hunter_dist > FLEE_DIST:
-			target = _nearest(captured.map(func(e: EntityBase) -> Vector2: return e.flat_position()), me)
-		elif hunter_dist > SAFE_TO_RESCUE_DIST and not _near_coins(me).is_empty():
-			target = _nearest(_near_coins(me), me)
+			target = _nearest(_flat_positions(captured), me, me)
 		else:
-			var safes := entity.get_tree().get_nodes_in_group(GameTypes.GROUP_SAFES).filter(
-				func(s: Interactable) -> bool: return rules.safe_progress.get(s.interactable_id, 1.0) < 1.0)
-			target = _nearest(safes.map(func(s: Node3D) -> Vector2: return _flat(s.global_position)), me)
+			var coins := _near_coins(me) if hunter_dist > SAFE_TO_RESCUE_DIST else []
+			if not coins.is_empty():
+				target = _nearest(coins, me, me)
+			else:
+				var safes := entity.get_tree().get_nodes_in_group(GameTypes.GROUP_SAFES).filter(
+					func(sf: Interactable) -> bool: return rules.safe_progress.get(sf.interactable_id, 1.0) < 1.0)
+				target = _nearest(safes.map(func(sf: Node3D) -> Vector2: return _flat(sf.global_position)), me, me)
 
 	var to_target := target - me
 	var dir := to_target.normalized() if to_target.length() > arrive else Vector2.ZERO
 	if act and to_target.length() <= ACT_DIST:
 		_interact = true
 		dir = to_target.normalized() * 0.2 # quay mặt về mục tiêu để đòn trúng
-	if not entity.is_hunter() and _hunter_distance(me) < FLEE_DIST and not _interact:
-		var away := (me - _nearest_hunter_pos(me)).normalized()
+	if not entity.is_hunter() and hunter_dist < FLEE_DIST and not _interact:
+		var away := (me - hunter_pos).normalized()
 		dir = (dir + away * 1.5).normalized()
 
 	_check_timer += delta
@@ -158,6 +171,14 @@ func _think(rules: MatchRules, rec: PlayerRecord, delta: float) -> void:
 		_detour_time -= delta
 		dir = _detour_dir
 	_move = dir
+
+
+## Chọn điểm như chạm minimap. Bot chạy trên client (--join --bot) thì gửi lên server.
+func _set_aim_point(p: Vector3) -> void:
+	if entity.multiplayer.is_server():
+		GameState.server_set_aim_point(entity.peer_id, p)
+	else:
+		GameState.set_aim_point(p)
 
 
 ## Chọn thẻ để bấm: túi máu khi có người cần cứu trong tầm; lựu đạn làm chậm
@@ -216,14 +237,14 @@ func _play_qte(rules: MatchRules, rec: PlayerRecord) -> void:
 
 
 ## Người gục mà đi bộ tới được (không nằm trong tường nhà tù).
-func _reachable_downed() -> Array:
-	return _escapees_in(GameTypes.PlayerState.DOWNED).filter(func(e: EntityBase) -> bool:
-		return not _inside_prison(e.flat_position()))
+func _reachable_downed(ents: Array, prisons: Array) -> Array:
+	return _escapees_in(ents, GameTypes.PlayerState.DOWNED).filter(func(e: EntityBase) -> bool:
+		return not _inside_prison(e.flat_position(), prisons))
 
 
-func _inside_prison(me: Vector2) -> bool:
-	for p: Vector2 in _positions(GameTypes.GROUP_PRISONS):
-		if me.distance_to(p) < PRISON_INSIDE:
+func _inside_prison(p: Vector2, prisons: Array) -> bool:
+	for c: Vector2 in prisons:
+		if p.distance_to(c) < PRISON_INSIDE:
 			return true
 	return false
 
@@ -241,21 +262,21 @@ func _entities() -> Array:
 		func(e: EntityBase) -> bool: return GameState.can_see(entity.peer_id, e.peer_id))
 
 
-func _escapees_where(filter: Callable) -> Array:
-	return _entities().filter(func(e: EntityBase) -> bool: return not e.is_hunter() and filter.call(e))
+func _escapees_where(ents: Array, filter: Callable) -> Array:
+	return ents.filter(func(e: EntityBase) -> bool: return not e.is_hunter() and filter.call(e))
 
 
-func _escapees_in(s: GameTypes.PlayerState) -> Array:
-	return _escapees_where(func(e: EntityBase) -> bool: return e.state == s)
+func _escapees_in(ents: Array, s: GameTypes.PlayerState) -> Array:
+	return _escapees_where(ents, func(e: EntityBase) -> bool: return e.state == s)
 
 
-func _nearest_hunter_pos(me: Vector2) -> Vector2:
-	var hunters := _entities().filter(func(e: EntityBase) -> bool: return e.is_hunter())
-	return _nearest(hunters.map(func(e: EntityBase) -> Vector2: return e.flat_position()), me + Vector2(1000, 0))
+func _nearest_hunter_pos(ents: Array, me: Vector2) -> Vector2:
+	var hunters := ents.filter(func(e: EntityBase) -> bool: return e.is_hunter())
+	return _nearest(_flat_positions(hunters), me, me + Vector2(1000, 0))
 
 
-func _hunter_distance(me: Vector2) -> float:
-	return me.distance_to(_nearest_hunter_pos(me))
+func _flat_positions(ents: Array) -> Array:
+	return ents.map(func(e: EntityBase) -> Vector2: return e.flat_position())
 
 
 func _positions(group: StringName) -> Array:
@@ -266,11 +287,11 @@ func _flat(v: Vector3) -> Vector2:
 	return Vector2(v.x, v.z)
 
 
-func _nearest(points: Array, fallback: Vector2) -> Vector2:
+func _nearest(points: Array, me: Vector2, fallback: Vector2) -> Vector2:
 	var best := fallback
 	var best_d := INF
 	for p: Vector2 in points:
-		var d := entity.flat_position().distance_to(p)
+		var d := me.distance_to(p)
 		if d < best_d:
 			best_d = d
 			best = p

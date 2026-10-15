@@ -24,6 +24,11 @@ var _footprints := PackedVector3Array() # x, z: vị trí; y: tuổi (giây) lú
 var _footprint_left := 0.0
 var _footprint_time := 1.0
 var _aim: Variant = null # Vector2 trên mặt sàn
+# Vật đứng yên (nhà tù, rương, cổng) chỉ tìm một lần lúc dựng minimap.
+var _prisons: PackedVector2Array = []
+var _safes: Array[Interactable] = []
+var _gates: PackedVector2Array = []
+var _frame: StyleBoxFlat
 
 
 func _ready() -> void:
@@ -50,28 +55,51 @@ func _process(delta: float) -> void:
 		_scale = WIDTH / _bounds.size.x
 		custom_minimum_size = _bounds.size * _scale
 		size = custom_minimum_size
-		position = Vector2(get_viewport_rect().size.x - size.x - 12, 12)
+		_place()
+		get_viewport().size_changed.connect(_place)
+		for node in get_tree().get_nodes_in_group(GameTypes.GROUP_PRISONS):
+			_prisons.append(_at(node))
+		for node in get_tree().get_nodes_in_group(GameTypes.GROUP_SAFES):
+			_safes.append(node as Interactable)
+		for node in get_tree().get_nodes_in_group(GameTypes.GROUP_EXIT_GATES):
+			_gates.append(_at(node))
+		_frame = StyleBoxFlat.new()
+		_frame.bg_color = BG
+		_frame.set_corner_radius_all(12)
+		_frame.set_border_width_all(3)
+		_frame.border_color = Color(0.12, 0.1, 0.16)
+		_frame.set_expand_margin_all(4)
 	queue_redraw()
+
+
+## Góc trên phải (gọi lại khi đổi kích thước màn hình / xoay máy).
+func _place() -> void:
+	position = Vector2(get_viewport_rect().size.x - size.x - 14, 14)
 
 
 func _draw() -> void:
 	var rules := GameState.rules
 	if rules == null or _bounds.size == Vector2.ZERO:
 		return
-	draw_rect(Rect2(Vector2.ZERO, size), BG)
+	draw_style_box(_frame, Rect2(Vector2.ZERO, size))
 	for w in _walls:
 		draw_rect(Rect2(_to_map(w.position), w.size * _scale), WALL)
 	for b in _bushes:
 		draw_circle(_to_map(Vector2(b.x, b.y)), b.z * _scale, BUSH)
-	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_PRISONS):
-		draw_rect(Rect2(_at(node) - Vector2(6, 6), Vector2(12, 12)), PRISON, false, 2.0)
-	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_SAFES):
-		var progress: float = rules.safe_progress.get((node as Interactable).interactable_id, 0.0)
+	for p in _prisons:
+		draw_rect(Rect2(p - Vector2(7, 7), Vector2(14, 14)), PRISON, false, 2.5)
+	for safe in _safes:
+		if not is_instance_valid(safe):
+			continue
+		var progress: float = rules.safe_progress.get(safe.interactable_id, 0.0)
 		var c := Color(0.3, 0.9, 0.3) if progress >= 1.0 else Color(0.6, 0.4, 0.2).lerp(Color(1, 0.85, 0.2), progress)
-		draw_rect(Rect2(_at(node) - Vector2(4, 4), Vector2(8, 8)), c)
+		var p := _at(safe)
+		draw_rect(Rect2(p - Vector2(5, 4), Vector2(10, 8)), c)
+		draw_line(p + Vector2(-5, -1), p + Vector2(5, -1), Color(0, 0, 0, 0.6), 1.0) # nắp rương
 	var gate_color := Color(0.3, 1, 0.4) if rules.gate_open else Color(1, 0.3, 0.3)
-	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_EXIT_GATES):
-		draw_circle(_at(node), 5.0, gate_color)
+	for p in _gates:
+		draw_circle(p, 6.0, Color(0.12, 0.1, 0.16))
+		draw_circle(p, 4.5, gate_color)
 
 	var my_id := multiplayer.get_unique_id()
 	var hunter := GameState.my_role() == GameTypes.Role.HUNTER
@@ -81,16 +109,16 @@ func _draw() -> void:
 		for f in _footprints:
 			var a := clampf(1.0 - f.y / history, 0.15, 1.0) * fade
 			draw_circle(_to_map(Vector2(f.x, f.z)), 2.5, Color(STEP, a))
+	var me: EntityBase = null
 	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
 		var e := node as EntityBase
 		if e.peer_id == my_id:
-			continue
-		if not hunter and not e.is_hunter() and e.state != GameTypes.PlayerState.ESCAPED:
+			me = e
+		elif not hunter and not e.is_hunter() and e.state != GameTypes.PlayerState.ESCAPED:
 			draw_circle(_at(e), 3.5, ALLY if not GameTypes.is_out(e.state) else ALLY_OUT)
-	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
-		var e := node as EntityBase
-		if e.peer_id == my_id:
-			draw_circle(_at(e), 4.5, ME)
+	if me: # mình vẽ sau cùng cho nổi lên trên, có viền
+		draw_circle(_at(me), 6.0, Color(0.12, 0.1, 0.16))
+		draw_circle(_at(me), 4.5, ME)
 	if _aim != null:
 		var p := _to_map(_aim)
 		draw_line(p - Vector2(5, 5), p + Vector2(5, 5), ME, 2.0)

@@ -158,11 +158,6 @@ func can_be_shot(kind: GameTypes.ShotKind, id: int) -> bool:
 	return p != null and p.is_hunter() and p.hp > 0
 
 
-## Những viên đạn đã tới nơi, chờ xét trúng.
-func due_shots() -> Array:
-	return shots.keys().filter(func(shot_id: int) -> bool: return shots[shot_id]["lands"] <= elapsed)
-
-
 ## Đạn tới nơi; `hit_ids` là người trúng (GameState tính theo vị trí, thường
 ## chỉ người đầu tiên trên đường đạn). Súng thợ săn chỉ trúng người trốn, súng lục chỉ trúng thợ săn.
 func land_shot(shot_id: int, hit_ids: Array) -> bool:
@@ -574,10 +569,10 @@ func tick(delta: float, authoritative: bool = true) -> void:
 				if gate_opening_left == 0.0 and authoritative:
 					gate_open = true
 					_world_dirty = true
-			for p: PlayerRecord in players.values():
-				_tick_player(p, delta, authoritative)
+			for id: int in players:
+				_tick_player(players[id], delta, authoritative)
 			if authoritative:
-				for obj_id: int in placed.keys():
+				for obj_id: int in placed.keys(): # remove_placed() xóa khỏi placed nên duyệt bản sao
 					if placed[obj_id]["expires"] <= elapsed:
 						remove_placed(obj_id)
 
@@ -664,13 +659,24 @@ func hunter_id() -> int:
 	return 0
 
 
+## Đếm bằng vòng lặp thường (không tạo mảng mới): server gọi mỗi frame qua is_over().
 func count_escapees(s: GameTypes.PlayerState) -> int:
-	return escapee_ids().filter(func(id: int) -> bool: return state_of(id) == s).size()
+	var n := 0
+	for id: int in players:
+		var p: PlayerRecord = players[id]
+		if not p.is_hunter() and p.state == s:
+			n += 1
+	return n
 
 
 ## Người trốn chưa bị loại khỏi bản đồ (kể cả đang gục / bị kéo).
 func active_escapees() -> int:
-	return escapee_ids().filter(func(id: int) -> bool: return not GameTypes.is_out(state_of(id))).size()
+	var n := 0
+	for id: int in players:
+		var p: PlayerRecord = players[id]
+		if not p.is_hunter() and not GameTypes.is_out(p.state):
+			n += 1
+	return n
 
 
 ## Trận kết thúc khi không còn người trốn nào ở ngoài (bị nhốt, bị loại
