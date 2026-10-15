@@ -34,6 +34,7 @@ const QTE_GOOD_CHANCE := 0.25
 var _move := Vector2.ZERO
 var _interact := false
 var _skill_slot := -1 # ô thẻ bot bấm trong frame này (-1 = không)
+var _item_aim := Vector2.ZERO # chỗ ném thẻ (như người kéo thẻ): hướng x, z thế giới, độ xa 0..1
 var _last_pos := Vector2.ZERO
 var _check_timer := 0.0
 var _detour_time := 0.0
@@ -47,6 +48,10 @@ var _qte_pressed := false # vừa bấm trong vòng căn: thả nút ngay khi v�
 
 func get_move() -> Vector2:
 	return _move
+
+
+func get_aim() -> Vector2:
+	return _item_aim if _skill_slot >= 0 else Vector2.ZERO
 
 
 func is_pressed(action: StringName) -> bool:
@@ -129,7 +134,8 @@ func _think(rules: MatchRules, rec: PlayerRecord, delta: float) -> void:
 			if hunter_dist < SAFE_TO_RESCUE_DIST:
 				needy.append_array(downed) # thợ săn ở gần thì ném luôn, không kịp đỡ tay
 			var in_range := needy.filter(func(e: EntityBase) -> bool: return me.distance_to(e.flat_position()) <= throw_range)
-			_use_items(rules, rec, not in_range.is_empty(), hunter_dist)
+			var ally: Variant = _nearest(_flat_positions(in_range), me, me) if not in_range.is_empty() else null
+			_use_items(rules, rec, me, ally, hunter_pos, hunter_dist)
 		if entity.state == GameTypes.PlayerState.DOWNED:
 			target = me # đang ngã thì chỉ bò né thợ săn
 		elif _inside_prison(me, prisons):
@@ -181,16 +187,20 @@ func _set_aim_point(p: Vector3) -> void:
 		GameState.set_aim_point(p)
 
 
-## Chọn thẻ để bấm: túi máu khi có người cần cứu trong tầm; lựu đạn làm chậm
-## khi thợ săn sát mình; súng khi thợ săn đang kéo người (bắn hết máu thì nó
-## buông) hoặc đuổi gần; ván trượt khi bị đuổi sát.
-func _use_items(rules: MatchRules, rec: PlayerRecord, ally_needs_medkit: bool, hunter_dist: float) -> void:
+## Chọn thẻ để bấm: túi máu ném vào người cần cứu trong tầm (`ally`, null nếu
+## không có); lựu đạn làm chậm ném vào thợ săn khi nó sát mình; súng khi thợ
+## săn đang kéo người (bắn hết máu thì nó buông) hoặc đuổi gần; ván trượt khi
+## bị đuổi sát. Thẻ ném được thì kéo tới đúng chỗ như người chơi kéo thẻ.
+func _use_items(rules: MatchRules, rec: PlayerRecord, me: Vector2, ally: Variant, hunter_pos: Vector2, hunter_dist: float) -> void:
 	var hunter := _hunter_record(rules)
 	var wants := []
-	if ally_needs_medkit:
+	var spots := {} # loại thẻ -> chỗ ném
+	if ally != null:
 		wants.append(GameTypes.ItemType.MEDKIT)
+		spots[GameTypes.ItemType.MEDKIT] = ally
 	if hunter and hunter_dist < FLEE_DIST * 0.8 and hunter.speed_boost_left <= 0.0:
 		wants.append(GameTypes.ItemType.STUN_GRENADE)
+		spots[GameTypes.ItemType.STUN_GRENADE] = hunter_pos
 	var hunter_up := hunter != null and hunter.hp > 0
 	if hunter_up and hunter_dist < rules.config.bullet_range * 0.9 \
 			and (hunter.carrying_id != 0 or hunter_dist < FLEE_DIST * 1.5):
@@ -198,11 +208,15 @@ func _use_items(rules: MatchRules, rec: PlayerRecord, ally_needs_medkit: bool, h
 	if hunter_dist < FLEE_DIST:
 		wants.append(GameTypes.ItemType.SPEED_BOOST)
 	if rec.hp < rec.max_hp and hunter_dist > SAFE_TO_RESCUE_DIST:
-		wants.append(GameTypes.ItemType.MEDKIT) # tự hồi máu khi an toàn
+		wants.append(GameTypes.ItemType.MEDKIT) # tự hồi máu khi an toàn: thả dưới chân
 	for type: int in wants:
 		var slot := rec.deck.find(type)
 		if slot >= 0 and rules.can_use_item(entity.peer_id, slot):
 			_skill_slot = slot
+			_item_aim = Vector2.ZERO
+			var range_m := float(rules.catalog[type].get("aim_range", 0.0))
+			if spots.has(type) and range_m > 0.0:
+				_item_aim = ((spots[type] as Vector2) - me).limit_length(range_m) / range_m
 			return
 
 
@@ -213,6 +227,7 @@ func _use_slot_of(rules: MatchRules, rec: PlayerRecord, type: GameTypes.ItemType
 		if before.is_valid():
 			before.call()
 		_skill_slot = slot
+		_item_aim = Vector2.ZERO
 
 
 func _hunter_record(rules: MatchRules) -> PlayerRecord:

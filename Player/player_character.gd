@@ -14,6 +14,9 @@ extends EntityBase
 ## Hình: nhân vật chibi KayKit Adventurers (CC0, Player/models/), thợ săn là
 ## Rogue trùm đầu cầm nỏ (vòng đỏ dưới chân), người trốn là hiệp sĩ Knight.
 ## Animation chọn trên mọi máy theo trạng thái + tốc độ, không gửi qua mạng.
+## Hình (model, tên, vòng đỏ) nằm trong một node riêng, mỗi frame vẽ được nội
+## suy giữa hai lần tính vật lý (60 lần/giây) nên màn hình 90/120 Hz hay FPS
+## lệch nhịp vẫn mượt, không giật / xé hình khi chạy. Camera bám theo hình này.
 
 const HUNTER_SPEED := 4.8 # m/s
 const ESCAPEE_SPEED := 4.5
@@ -47,6 +50,9 @@ var _anim_name := ""
 var _oneshot_left := 0.0 # đang phát anim một lần (bắn, bị trúng, ném)
 var _last_pos := Vector3.ZERO
 var _speed := 0.0 # m/s trên mặt sàn, đo từ vị trí (client không có velocity thật)
+var _visual: Node3D # hình, top_level, nội suy theo khung hình (không có trên server riêng)
+var _xf_prev := Transform3D.IDENTITY # vị trí ở hai lần tính vật lý gần nhất
+var _xf_curr := Transform3D.IDENTITY
 var _concealed := false # máy này không được thấy (đứng trong bụi cây phe kia)
 var _air_velocity := Vector3.ZERO # chỉ server: đang bay vì đệm lò xo
 var _flying := false
@@ -80,7 +86,34 @@ func setup(id: int, p_role: GameTypes.Role, p_name: String, pos: Vector3, local:
 		add_child(load("res://Player/follow_camera.gd").new())
 	EventBus.item_used.connect(_on_item_used)
 	_last_pos = global_position if is_inside_tree() else pos
-	set_process(_anim != null or (local and is_hunter())) # animation, luồng ngắm
+
+
+func _ready() -> void:
+	set_process(_visual != null) # hình nội suy, animation, luồng ngắm; server riêng không cần
+	set_physics_process(_visual != null)
+	_snap_visual()
+
+
+## Đặt hình đúng chỗ nhân vật, bỏ nội suy (vừa vào trận, dịch chuyển).
+func _snap_visual() -> void:
+	_xf_curr = global_transform
+	_xf_prev = _xf_curr
+	if _visual:
+		_visual.global_transform = _xf_curr
+
+
+## Chạy sau khi Match đã di chuyển nhân vật trong lần tính vật lý này (node con
+## chạy sau node cha): ghi lại vị trí để _process nội suy.
+func _physics_process(_delta: float) -> void:
+	_xf_prev = _xf_curr
+	_xf_curr = global_transform
+	if _xf_prev.origin.distance_squared_to(_xf_curr.origin) > SNAP_DIST * SNAP_DIST:
+		_xf_prev = _xf_curr # dịch chuyển: nhảy luôn, không trượt ngang bản đồ
+
+
+## Vị trí đang vẽ trên màn hình (đã nội suy). Camera và luồng ngắm bám theo đây.
+func visual_position() -> Vector3:
+	return _visual.global_position if _visual else global_position
 
 
 func _build_body() -> void:
@@ -94,6 +127,10 @@ func _build_body() -> void:
 
 	if DisplayServer.get_name() == "headless": # server riêng không cần hình, chữ
 		return
+	_visual = Node3D.new()
+	_visual.name = "Visual"
+	_visual.top_level = true
+	add_child(_visual)
 	_build_model()
 
 	var label := Label3D.new()
@@ -102,7 +139,7 @@ func _build_body() -> void:
 	label.position.y = HEIGHT + 0.4
 	label.font_size = 48
 	label.modulate = Color(1, 0.9, 0.3) if is_local else Color.WHITE
-	add_child(label)
+	_visual.add_child(label)
 
 
 func _build_model() -> void:
@@ -110,7 +147,7 @@ func _build_model() -> void:
 	var model: Node3D = (load(path) as PackedScene).instantiate()
 	model.scale = Vector3.ONE * MODEL_SCALE * (1.1 if is_hunter() else 1.0)
 	model.rotation.y = PI # model nhìn về +Z, nhân vật nhìn về -Z
-	add_child(model)
+	_visual.add_child(model)
 	for node in model.find_children("*", "MeshInstance3D", true, false):
 		var mi := node as MeshInstance3D
 		# Vũ khí gắn ở tay (handslot_l/r): ẩn hết, trừ nỏ của thợ săn.
@@ -133,7 +170,7 @@ func _build_model() -> void:
 		ring.scale = Vector3(1, 0.1, 1)
 		ring.position.y = 0.05
 		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(ring)
+		_visual.add_child(ring)
 	var players := model.find_children("*", "AnimationPlayer", true, false)
 	if players.is_empty():
 		return
@@ -164,9 +201,10 @@ func _play_once(anim_name: String, seconds: float) -> void:
 
 ## Mọi máy: chọn anim theo trạng thái và tốc độ đo được.
 func _update_anim(delta: float) -> void:
-	var flat := global_position - _last_pos
+	var pos := _visual.global_position
+	var flat := pos - _last_pos
 	flat.y = 0.0
-	_last_pos = global_position
+	_last_pos = pos
 	if delta > 0.0:
 		_speed = lerpf(_speed, flat.length() / delta, minf(1.0, delta * 10.0))
 	if _oneshot_left > 0.0:
@@ -179,7 +217,7 @@ func _update_anim(delta: float) -> void:
 		GameTypes.PlayerState.IMPRISONED:
 			_play("Sit_Floor_Idle")
 			return
-	if _flying or global_position.y > 0.4:
+	if _flying or pos.y > 0.4:
 		_play("Jump_Idle")
 	elif _speed > RUN_SPEED_MIN:
 		_play("Running_A", clampf(_speed / ESCAPEE_SPEED, 0.6, 1.6))
@@ -279,9 +317,11 @@ func _escapee_interact(delta: float) -> void:
 		GameState.server_channel_rescue(peer_id, downed.peer_id, delta)
 
 
+## Mọi máy có màn hình: đặt hình nội suy giữa hai lần tính vật lý.
 ## Máy người chơi (thợ săn): đang kéo cần ngắm thì hiện luồng xanh từ chân tới
 ## hết tầm, dừng ở tường. Một raycast mỗi frame, chỉ lúc đang ngắm.
 func _process(delta: float) -> void:
+	_visual.global_transform = _xf_prev.interpolate_with(_xf_curr, Engine.get_physics_interpolation_fraction())
 	if _anim:
 		_update_anim(delta)
 	if not (is_local and is_hunter()):
@@ -303,7 +343,7 @@ func _process(delta: float) -> void:
 	if not hit.is_empty():
 		length = Vector2(hit["position"].x - from.x, hit["position"].z - from.z).length()
 	_beam.visible = true
-	_beam.global_position = global_position + Vector3(0, 0.06, 0)
+	_beam.global_position = _visual.global_position + Vector3(0, 0.06, 0)
 	_beam.global_rotation = Vector3(0, atan2(-dir.x, -dir.y), 0)
 	_beam_mesh.scale.z = maxf(length, 0.1)
 	_beam_mesh.position.z = -_beam_mesh.scale.z / 2.0

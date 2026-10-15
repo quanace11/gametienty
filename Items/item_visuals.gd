@@ -13,7 +13,6 @@ const PLACED_SCRIPTS := {
 const Medkit = preload("res://Items/effects/medkit.gd")
 const MEDKIT_FLIGHT := Medkit.FLIGHT_TIME
 const GRENADE_FLIGHT := 0.6
-const GRENADE_RADIUS := 2.5
 
 var _placed := {} # obj_id -> Node3D
 
@@ -57,13 +56,14 @@ func _on_removed(obj_id: int) -> void:
 	_placed.erase(obj_id)
 
 
-func _on_item_used(id: int, type: GameTypes.ItemType, target_id: int, target_pos: Vector3) -> void:
+func _on_item_used(id: int, type: GameTypes.ItemType, _target_id: int, target_pos: Vector3) -> void:
 	var from: Variant = _entity_pos(id)
 	if from == null:
 		return
 	match type:
 		T.MEDKIT:
-			if target_id == id:
+			var flat := Vector2((from as Vector3).x - target_pos.x, (from as Vector3).z - target_pos.z)
+			if flat.length() < 0.3: # chạm nhanh: thả ngay dưới chân
 				_heal_area(target_pos)
 			else:
 				_throw(_kit_mesh, from, target_pos, MEDKIT_FLIGHT, _heal_area.bind(target_pos))
@@ -113,7 +113,8 @@ func _blast(pos: Vector3) -> void:
 	mi.global_position = pos + Vector3(0, 0.05, 0)
 	mi.scale = Vector3(0.2, 1, 0.2)
 	var tween := mi.create_tween()
-	tween.tween_property(mi, "scale", Vector3(GRENADE_RADIUS, 1, GRENADE_RADIUS), 0.15)
+	var r := _area(T.STUN_GRENADE)
+	tween.tween_property(mi, "scale", Vector3(r, 1, r), 0.15)
 	tween.tween_property(mi, "transparency", 1.0, 0.35)
 	tween.tween_callback(mi.queue_free)
 
@@ -160,8 +161,8 @@ func _build_meshes() -> void:
 	var m := _glow(Color(0.9, 0.9, 0.5))
 	_blast_mesh.material = m
 	_heal_mesh = CylinderMesh.new()
-	_heal_mesh.top_radius = Medkit.AREA_RADIUS
-	_heal_mesh.bottom_radius = Medkit.AREA_RADIUS
+	_heal_mesh.top_radius = _area(T.MEDKIT) # đúng bán kính cứu của túi
+	_heal_mesh.bottom_radius = _heal_mesh.top_radius
 	_heal_mesh.height = 0.04
 	_heal_mesh.radial_segments = 24
 	_heal_mesh.rings = 1
@@ -185,3 +186,10 @@ func _glow(c: Color) -> StandardMaterial3D:
 	m.emission_enabled = true
 	m.emission = c
 	return m
+
+
+## Bán kính vùng tác dụng của thẻ `type` (ItemData.area_radius).
+static func _area(type: GameTypes.ItemType) -> float:
+	if GameState.rules == null:
+		return 2.0
+	return float(GameState.rules.catalog.get(type, {}).get("area", 2.0))

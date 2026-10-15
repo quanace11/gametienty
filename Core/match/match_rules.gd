@@ -29,7 +29,7 @@ var gate_opening_left := 0.0 ## > 0: cổng đang rung, chưa qua được
 var coins := {} # coin_id -> giá trị, những cọc tiền còn trên sàn
 var coins_taken := {} # coin_id -> id người nhặt
 var placed := {} # obj_id -> {"type": ItemType, "pos": Vector3, "yaw": float, "owner": id, "expires": elapsed}
-var catalog := {} ## ItemType -> {"cost": int, "cooldown": float}, Items khai báo (setup_items)
+var catalog := {} ## ItemType -> {"cost": int, "cooldown": float, "roles", "aim_range": float, "area": float}, Items khai báo (setup_items)
 ## Đạn đang bay: shot_id -> {"kind": ShotKind, "owner": id, "from": Vector3, "to": Vector3, "fired": elapsed, "lands": elapsed}
 var shots := {}
 
@@ -285,7 +285,8 @@ func setup_items(items: Dictionary, decks: Dictionary, defaults: Dictionary) -> 
 	catalog.clear()
 	for type: int in items:
 		var it: Variant = items[type]
-		catalog[type] = {"cost": it.cost, "cooldown": it.cooldown, "roles": Array(it.allowed_roles)} if it is Resource else it
+		catalog[type] = {"cost": it.cost, "cooldown": it.cooldown, "roles": Array(it.allowed_roles),
+			"aim_range": it.aim_range, "area": it.area_radius} if it is Resource else it
 	for id: int in players:
 		var p: PlayerRecord = players[id]
 		p.deck = _valid_deck(decks.get(id, []), p.role)

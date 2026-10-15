@@ -1,12 +1,9 @@
 extends "res://Items/effects/place_object.gd"
-## Bẫy kẹp: đặt dưới chân, thợ săn dẫm vào thì bị kẹp (chạy chậm). Thợ săn thấy mờ.
+## Bẫy kẹp: thợ săn dẫm vào thì bị kẹp (chạy chậm). Thợ săn thấy mờ.
+## Kéo thẻ để đặt xa, chạm nhanh thì đặt dưới chân.
 
 func _type() -> GameTypes.ItemType:
 	return GameTypes.ItemType.TRAP
-
-
-func _distance() -> float:
-	return 0.0
 
 
 func _lifetime() -> float:

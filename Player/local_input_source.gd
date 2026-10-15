@@ -4,6 +4,8 @@ extends InputSource
 ## Ngắm bắn: kéo cần ngắm (aim_*) hoặc giữ chuột phải, thả ra là bắn theo hướng
 ## đó. Kéo về giữa cần hoặc thả tay trên nút hủy (aim_cancel) thì không bắn. Lướt
 ## ngang qua nút hủy rồi kéo ra thì vẫn ngắm tiếp (không khóa hủy cả lần kéo).
+## Thẻ kéo-thả: UI giữ item_* (hướng + độ xa 0..1) cùng lúc bấm skill_N; lúc đó
+## get_aim() trả đúng vector này (không chuẩn hóa) để server tính chỗ ném.
 
 const KEYS := {
 	&"move_left": [KEY_A, KEY_LEFT],
@@ -24,6 +26,11 @@ const KEYS := {
 	&"aim_down": [],
 	&"aim_hold": [], # ngón tay đang đặt trên cần ngắm
 	&"aim_cancel": [],
+	# Chỗ ném thẻ đạo cụ (UI giữ cùng lúc bấm skill_N), độ mạnh 0..1, không có phím.
+	&"item_left": [],
+	&"item_right": [],
+	&"item_up": [],
+	&"item_down": [],
 }
 const AIM_DEAD := 0.3 ## cần ngắm kéo ít hơn chừng này thì coi như không ngắm (thả ra là hủy)
 const SHOOT_HOLD := 0.15 ## giây giữ nút "shoot" sau khi thả cần, để server chắc chắn nhận được
@@ -38,7 +45,8 @@ func _init() -> void:
 	for action: StringName in KEYS:
 		if InputMap.has_action(action):
 			continue
-		InputMap.add_action(action, 0.05 if String(action).begins_with("aim") else 0.2)
+		var s := String(action)
+		InputMap.add_action(action, 0.0 if s.begins_with("item") else 0.05 if s.begins_with("aim") else 0.2)
 		for key: Key in KEYS[action]:
 			var ev := InputEventKey.new()
 			ev.physical_keycode = key
@@ -78,6 +86,10 @@ func get_move() -> Vector2:
 func get_aim() -> Vector2:
 	if _shoot_left > 0.0:
 		return _shot_aim
+	var item := Vector2(Input.get_action_raw_strength(&"item_right") - Input.get_action_raw_strength(&"item_left"),
+		Input.get_action_raw_strength(&"item_down") - Input.get_action_raw_strength(&"item_up"))
+	if item != Vector2.ZERO:
+		return item.limit_length(1.0) # thẻ kéo-thả: giữ độ xa
 	return aiming_direction()
 
 
