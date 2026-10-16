@@ -37,7 +37,7 @@ extends Resource
 @export var hunter_knockout_slow_factor := 0.5
 @export var rifle_range := 12.0 # mét, tầm súng thợ săn (tường chặn đạn)
 @export var rifle_speed := 15.0 # m/s, đạn bay thẳng, đủ chậm để người trốn thấy thì né được
-@export var rifle_radius := 0.4 # mét, đạn đi qua gần chừng này (cộng thân người) là trúng; bằng nửa bề rộng luồng ngắm
+@export var rifle_radius := 0.6 # mét, đạn đi qua gần chừng này (cộng thân người) là trúng; bằng nửa bề rộng luồng ngắm
 @export var bullet_range := 10.0 # mét, tầm súng lục
 @export var bullet_speed := 30.0
 @export var bullet_radius := 0.8
