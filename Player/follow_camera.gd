@@ -13,6 +13,7 @@ const FOLLOW_SPEED := 8.0
 const SPECTATE := &"spectate_next"
 
 var _watch: EntityBase # người đang xem khi mình đã ra khỏi trận (null = chính mình)
+var _retry_left := 0.0
 
 
 func _ready() -> void:
@@ -41,7 +42,9 @@ func _watched() -> Node3D:
 		_watch = null
 		return get_parent()
 	var next := InputMap.has_action(SPECTATE) and Input.is_action_just_pressed(SPECTATE)
-	if next or not _watchable(_watch, me):
+	_retry_left -= get_process_delta_time()
+	if next or (not _watchable(_watch, me) and _retry_left <= 0.0):
+		_retry_left = 0.25 # không ai để xem thì 0,25 giây mới tìm lại, khỏi quét nhóm mỗi frame
 		_watch = _next_watch(me, not next)
 	return _watch if _watch else me
 

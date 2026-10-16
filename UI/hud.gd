@@ -89,7 +89,9 @@ func _refresh(rules: MatchRules) -> void:
 		_set_text(_timer, "Bắt đầu sau %d" % ceili(rules.countdown_left))
 	else:
 		_set_text(_timer, "%d:%02d" % [t / 60, t % 60])
-	_timer.add_theme_color_override("font_color", UiTheme.RED if t <= 30 else Color.WHITE)
+	var timer_color := UiTheme.RED if t <= 30 else Color.WHITE
+	if _timer.get_theme_color(&"font_color") != timer_color: # đặt lại mỗi lần là dựng lại bố cục thanh trên
+		_timer.add_theme_color_override("font_color", timer_color)
 	_set_text(_keys, "Trận linh %d/%d" % [rules.safes_unlocked(), rules.safes_required()])
 	_keys_bar.set_value(float(rules.safes_unlocked()) / maxf(1.0, rules.safes_required()))
 	if rules.gate_open:

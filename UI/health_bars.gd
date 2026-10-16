@@ -36,10 +36,11 @@ func _process(delta: float) -> void:
 		_entities.clear()
 		for n in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
 			_entities.append(n as EntityBase)
-	for id: int in _hit_left.keys():
-		_hit_left[id] -= delta
-		if _hit_left[id] <= 0.0:
-			_hit_left.erase(id)
+	if not _hit_left.is_empty(): # keys() tạo mảng mới, chỉ gọi khi đang có người vừa trúng
+		for id: int in _hit_left.keys():
+			_hit_left[id] -= delta
+			if _hit_left[id] <= 0.0:
+				_hit_left.erase(id)
 	queue_redraw()
 
 
