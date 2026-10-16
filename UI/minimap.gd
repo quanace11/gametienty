@@ -1,6 +1,6 @@
 extends Control
-## Minimap góc trên phải. Vẽ tường, rương (màu theo tiến độ), cổng, nhà tù,
-## mình và đồng đội (người trốn). Thợ săn thấy dấu chân radar mờ dần, và chạm
+## Minimap góc trên phải. Vẽ tường, trận linh (hình thoi, màu theo tiến độ),
+## lối ra, huyết trận, mình và đồng môn (đệ tử). Thợ săn thấy dấu chân radar mờ dần, và chạm
 ## vào minimap để chọn điểm dịch chuyển (GameState.set_aim_point).
 ## Chỉ đọc GameState / EventBus, vẽ lại 10 lần/giây (đỡ tốn pin điện thoại).
 
@@ -11,9 +11,11 @@ const WALL := Color(0.75, 0.72, 0.65)
 const ME := Color(1, 0.9, 0.3)
 const ALLY := Color(0.35, 0.65, 1.0)
 const ALLY_OUT := Color(0.5, 0.5, 0.5)
-const PRISON := Color(0.6, 0.45, 0.9)
+const PRISON := Color(0.95, 0.2, 0.25) # huyết trận
 const STEP := Color(1, 0.3, 0.3)
 const BUSH := Color(0.3, 0.68, 0.3, 0.7)
+
+var _diamond := PackedVector2Array([Vector2.ZERO, Vector2.ZERO, Vector2.ZERO, Vector2.ZERO]) # dùng lại, không tạo mới mỗi lần vẽ
 
 var _bounds := Rect2()
 var _walls: Array[Rect2] = []
@@ -92,10 +94,13 @@ func _draw() -> void:
 		if not is_instance_valid(safe):
 			continue
 		var progress: float = rules.safe_progress.get(safe.interactable_id, 0.0)
-		var c := Color(0.3, 0.9, 0.3) if progress >= 1.0 else Color(0.6, 0.4, 0.2).lerp(Color(1, 0.85, 0.2), progress)
+		var c := Color(1, 0.82, 0.3) if progress >= 1.0 else Color(0.3, 0.6, 0.8).lerp(Color(0.5, 0.95, 1.0), progress)
 		var p := _at(safe)
-		draw_rect(Rect2(p - Vector2(5, 4), Vector2(10, 8)), c)
-		draw_line(p + Vector2(-5, -1), p + Vector2(5, -1), Color(0, 0, 0, 0.6), 1.0) # nắp rương
+		_diamond[0] = p + Vector2(0, -6)
+		_diamond[1] = p + Vector2(5, 0)
+		_diamond[2] = p + Vector2(0, 6)
+		_diamond[3] = p + Vector2(-5, 0)
+		draw_colored_polygon(_diamond, c) # linh tinh
 	var gate_color := Color(0.3, 1, 0.4) if rules.gate_open else Color(1, 0.3, 0.3)
 	for p in _gates:
 		draw_circle(p, 6.0, Color(0.12, 0.1, 0.16))

@@ -1,54 +1,71 @@
 extends Node3D
-## Hình đạn và vụ nổ (chỉ để nhìn, không quyết định trúng hay trượt).
-## Súng thợ săn bắn tên lửa chibi có lửa đuôi, bay thẳng rồi nổ thành quả cầu
-## lửa + khói ở chỗ chạm (người đầu tiên trên đường bay, tường, hoặc hết tầm).
-## Súng lục bắn viên đạn vàng, chạm thì tóe lửa nhỏ. Ai bị trúng thật do server
-## tính (GameState), file này chỉ đoán chỗ nổ cho đẹp.
-## Tên lửa và vụ nổ lấy từ pool, không tạo/xóa node mỗi phát; _process chỉ chạy
+## Hình phi kiếm và kiếm khí (chỉ để nhìn, không quyết định trúng hay trượt).
+## Ma tu (súng thợ săn) hóa ra một thanh phi kiếm tím đen trên vai, kiếm xoay
+## mũi về phía mục tiêu rồi phóng đi để lại vệt sáng; chạm người đầu tiên trên
+## đường bay, tường hoặc hết tầm thì nổ kiếm khí: chớp sáng, vòng khí loang ra và
+## mảnh sáng văng tung. Phù kiếm (súng lục) là thanh kiếm nhỏ màu ngọc, nổ nhỏ.
+## Ai bị trúng thật do server tính (GameState), file này chỉ đoán chỗ nổ cho đẹp.
+## Thời điểm tới nơi giữ đúng `flight` của server: đoạn hóa kiếm ăn vào đầu đường bay.
+## Kiếm và vụ nổ lấy từ pool, không tạo/xóa node mỗi phát; _process chỉ chạy
 ## khi có thứ đang bay hoặc đang nổ.
 
-const ROCKET_SCALE := 1.6
-const EXPLOSION_TIME := 0.7
-const ROCKET_BLAST := 1.0 # bán kính quả cầu lửa lớn nhất, mét
-const BULLET_BLAST := 0.35
-const SMOKE_PUFFS := 5
+const SWORD_SCALE := 1.5
+const SMALL_SWORD_SCALE := 0.8
+const CONJURE_TIME := 0.16 # giây hóa kiếm trên vai (tối đa, kẹp theo flight)
+const CONJURE_HEIGHT := 0.7 # kiếm hiện cao hơn chỗ bắn bao nhiêu mét
+const SPIN_SPEED := 14.0 # rad/giây, kiếm lăn quanh trục bay
+const EXPLOSION_TIME := 0.6
+const SWORD_BLAST := 1.0 # bán kính kiếm khí lớn nhất, mét
+const SMALL_BLAST := 0.4
+const SHARDS := 6
 const HIT_PADDING := 0.3
 
 class Shot:
 	var node: Node3D
-	var flame: Node3D
+	var blade: Node3D # phần lăn quanh trục bay
+	var trail: Node3D
 	var kind: GameTypes.ShotKind
 	var owner_id := 0
 	var from := Vector3.ZERO
+	var hover := Vector3.ZERO
 	var to := Vector3.ZERO
 	var flight := 0.1
+	var conjure := 0.05
 	var age := 0.0
 	var targets: Array[Node] = []
 
 class Blast:
 	var node: Node3D
-	var fire: Node3D
+	var ring: Node3D
 	var core: Node3D
-	var puffs: Array[Node3D] = []
+	var shards: Array[Node3D] = []
+	var kind: GameTypes.ShotKind
 	var size := 1.0
 	var age := 0.0
 
 var _shots: Array[Shot] = []
 var _blasts: Array[Blast] = []
-var _free_rockets: Array[Shot] = []
-var _free_bullets: Array[Shot] = []
+var _free_swords: Array[Shot] = []
+var _free_small: Array[Shot] = []
 var _free_blasts: Array[Blast] = []
+var _free_small_blasts: Array[Blast] = []
+
+## Bộ mesh một loại kiếm (màu riêng), dùng chung cho mọi thanh cùng loại.
+class SwordSet:
+	var blade: BoxMesh
+	var tip: PrismMesh
+	var guard: BoxMesh
+	var grip: CylinderMesh
+	var pommel: SphereMesh
+	var trail: BoxMesh
+	var ring: TorusMesh
+	var core: SphereMesh
+	var shard: PrismMesh
 
 static var _built := false
-static var _body_mesh: CylinderMesh
-static var _nose_mesh: CylinderMesh
-static var _fin_mesh: BoxMesh
-static var _flame_mesh: SphereMesh
-static var _bullet_mesh: SphereMesh
-static var _fire_mesh: SphereMesh
-static var _core_mesh: SphereMesh
-static var _smoke_mesh: SphereMesh
-static var _puff_dirs: Array[Vector3] = []
+static var _demon: SwordSet # phi kiếm ma tu
+static var _jade: SwordSet # phù kiếm
+static var _shard_dirs: Array[Vector3] = []
 
 
 func _ready() -> void:
@@ -56,7 +73,7 @@ func _ready() -> void:
 	set_process(false)
 
 
-## Bắt đầu vẽ một viên đạn bay từ `from` tới `to` trong `flight` giây.
+## Bắt đầu vẽ một thanh kiếm bay từ `from` tới `to` trong `flight` giây.
 func fire(kind: GameTypes.ShotKind, owner_id: int, from: Vector3, to: Vector3, flight: float) -> void:
 	_build_shared()
 	var shot := _take_shot(kind)
@@ -65,14 +82,18 @@ func fire(kind: GameTypes.ShotKind, owner_id: int, from: Vector3, to: Vector3, f
 	shot.from = from
 	shot.to = to
 	shot.flight = maxf(flight, 0.05)
+	shot.conjure = minf(CONJURE_TIME, shot.flight * 0.35)
+	shot.hover = from + Vector3.UP * CONJURE_HEIGHT * (1.0 if kind == GameTypes.ShotKind.RIFLE else 0.5)
 	shot.age = 0.0
 	shot.targets.clear()
 	for n in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
 		if (n as EntityBase).peer_id != owner_id:
 			shot.targets.append(n)
 	shot.node.visible = true
-	shot.node.global_position = from
-	if Vector2(to.x - from.x, to.z - from.z).length_squared() > 0.0001:
+	shot.node.global_position = shot.hover
+	shot.node.scale = Vector3.ONE * 0.001
+	shot.trail.visible = false
+	if shot.hover.distance_squared_to(to) > 0.0001:
 		shot.node.look_at(to, Vector3.UP)
 	_shots.append(shot)
 	set_process(true)
@@ -83,13 +104,22 @@ func _process(delta: float) -> void:
 	while i >= 0:
 		var shot := _shots[i]
 		shot.age += delta
-		var t := minf(shot.age / shot.flight, 1.0)
-		shot.node.global_position = shot.from.lerp(shot.to, t)
-		if shot.flame:
-			var f := 1.0 + 0.25 * sin(shot.age * 60.0)
-			shot.flame.scale = Vector3(0.16 * f, 0.16 * f, 0.38 * f)
-		if t >= 1.0 or _touches_target(shot):
-			_explode(shot.node.global_position, ROCKET_BLAST if shot.kind == GameTypes.ShotKind.RIFLE else BULLET_BLAST)
+		var full := SWORD_SCALE if shot.kind == GameTypes.ShotKind.RIFLE else SMALL_SWORD_SCALE
+		shot.blade.rotation.z += SPIN_SPEED * delta
+		var done := false
+		if shot.age < shot.conjure:
+			# Hóa kiếm: phồng ra từ hư không, hơi rung trên vai.
+			var c := shot.age / shot.conjure
+			shot.node.scale = Vector3.ONE * maxf(full * (1.0 - pow(1.0 - c, 3.0)), 0.001)
+			shot.node.global_position = shot.hover + Vector3.UP * 0.05 * sin(shot.age * 50.0)
+		else:
+			var t := minf((shot.age - shot.conjure) / maxf(shot.flight - shot.conjure, 0.01), 1.0)
+			shot.node.scale = Vector3.ONE * full
+			shot.node.global_position = shot.hover.lerp(shot.to, t * t * (2.0 - t)) # phóng vút, chậm dần ở cuối
+			shot.trail.visible = true
+			done = t >= 1.0 or _touches_target(shot)
+		if done:
+			_explode(shot.kind, shot.node.global_position)
 			_release_shot(shot)
 			_shots.remove_at(i)
 		i -= 1
@@ -99,7 +129,7 @@ func _process(delta: float) -> void:
 		b.age += delta
 		if b.age >= EXPLOSION_TIME:
 			b.node.visible = false
-			_free_blasts.append(b)
+			(_free_blasts if b.kind == GameTypes.ShotKind.RIFLE else _free_small_blasts).append(b)
 			_blasts.remove_at(i)
 		else:
 			_animate_blast(b, b.age / EXPLOSION_TIME)
@@ -108,7 +138,7 @@ func _process(delta: float) -> void:
 		set_process(false)
 
 
-## Đạn chạm người đầu tiên mà loại đạn này trúng được (đang nhìn thấy) thì nổ luôn ở đó.
+## Kiếm chạm người đầu tiên mà loại này trúng được (đang nhìn thấy) thì nổ luôn ở đó.
 func _touches_target(shot: Shot) -> bool:
 	if GameState.rules == null:
 		return false
@@ -126,9 +156,11 @@ func _touches_target(shot: Shot) -> bool:
 	return false
 
 
-func _explode(pos: Vector3, size: float) -> void:
-	var b: Blast = _free_blasts.pop_back() if not _free_blasts.is_empty() else _new_blast()
-	b.size = size
+func _explode(kind: GameTypes.ShotKind, pos: Vector3) -> void:
+	var big := kind == GameTypes.ShotKind.RIFLE
+	var pool := _free_blasts if big else _free_small_blasts
+	var b: Blast = pool.pop_back() if not pool.is_empty() else _new_blast(kind)
+	b.size = SWORD_BLAST if big else SMALL_BLAST
 	b.age = 0.0
 	b.node.global_position = pos
 	b.node.visible = true
@@ -136,64 +168,63 @@ func _explode(pos: Vector3, size: float) -> void:
 	_blasts.append(b)
 
 
-## t từ 0 tới 1: chớp vàng, rồi cầu lửa cam phồng ra và xẹp, khói bung ra bay lên rồi tan.
+## t từ 0 tới 1: chớp sáng, vòng kiếm khí loang ra sát đất rồi mỏng dần, mảnh sáng văng ra rồi tắt.
 func _animate_blast(b: Blast, t: float) -> void:
-	var flash := minf(t / 0.06, 1.0) * clampf(1.0 - (t - 0.06) / 0.16, 0.0, 1.0)
-	b.core.scale = Vector3.ONE * maxf(b.size * 2.3 * flash, 0.001)
-	var grow := 1.0 - pow(1.0 - minf(t / 0.3, 1.0), 3.0)
-	var fire := b.size * 2.0 * grow * clampf(1.0 - (t - 0.4) / 0.3, 0.0, 1.0)
-	b.fire.scale = Vector3.ONE * maxf(fire, 0.001)
-	var puff := b.size * 1.1 * sin(PI * t)
-	for k in b.puffs.size():
-		var d := _puff_dirs[k]
-		b.puffs[k].position = (d * (0.3 + 0.9 * t) + Vector3.UP * (0.9 * t)) * b.size
-		b.puffs[k].scale = Vector3.ONE * maxf(puff * (0.8 + 0.1 * k), 0.001)
+	var flash := minf(t / 0.05, 1.0) * clampf(1.0 - (t - 0.05) / 0.18, 0.0, 1.0)
+	b.core.scale = Vector3.ONE * maxf(b.size * 1.6 * flash, 0.001)
+	var grow := 1.0 - pow(1.0 - minf(t / 0.45, 1.0), 3.0)
+	var thin := clampf(1.0 - (t - 0.35) / 0.65, 0.0, 1.0)
+	b.ring.scale = Vector3(b.size * 2.4 * grow, maxf(thin, 0.001), b.size * 2.4 * grow) + Vector3.ONE * 0.001
+	var fly := 1.0 - pow(1.0 - t, 2.0)
+	var shard := b.size * (1.0 - t)
+	for k in b.shards.size():
+		var d := _shard_dirs[k]
+		b.shards[k].position = (d * 1.6 * fly + Vector3.UP * 0.6 * sin(PI * t)) * b.size
+		b.shards[k].scale = Vector3.ONE * maxf(shard, 0.001)
 
 
 func _take_shot(kind: GameTypes.ShotKind) -> Shot:
-	var rocket := kind == GameTypes.ShotKind.RIFLE
-	var pool := _free_rockets if rocket else _free_bullets
+	var big := kind == GameTypes.ShotKind.RIFLE
+	var pool := _free_swords if big else _free_small
 	if not pool.is_empty():
 		return pool.pop_back()
-	return _new_rocket() if rocket else _new_bullet()
+	return _new_sword(_demon if big else _jade)
 
 
 func _release_shot(shot: Shot) -> void:
 	shot.node.visible = false
 	shot.targets.clear()
-	(_free_rockets if shot.kind == GameTypes.ShotKind.RIFLE else _free_bullets).append(shot)
+	(_free_swords if shot.kind == GameTypes.ShotKind.RIFLE else _free_small).append(shot)
 
 
-## Tên lửa chibi: thân trắng, mũi đỏ, cánh đỏ, lửa đuôi; mũi hướng -Z để look_at quay theo đường bay.
-func _new_rocket() -> Shot:
-	var shot := Shot.new()
-	shot.node = Node3D.new()
-	shot.node.scale = Vector3.ONE * ROCKET_SCALE
-	add_child(shot.node)
-	_part(shot.node, _body_mesh, Vector3.ZERO, Vector3(-90, 0, 0))
-	_part(shot.node, _nose_mesh, Vector3(0, 0, -0.36), Vector3(-90, 0, 0))
-	_part(shot.node, _fin_mesh, Vector3(0, 0, 0.2), Vector3.ZERO)
-	_part(shot.node, _fin_mesh, Vector3(0, 0, 0.2), Vector3(0, 0, 90))
-	shot.flame = _part(shot.node, _flame_mesh, Vector3(0, 0, 0.42), Vector3.ZERO)
-	return shot
-
-
-func _new_bullet() -> Shot:
+## Thanh kiếm: lưỡi + mũi, chắn kiếm, chuôi, núm; mũi hướng -Z để look_at quay theo đường bay.
+func _new_sword(s: SwordSet) -> Shot:
 	var shot := Shot.new()
 	shot.node = Node3D.new()
 	add_child(shot.node)
-	_part(shot.node, _bullet_mesh, Vector3.ZERO, Vector3.ZERO)
+	shot.blade = Node3D.new()
+	shot.node.add_child(shot.blade)
+	_part(shot.blade, s.blade, Vector3(0, 0, -0.12), Vector3.ZERO)
+	_part(shot.blade, s.tip, Vector3(0, 0, -0.52), Vector3(-90, 0, 0))
+	_part(shot.blade, s.guard, Vector3(0, 0, 0.24), Vector3.ZERO)
+	_part(shot.blade, s.grip, Vector3(0, 0, 0.36), Vector3(90, 0, 0))
+	_part(shot.blade, s.pommel, Vector3(0, 0, 0.47), Vector3.ZERO)
+	shot.trail = _part(shot.node, s.trail, Vector3(0, 0, 0.9), Vector3.ZERO)
 	return shot
 
 
-func _new_blast() -> Blast:
+func _new_blast(kind: GameTypes.ShotKind) -> Blast:
+	var s := _demon if kind == GameTypes.ShotKind.RIFLE else _jade
 	var b := Blast.new()
+	b.kind = kind
 	b.node = Node3D.new()
 	add_child(b.node)
-	for k in SMOKE_PUFFS:
-		b.puffs.append(_part(b.node, _smoke_mesh, Vector3.ZERO, Vector3.ZERO))
-	b.fire = _part(b.node, _fire_mesh, Vector3.ZERO, Vector3.ZERO)
-	b.core = _part(b.node, _core_mesh, Vector3.ZERO, Vector3.ZERO)
+	for k in SHARDS:
+		var sh := _part(b.node, s.shard, Vector3.ZERO, Vector3.ZERO)
+		sh.look_at_from_position(Vector3.ZERO, _shard_dirs[k], Vector3.UP if absf(_shard_dirs[k].y) < 0.9 else Vector3.FORWARD)
+		b.shards.append(sh)
+	b.ring = _part(b.node, s.ring, Vector3(0, 0.1, 0), Vector3.ZERO)
+	b.core = _part(b.node, s.core, Vector3.ZERO, Vector3.ZERO)
 	return b
 
 
@@ -211,43 +242,64 @@ static func _build_shared() -> void:
 	if _built:
 		return
 	_built = true
-	var white := _mat(Color(0.95, 0.95, 0.92), false)
-	var red := _mat(Color(0.9, 0.25, 0.2), false)
-	_body_mesh = CylinderMesh.new()
-	_body_mesh.top_radius = 0.11
-	_body_mesh.bottom_radius = 0.11
-	_body_mesh.height = 0.5
-	_body_mesh.radial_segments = 8
-	_body_mesh.rings = 1
-	_body_mesh.material = white
-	_nose_mesh = CylinderMesh.new()
-	_nose_mesh.top_radius = 0.0
-	_nose_mesh.bottom_radius = 0.11
-	_nose_mesh.height = 0.22
-	_nose_mesh.radial_segments = 8
-	_nose_mesh.rings = 1
-	_nose_mesh.material = red
-	_fin_mesh = BoxMesh.new()
-	_fin_mesh.size = Vector3(0.38, 0.04, 0.16)
-	_fin_mesh.material = red
-	_flame_mesh = _sphere(0.5, _mat(Color(1.0, 0.7, 0.15), true))
-	_bullet_mesh = _sphere(0.08, _mat(Color(1, 0.95, 0.4), true))
-	var fire := _mat(Color(1.0, 0.5, 0.12), false)
-	fire.emission_enabled = true # tự sáng nhưng vẫn có khối (mặt khuất tối hơn)
-	fire.emission = Color(1.0, 0.4, 0.05)
-	fire.emission_energy_multiplier = 0.7
-	_fire_mesh = _sphere(0.5, fire)
-	_core_mesh = _sphere(0.5, _mat(Color(1.0, 0.92, 0.45), true))
-	_smoke_mesh = _sphere(0.5, _mat(Color(0.66, 0.64, 0.62), false))
-	for k in SMOKE_PUFFS:
-		var a := TAU * k / SMOKE_PUFFS
-		_puff_dirs.append(Vector3(cos(a), 0.15 * (k % 2), sin(a)))
+	# Ma tu: lưỡi tím đen tỏa sáng đỏ tím, chắn và chuôi đen, vệt tím.
+	_demon = _sword_set(Color(0.3, 0.08, 0.4), Color(0.6, 0.08, 0.35), Color(0.12, 0.08, 0.14), Color(0.75, 0.35, 1.0, 0.45))
+	# Phù kiếm: lưỡi ngọc, chắn vàng, vệt xanh ngọc.
+	_jade = _sword_set(Color(0.55, 0.95, 0.85), Color(0.3, 0.9, 0.8), Color(0.85, 0.65, 0.25), Color(0.45, 1.0, 0.85, 0.45))
+	for k in SHARDS:
+		var a := TAU * k / SHARDS
+		_shard_dirs.append(Vector3(cos(a), 0.35 * ((k % 3) - 1), sin(a)).normalized())
 
 
-static func _mat(color: Color, glow: bool) -> StandardMaterial3D:
+static func _sword_set(blade_color: Color, glow_color: Color, hilt_color: Color, trail_color: Color) -> SwordSet:
+	var s := SwordSet.new()
+	var blade := StandardMaterial3D.new()
+	blade.albedo_color = blade_color
+	blade.metallic = 0.3
+	blade.emission_enabled = true # tự sáng như linh khí phủ lưỡi kiếm
+	blade.emission = glow_color
+	blade.emission_energy_multiplier = 0.6
+	var hilt := _mat(hilt_color, false)
+	var glow := _mat(glow_color.lightened(0.3), true)
+	var trail := _mat(trail_color, true)
+	trail.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	s.blade = BoxMesh.new()
+	s.blade.size = Vector3(0.09, 0.025, 0.64)
+	s.blade.material = blade
+	s.tip = PrismMesh.new()
+	s.tip.size = Vector3(0.09, 0.16, 0.025)
+	s.tip.material = blade
+	s.guard = BoxMesh.new()
+	s.guard.size = Vector3(0.26, 0.05, 0.05)
+	s.guard.material = hilt
+	s.grip = CylinderMesh.new()
+	s.grip.top_radius = 0.025
+	s.grip.bottom_radius = 0.025
+	s.grip.height = 0.2
+	s.grip.radial_segments = 6
+	s.grip.rings = 1
+	s.grip.material = hilt
+	s.pommel = _sphere(0.04, glow)
+	s.trail = BoxMesh.new()
+	s.trail.size = Vector3(0.14, 0.02, 1.1)
+	s.trail.material = trail
+	s.ring = TorusMesh.new()
+	s.ring.inner_radius = 0.42
+	s.ring.outer_radius = 0.5
+	s.ring.rings = 16
+	s.ring.ring_segments = 4
+	s.ring.material = glow
+	s.core = _sphere(0.5, glow)
+	s.shard = PrismMesh.new()
+	s.shard.size = Vector3(0.1, 0.35, 0.03)
+	s.shard.material = glow
+	return s
+
+
+static func _mat(color: Color, unshaded: bool) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = color
-	if glow:
+	if unshaded:
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	return m
 

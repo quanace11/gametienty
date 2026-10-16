@@ -253,23 +253,23 @@ func _draw() -> void:
 	var ac := _aim_center()
 	if _hunter():
 		draw_circle(ac, AIM_R + 3, Color(INK, 0.5))
-		draw_circle(ac, AIM_R, Color(0.95, 0.35, 0.3, 0.3 if aiming else 0.2))
+		draw_circle(ac, AIM_R, Color(0.65, 0.25, 0.85, 0.3 if aiming else 0.2)) # tím ma khí
 		draw_arc(ac, AIM_R, 0, TAU, 48, Color(1, 1, 1, 0.55), 3.0)
 		var k := ac + _aim * AIM_R
-		_knob(k, Color(0.95, 0.4, 0.3))
+		_knob(k, Color(0.7, 0.35, 0.95))
 		# Tâm ngắm vẽ trên núm.
 		draw_arc(k, 13, 0, TAU, 20, Color.WHITE, 3.0)
 		for d: Vector2 in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
 			draw_line(k + d * 8, k + d * 20, Color.WHITE, 3.0)
 		if not aiming:
-			_text(font, ac + Vector2(0, AIM_R + 18), "BẮN", 18, Color.WHITE)
+			_text(font, ac + Vector2(0, AIM_R + 18), "PHI KIẾM", 18, Color.WHITE)
 		elif _card_slot < 0:
 			_cancel_button(font, _over_cancel)
 	else:
 		draw_circle(ac, AIM_R + 3, INK)
 		draw_circle(ac, AIM_R, Color(0.33, 0.78, 0.4).darkened(0.15 if held else 0.0))
 		draw_circle(ac + Vector2(-AIM_R * 0.3, -AIM_R * 0.35), AIM_R * 0.28, Color(1, 1, 1, 0.25))
-		_text(font, ac, "E\nCạy / Đỡ", 20, Color.WHITE)
+		_text(font, ac, "E\nGiải / Đỡ", 20, Color.WHITE)
 	_draw_cards(me, font)
 	if _card_slot >= 0 and _card_slot < me.deck.size():
 		_draw_card_aim(me, font)

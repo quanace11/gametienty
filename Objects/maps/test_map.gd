@@ -1,7 +1,8 @@
 extends MapBase
-## Bản đồ thử 32 x 20 m, phong cách chibi dựng bằng code: sân cỏ, quảng trường
-## lát gạch ở giữa, tường thấp màu kem mái ngói, hàng rào cây ở viền, nhà tù ở
-## chính giữa, bụi cây để nấp, cây trang trí ngoài viền. Sau này có thể thay
+## Bản đồ thử 32 x 20 m, phong cách tiên hiệp chibi dựng bằng code: sân cỏ ngọc,
+## quảng trường đá xanh ở giữa, tường vôi trắng mái ngói đen có đèn lồng đỏ ở hai
+## đầu, hàng rào trúc ở viền, huyết trận ở chính giữa, bụi cây để nấp, cây tùng
+## ngoài viền. Sau này có thể thay
 ## bằng scene dựng trong editor, giữ nguyên các hàm của MapBase.
 
 const SIZE := Vector2(32, 20) # x, z
@@ -17,13 +18,13 @@ const WALLS := [
 	Rect2(12, 6, 8, 0.8), Rect2(12, 13.2, 8, 0.8),
 	Rect2(24, 2, 0.8, 7), Rect2(24, 11, 0.8, 7),
 ]
-## 5 rương, cần mở 3 (MatchConfig.safes_required).
+## 5 trận linh, cần giải 3 (MatchConfig.safes_required).
 const SAFES := [
 	Vector3(9, 0, 2.6), Vector3(22, 0, 2.6), Vector3(16, 0, 2.6), Vector3(9, 0, 17.4), Vector3(22, 0, 17.4),
 ]
-## 2 cổng ở hai đầu đối diện.
+## 2 lối ra ở hai đầu đối diện.
 const EXIT_GATES := [Vector3(0.8, 0, 10), Vector3(31.2, 0, 10)]
-## Một nhà tù ở chính giữa, tường cao 3 m, chỉ đệm lò xo bay qua được.
+## Một huyết trận ở chính giữa, kết giới cao 3 m, chỉ đệm lò xo bay qua được.
 const PRISONS := [Vector3(16, 0, 10)]
 ## Bụi cây để nấp: Vector3(x, z, bán kính).
 const BUSHES: Array[Vector3] = [
@@ -34,7 +35,7 @@ const HUNTER_SPAWN := Vector3(16, 0.05, 16.2)
 const ESCAPEE_SPAWNS: Array[Vector3] = [
 	Vector3(3, 0.05, 3), Vector3(3, 0.05, 17), Vector3(29, 0.05, 3), Vector3(29, 0.05, 17),
 ]
-## Tiền rải sẵn trên sàn.
+## Linh thạch rải sẵn trên sàn.
 const COIN_SPOTS: Array[Vector3] = [
 	Vector3(3, 0, 7), Vector3(3, 0, 13), Vector3(29, 0, 7), Vector3(29, 0, 13),
 	Vector3(9, 0, 6), Vector3(9, 0, 10), Vector3(9, 0, 14), Vector3(22, 0, 6), Vector3(22, 0, 10), Vector3(22, 0, 14),
@@ -49,18 +50,20 @@ const PrisonScript = preload("res://Objects/prison.gd")
 const CoinScript = preload("res://Objects/coin.gd")
 const BushScript = preload("res://Objects/bush.gd")
 
-const GRASS := Color(0.34, 0.54, 0.26)
-const PLAZA := Color(0.8, 0.68, 0.5)
-const WALL := Color(0.9, 0.8, 0.62)
-const ROOF := Color(0.86, 0.46, 0.32)
-const HEDGE := Color(0.24, 0.55, 0.3)
-const TRUNK := Color(0.55, 0.36, 0.2)
-const LEAVES := Color(0.33, 0.72, 0.35)
+const GRASS := Color(0.36, 0.55, 0.36)
+const PLAZA := Color(0.58, 0.62, 0.62) # đá xanh
+const WALL := Color(0.93, 0.91, 0.86) # vôi trắng
+const ROOF := Color(0.2, 0.22, 0.27) # ngói đen
+const HEDGE := Color(0.42, 0.62, 0.3) # trúc
+const TRUNK := Color(0.42, 0.28, 0.2)
+const LEAVES := Color(0.18, 0.42, 0.3) # tùng
+const LANTERN := Color(0.95, 0.2, 0.15)
 
 var _materials := {} # màu -> material dùng chung
+var _lantern_mesh: SphereMesh
 
 func _ready() -> void:
-	# Sân cỏ rộng hơn bản đồ một chút, quảng trường lát gạch quanh nhà tù.
+	# Sân cỏ rộng hơn bản đồ một chút, quảng trường đá xanh quanh huyết trận.
 	_add_box(Vector3(SIZE.x / 2, -0.1, SIZE.y / 2), Vector3(SIZE.x + 8, 0.2, SIZE.y + 8), GRASS)
 	_add_mesh(Vector3(16, 0.005, 10), Vector3(9, 0.01, 8.4), PLAZA)
 	for i in WALLS.size():
@@ -68,8 +71,13 @@ func _ready() -> void:
 		var center := r.get_center()
 		var border := i < 4 # 4 cạnh viền là hàng rào cây
 		_add_box(Vector3(center.x, WALL_HEIGHT / 2, center.y), Vector3(r.size.x, WALL_HEIGHT, r.size.y), HEDGE if border else WALL)
-		if not border:
-			_add_mesh(Vector3(center.x, WALL_HEIGHT + CAP / 2, center.y), Vector3(r.size.x + 0.2, CAP, r.size.y + 0.2), ROOF)
+		if not border: # mái ngói chìa ra, nóc mái, đèn lồng ở hai đầu tường
+			_add_mesh(Vector3(center.x, WALL_HEIGHT + CAP / 2, center.y), Vector3(r.size.x + 0.4, CAP, r.size.y + 0.4), ROOF)
+			_add_mesh(Vector3(center.x, WALL_HEIGHT + CAP + 0.06, center.y), Vector3(maxf(r.size.x - 0.2, 0.2), 0.12, maxf(r.size.y - 0.2, 0.2)), ROOF)
+			var along := Vector2(r.size.x, 0) if r.size.x > r.size.y else Vector2(0, r.size.y)
+			for end: float in [-0.5, 0.5]:
+				var p := center + along * end
+				_add_lantern(Vector3(p.x, WALL_HEIGHT + CAP, p.y))
 	for i in BUSHES.size():
 		var bush: Node3D = BushScript.new()
 		bush.index = i
@@ -101,7 +109,26 @@ func _ready() -> void:
 	_add_lighting()
 
 
-## Cây trang trí ngoài viền (không va chạm, không ảnh hưởng luật).
+## Đèn lồng đỏ trên đầu tường (chỉ để nhìn, tự sáng, không đổ bóng).
+func _add_lantern(pos: Vector3) -> void:
+	if _lantern_mesh == null:
+		var glow := _material(LANTERN).duplicate() as StandardMaterial3D
+		glow.emission_enabled = true
+		glow.emission = LANTERN * 0.6
+		_lantern_mesh = SphereMesh.new()
+		_lantern_mesh.radius = 0.2
+		_lantern_mesh.height = 0.34
+		_lantern_mesh.radial_segments = 8
+		_lantern_mesh.rings = 4
+		_lantern_mesh.material = glow
+	var mi := MeshInstance3D.new()
+	mi.mesh = _lantern_mesh
+	mi.position = pos + Vector3(0, 0.3, 0)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
+
+
+## Cây tùng ngoài viền: thân + hai tầng tán hình nón (không va chạm, không ảnh hưởng luật).
 func _add_trees() -> void:
 	var trunk := CylinderMesh.new()
 	trunk.top_radius = 0.18
@@ -109,12 +136,24 @@ func _add_trees() -> void:
 	trunk.height = 1.2
 	trunk.radial_segments = 6
 	trunk.material = _material(TRUNK)
-	var crown := SphereMesh.new()
-	crown.radius = 1.0
-	crown.height = 1.8
-	crown.radial_segments = 8
-	crown.rings = 4
-	crown.material = _material(LEAVES)
+	var low := CylinderMesh.new()
+	low.top_radius = 0.0
+	low.bottom_radius = 1.2
+	low.height = 1.4
+	low.radial_segments = 8
+	low.rings = 1
+	var high := CylinderMesh.new()
+	high.top_radius = 0.0
+	high.bottom_radius = 0.85
+	high.height = 1.2
+	high.radial_segments = 8
+	high.rings = 1
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.append_from(low, 0, Transform3D(Basis(), Vector3(0, -0.3, 0)))
+	st.append_from(high, 0, Transform3D(Basis(), Vector3(0, 0.45, 0)))
+	st.set_material(_material(LEAVES))
+	var crown := st.commit()
 	for x in range(-2, 36, 5):
 		for z: float in [-2.2]: # chỉ phía bắc: phía nam gần camera, cây sẽ che màn hình
 			_add_tree(Vector3(x, 0, z), trunk, crown)
@@ -178,7 +217,7 @@ func _add_lighting() -> void:
 	add_child(sun)
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.55, 0.78, 0.95) # trời xanh
+	env.background_color = Color(0.72, 0.84, 0.9) # trời mây nhạt
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.8, 0.82, 0.9)
 	env.ambient_light_energy = 0.35

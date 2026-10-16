@@ -1,12 +1,12 @@
 class_name Coin
 extends Interactable
-## Cọc tiền vàng trên sàn: người trốn chạm vào là nhặt. interactable_id là id
+## Linh thạch trên sàn (trong code gọi là tiền / coin): đệ tử chạm vào là nhặt. interactable_id là id
 ## cọc trong MatchRules.coins (rải sẵn: 0, 1, 2...; văng từ rương: xem
 ## MatchRules.chest_coin_ids). Nhặt rồi thì ẩn trên mọi máy.
 
 const RADIUS := 0.6
 
-static var _shared_mesh: CylinderMesh # mọi cọc tiền dùng chung một mesh + material
+static var _shared_mesh: SphereMesh # mọi viên linh thạch dùng chung một mesh + material
 
 var _mesh: MeshInstance3D
 
@@ -29,19 +29,19 @@ func _ready() -> void:
 
 	if _shared_mesh == null:
 		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Color(1.0, 0.82, 0.15)
+		mat.albedo_color = Color(0.45, 0.95, 1.0)
 		mat.emission_enabled = true
-		mat.emission = Color(0.5, 0.35, 0.0)
-		_shared_mesh = CylinderMesh.new()
-		_shared_mesh.top_radius = 0.2
-		_shared_mesh.bottom_radius = 0.2
-		_shared_mesh.height = 0.25
-		_shared_mesh.radial_segments = 12
+		mat.emission = Color(0.15, 0.5, 0.6)
+		_shared_mesh = SphereMesh.new() # cầu 4 múi, 2 tầng = viên tinh thể hình thoi
+		_shared_mesh.radius = 0.16
+		_shared_mesh.height = 0.45
+		_shared_mesh.radial_segments = 4
+		_shared_mesh.rings = 2
 		_shared_mesh.material = mat
 	_mesh = MeshInstance3D.new()
 	_mesh.mesh = _shared_mesh
 	_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_mesh.position.y = 0.3
+	_mesh.position.y = 0.35
 	add_child(_mesh)
 
 

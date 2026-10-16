@@ -10,7 +10,7 @@ const HUNTER_TEXT := {
 	GameTypes.HunterResult.PARTIAL: "THẮNG MỘT PHẦN",
 	GameTypes.HunterResult.TOTAL: "THẮNG TUYỆT ĐỐI",
 }
-const COLUMNS := ["Người chơi", "Kết quả", "Rương", "Cứu", "Trúng", "Tiền", "Điểm"]
+const COLUMNS := ["Người chơi", "Kết quả", "Trận linh", "Cứu", "Trúng", "Linh thạch", "Điểm"]
 const WIDTHS := [190, 170, 70, 55, 65, 60, 70]
 
 
@@ -30,9 +30,9 @@ func show_result(res: Dictionary, my_id: int) -> void:
 	var big := _label(banner, _my_title(mine), 40)
 	big.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
-	var hunter_line := "Bắt %d/%d người trốn, %d người thoát" % [res["caught"], res["escapees"], res["escaped"]]
+	var hunter_line := "Bắt %d/%d đệ tử, %d người thoát" % [res["caught"], res["escapees"], res["escaped"]]
 	if mine.get("role", -1) != GameTypes.Role.HUNTER:
-		hunter_line = "Thợ săn %s: %s" % [HUNTER_TEXT[res["hunter_result"]], hunter_line.to_lower()]
+		hunter_line = "Ma tu %s: %s" % [HUNTER_TEXT[res["hunter_result"]], hunter_line.to_lower()]
 	var sub := _label(box, hunter_line, 20)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
@@ -45,7 +45,7 @@ func show_result(res: Dictionary, my_id: int) -> void:
 		var result: String = HUNTER_TEXT[row["result"]] if hunter \
 			else ("THOÁT" if row["result"] == GameTypes.EscapeeResult.ESCAPED else "BỊ BẮT")
 		var cells := [
-			("[Thợ săn] " if hunter else "") + str(row["name"]), result,
+			("[Ma tu] " if hunter else "") + str(row["name"]), result,
 			"-" if hunter else "%.1f" % row["chests"],
 			"-" if hunter else str(row["rescues"]),
 			"-" if hunter else str(row.get("damage", 0)),
@@ -76,7 +76,7 @@ func _my_title(row: Dictionary) -> String:
 	if row.is_empty():
 		return "HẾT TRẬN"
 	if row["role"] == GameTypes.Role.HUNTER:
-		return "THỢ SĂN " + HUNTER_TEXT[row["result"]]
+		return "MA TU " + HUNTER_TEXT[row["result"]]
 	return "BẠN ĐÃ THOÁT!" if row["result"] == GameTypes.EscapeeResult.ESCAPED else "BẠN BỊ BẮT"
 
 

@@ -51,9 +51,9 @@ static func _build_shared() -> void:
 	_leaf_mesh.radial_segments = 8
 	_leaf_mesh.rings = 4
 	_solid = StandardMaterial3D.new()
-	_solid.albedo_color = Color(0.3, 0.68, 0.3)
+	_solid.albedo_color = Color(0.3, 0.6, 0.35)
 	_faded = StandardMaterial3D.new()
-	_faded.albedo_color = Color(0.3, 0.68, 0.3, 0.35)
+	_faded.albedo_color = Color(0.3, 0.6, 0.35, 0.35)
 	_faded.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 
 
