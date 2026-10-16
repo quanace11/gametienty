@@ -1,8 +1,8 @@
 # AI (Thành viên D)
 
-Bot cho chế độ offline. Bot là `InputSource`, cắm vào nhân vật như bàn phím.
+Bot cho chế độ offline và để lấp chỗ online. Bot là `InputSource`, cắm vào nhân vật như bàn phím, nghĩ 10 lần/giây (`THINK_INTERVAL`).
 
-- `bot_input_source.gd`: bot đơn giản, đi thẳng tới mục tiêu, kẹt thì rẽ ngẫu nhiên. Nghĩ 10 lần/giây; cạy rương và căn vòng (65% trúng vùng đậm), nhặt tiền gần, ném túi máu
+- `bot_input_source.gd`: bot người trốn cạy rương và căn vòng (65% trúng vùng đậm), nhặt tiền, chạy trốn khi thợ săn tới gần, đỡ / cứu đồng đội, ném túi máu và lựu đạn đúng chỗ, dùng thẻ; bot thợ săn đuổi, bắn, kéo người gục vào tù, dùng radar và dịch chuyển. Bot không thấy người đang nấp trong bụi (`GameState.can_see()`). Đi đường thẳng tới mục tiêu, kẹt tường thì rẽ ngẫu nhiên
 
-Tiếp theo: NavigationRegion3D + NavigationAgent3D cho bản đồ, tầm nhìn hình nón, nghe `EventBus.noise_made`, state machine Escapee (mở két, chạy trốn, cứu) và Hunter (tuần tra két, đuổi, kéo vào tù).
+Tiếp theo: NavigationRegion3D + NavigationAgent3D (tính đường thưa để server nhẹ), tuần tra rương cho thợ săn.
 Đọc thế giới qua group trong `GameTypes` và `GameState.rules`, không gọi thẳng code module khác.

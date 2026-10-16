@@ -75,11 +75,13 @@ Bot luôn chạy trên server, giống hệt người chơi, chỉ khác nguồn
 
 | Giai đoạn | Việc | Phần code bị sửa | Phần KHÔNG phải sửa |
 |---|---|---|---|
-| 0. Offline (bây giờ) | Gameplay, bot, bản đồ | Mọi module | |
+| 0. Offline (trận 1v4 với bot đã xong, đang hoàn thiện) | Gameplay, bot, bản đồ | Mọi module | |
 | 1. Host / LAN | Đã chạy được. Chỉ cần test thường xuyên | Không | Mọi module |
 | 2. Server riêng (VPS) | Export bản Linux "Dedicated Server", chạy `--server` | Cấu hình export | Mọi module |
-| 3. Chơi qua Internet mượt | Dự đoán phía client cho nhân vật của mình, bộ đệm nội suy, bù độ trễ cho đòn đánh | `Core/match/`, `Player/` (phần client) | Objects, Items, AI, luật |
+| 3. Chơi qua Internet mượt | Dự đoán phía client cho nhân vật của mình, bộ đệm nội suy (bù trễ cho vòng căn và bắn đã có) | `Core/match/`, `Player/` (phần client) | Objects, Items, AI, luật |
 | 4. Nhiều phòng, nhiều người | Mỗi phòng một tiến trình server, dịch vụ ghép trận, tài khoản | Thêm dịch vụ mới bên ngoài game, `Core/network/` | Gameplay |
+
+Thứ tự việc cụ thể: mục Kế hoạch trong [README](../README.md#kế-hoạch).
 
 Tức là nếu giữ đúng năm luật vàng, lên online chỉ đụng tới `Core/` và phần hiển thị của `Player/`, không đụng tới két, vật phẩm, bot hay luật thắng thua.
 

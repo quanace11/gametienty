@@ -6,14 +6,14 @@ Phần còn lại của trận ngoài chu trình bắt người ([CHU_TRINH_BAT.
 
 Trong code Core rương vẫn tên là `safe` (`safe_progress`, `GROUP_SAFES`, `safe_unlocked`).
 
-- Người trốn đứng sát rương là cạy (`GameState.server_channel_chest(id, safe_id, delta)` mỗi physics frame). Một người mất `chest_open_time` giây, nhiều người cùng cạy thì cộng dồn.
+- Người trốn đứng sát rương là cạy (dừng lại thì nhân vật ngồi xuống mò ổ khóa) (`GameState.server_channel_chest(id, safe_id, delta)` mỗi physics frame). Một người mất `chest_open_time` giây, nhiều người cùng cạy thì cộng dồn.
 - Mở xong rương thì nhả 1 chìa khóa và văng `chest_coins` cọc tiền ra sàn. Đủ `safes_required` chìa thì cổng bắt đầu mở.
 
 ## 2. Vòng căn
 
 Trong lúc cạy, cứ `qte_interval_min..max` giây vòng căn hiện ra một lần: kim chạy một vòng trong `1 / qte_speed` giây, trên vòng có vùng sáng đậm ở giữa và vùng mờ hai bên. Vị trí vùng do server random.
 
-| Bấm E khi kim ở | Kết quả |
+| Chạm màn hình (hoặc E) khi kim ở | Kết quả |
 |---|---|
 | Vùng sáng đậm (`qte_perfect_width`) | `PERFECT`: rương mở thêm `qte_perfect_bonus`, được `qte_perfect_coins` tiền |
 | Vùng mờ (`qte_good_width`) | `GOOD`: được `qte_good_coins` tiền, không tăng tốc |
@@ -84,7 +84,7 @@ Thợ săn không đánh cận chiến. Bấm E / Space (không có người g�
 - Ngắm tay: kéo cần ngắm (hoặc giữ chuột phải), máy mình hiện luồng xanh chỉ hướng và tầm bắn (dừng ở tường), thả tay thì client gửi nút `shoot` kèm hướng ngắm (`InputSource.get_aim()`), server bắn theo hướng đó hết tầm. Kéo về giữa hoặc vào nút Hủy rồi thả thì không bắn.
 - Tự nhắm (E / chạm nhanh nút BẮN): người trốn gần nhất trong tầm `rifle_range` (12 m) ở phía trước (góc 150°), nhắm vào chỗ người đó đang đứng (không đón đầu, người đang chạy vẫn né được; muốn trúng người chạy thì tự kéo cần ngắm canh góc). Không có ai thì bắn thẳng về phía trước.
 - Đạn bay **đường thẳng** ngang tầm ngực, tốc độ `rifle_speed` (15 m/s, 10 m mất gần 0.7 giây, thấy tên lửa bay tới thì kịp né). Server raycast một lần lúc bắn: gặp tường / vật cản (layer 1, kể cả hộp gỗ) thì đạn dừng ở đó.
-- Đạn bay thật: mỗi frame server xét đoạn đạn vừa bay qua, chạm người trốn đầu tiên nằm trong `rifle_radius` (0.3 m, cộng thân người, bằng bề rộng luồng ngắm) thì nổ ở đó, người đó mất 1 máu (2 lần là gục). Bước ra khỏi đường bay trước khi đạn tới là né được. Súng lục cũng bay và trúng theo cách này. Một viên chỉ trúng một người. Hồi chiêu `attack_cooldown`.
+- Đạn bay thật: mỗi frame server xét đoạn đạn vừa bay qua, chạm người trốn đầu tiên nằm trong `rifle_radius` (0.4 m, cộng thân người, bằng nửa bề rộng luồng ngắm) thì nổ ở đó, người đó mất 1 máu (2 lần là gục). Bước ra khỏi đường bay trước khi đạn tới là né được. Súng lục cũng bay và trúng theo cách này. Một viên chỉ trúng một người. Hồi chiêu `attack_cooldown`.
 - Bắn xong thì người bắn khựng lại `shoot_flinch_time` (0.25 giây, đi chậm còn `flinch_speed` = 20%); người trốn trúng đạn khựng `hit_flinch_time` (0.35 giây). Súng lục cũng làm người bắn khựng, nhưng thợ săn trúng đạn thì không khựng. Khựng chỉ tính trên server (di chuyển do server quyết), không gửi thêm dữ liệu.
 
 Người trốn có **súng lục** (thẻ trong bộ bài), đạn cũng bay thẳng và bị tường chặn. Thợ săn có `hunter_max_hp` (6) máu. **Người trốn không làm choáng được thợ săn**: hết máu thì thợ săn buông người đang kéo, chạy chậm `hunter_knockout_slow_factor` (một nửa) trong `hunter_knockout_slow` (3 giây), và hồi đầy máu ngay. Mỗi máu bắn mất được `score_damage` điểm.
