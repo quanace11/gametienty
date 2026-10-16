@@ -81,7 +81,7 @@ Bot luôn chạy trên server, giống hệt người chơi, chỉ khác nguồn
 | 3. Chơi qua Internet mượt | Dự đoán phía client cho nhân vật của mình, bộ đệm nội suy (bù trễ cho vòng căn và bắn đã có) | `Core/match/`, `Player/` (phần client) | Objects, Items, AI, luật |
 | 4. Nhiều phòng, nhiều người | Mỗi phòng một tiến trình server, dịch vụ ghép trận, tài khoản | Thêm dịch vụ mới bên ngoài game, `Core/network/` | Gameplay |
 
-Thứ tự việc cụ thể: mục Kế hoạch trong [README](../README.md#kế-hoạch).
+Việc của từng tuần: mục Kế hoạch trong [README](../README.md#kế-hoạch). Online (các bước 2-4 dưới đây) để sang giai đoạn 2, sau khi xong bản offline.
 
 Tức là nếu giữ đúng năm luật vàng, lên online chỉ đụng tới `Core/` và phần hiển thị của `Player/`, không đụng tới két, vật phẩm, bot hay luật thắng thua.
 
