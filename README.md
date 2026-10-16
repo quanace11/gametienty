@@ -54,7 +54,7 @@ Cập nhật mỗi khi merge một phần lớn. Người mới vào đọc mụ
 | Nhà tù | Tường cao, bị đốt sau 45 giây, cứu bằng túi máu ném qua tường, đệm lò xo bật ra | `Objects/prison.gd` |
 | Bộ bài | Người trốn chọn 5 thẻ ở menu, trả bằng tiền: túi máu (bay chậm, vùng tròn xanh 1,2 m, không ai cần cứu thì nằm chờ 8 giây để chạy tới đón), lựu đạn làm chậm, súng lục, ván trượt, đệm lò xo, bẫy, hộp gỗ. Thợ săn: radar dấu chân, dịch chuyển (chạm minimap chọn chỗ) | `Items/`, `UI/main_menu.gd` |
 | Giao diện | Kiểu game chibi dựng bằng code (`UI/ui_theme.gd`): menu nền trời có nút vai to và ô chọn thẻ; HUD có thanh trên (đồng hồ, chìa, cổng), hàng đầu người trốn theo màu, tim máu + tiền, thông báo nổi; nút cảm ứng viền đậm, thẻ hồi chiêu quét hình quạt; minimap khung bo tròn; bảng kết quả thắng/thua. Giao diện co theo màn hình (stretch `canvas_items`). Nhân vật và camera vẽ nội suy giữa hai lần tính vật lý nên chạy mượt cả trên màn 90/120 Hz | `UI/`, `Player/` |
-| Nhân vật | 2 nhân vật chibi KayKit (CC0) kiểu tiên hiệp: ma tu (thợ săn) là Rogue trùm đầu áo tím đen, ma khí tím đỏ dưới chân; đệ tử (người trốn) là Mage áo trắng ngọc, búi tóc, mượn khung xương + animation của Knight. Có animation chạy, đứng, gục, ngồi tù, bay, phóng kiếm, bị trúng, ném | `Player/models/` |
+| Nhân vật | Mô hình ma tu (áo đen đỏ, tóc đỏ, cầm kiếm, ma khí tím đỏ dưới chân) và đệ tử (áo trắng, búi tóc) của dự án, 3 mức chi tiết theo cài đặt đồ họa (Thấp ~4,5k / Vừa ~10k / Cao ~31k tam giác). Không có khung xương: chạy, đứng, gục, ngồi tù, bay, cạy rương, phóng kiếm, bị trúng là tư thế nghiêng / nhún / nằm cả người | `Player/models/` |
 | Bản đồ | Phong cách chibi dựng bằng code: sân cỏ, tường thấp mái ngói, hàng rào cây ở viền, nhà tù ở chính giữa, rương có nắp và đai vàng | `Objects/maps/test_map.gd`, `Objects/safe.gd` |
 | Bụi cây | Đứng trong bụi thì phe kia không thấy, trừ khi đứng cùng bụi; đồng đội vẫn thấy nhau. Server không gửi vị trí người nấp xuống máy phe kia; bot và súng tự nhắm cũng không thấy | `Objects/bush.gd`, `GameState.can_see()` |
 | Bot | Bot người trốn cạy rương, chạy trốn, cứu nhau, ném túi máu / lựu đạn đúng chỗ, dùng thẻ; bot thợ săn đuổi, bắn, kéo vào tù, dùng radar / dịch chuyển | `AI/bot_input_source.gd` |
@@ -72,8 +72,7 @@ Cập nhật mỗi khi merge một phần lớn. Người mới vào đọc mụ
 
 | Asset | Tác giả | Giấy phép | Ở đâu |
 |---|---|---|---|
-| KayKit Character Pack: Adventurers 1.0 (Knight, Rogue_Hooded), đã cắt bớt animation | Kay Lousberg | CC0 1.0 (dùng thương mại, không cần ghi công) | `Player/models/`, `Player/models/LICENSE_KayKit.txt` |
-| KayKit Character Pack: Adventurers 2.0 (Mage, chỉ lưới, không animation); `ma_tu_texture.png`, `de_tu_texture.png` là bảng màu Rogue / Mage tô lại | Kay Lousberg | CC0 1.0 | `Player/models/mage.glb` |
+| Mô hình ma tu và đệ tử (`ma_tu_*.glb`, `de_tu_*.glb`): quan gửi, bản Thấp / Vừa đã giảm tam giác và nướng lại texture | Dự án (quan) | Của dự án | `Player/models/` |
 
 Chỉ thêm asset CC0 hoặc giấy phép cho dùng thương mại, và ghi vào bảng này.
 

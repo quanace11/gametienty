@@ -11,10 +11,11 @@ extends EntityBase
 ## Nút thẻ đạo cụ (skill_1..4) do Core + Items xử lý, file này chỉ lo bị hất
 ## tung (server_launch) khi giẫm đệm lò xo.
 ## Mọi quyết định đúng/sai nằm ở GameState; file này chỉ chọn điểm ngắm và vị trí.
-## Hình: nhân vật chibi KayKit Adventurers (CC0, Player/models/), ma tu (thợ săn)
-## là Rogue trùm đầu áo tím đen, ma khí tím đỏ dưới chân, tay không (phi kiếm
-## hóa ra khi bắn); đệ tử (người trốn) là Mage áo trắng xanh, búi tóc trâm ngọc.
-## Animation chọn trên mọi máy theo trạng thái + tốc độ, không gửi qua mạng.
+## Hình: mô hình ma tu (áo đen đỏ, tóc đỏ, cầm kiếm) và đệ tử (áo trắng, búi
+## tóc) của dự án, 3 mức chi tiết theo cài đặt đồ họa. Mô hình không có khung
+## xương nên cử động bằng cách nghiêng / nhún / nằm cả người (_apply_pose); ma tu
+## có ma khí tím đỏ dưới chân và 3 phi kiếm sau lưng, một nửa đệ tử có cánh lửa.
+## Tư thế chọn trên mọi máy theo trạng thái + tốc độ, không gửi qua mạng.
 ## Hình (model, tên, vòng đỏ) nằm trong một node riêng, mỗi frame vẽ được nội
 ## suy giữa hai lần tính vật lý (60 lần/giây) nên màn hình 90/120 Hz hay FPS
 ## lệch nhịp vẫn mượt, không giật / xé hình khi chạy. Camera bám theo hình này.
@@ -36,34 +37,34 @@ const SNAP_DIST := 6.0 # mét, lệch hơn chừng này (dịch chuyển) thì �
 const AIM_MIN := 0.2 # độ dài hướng ngắm tối thiểu để bắn theo tay, ngắn hơn thì tự nhắm
 const BEAM_HEIGHT := 1.1 # ngang nòng súng (GameState.SHOT_HEIGHT), để raycast luồng ngắm
 
-const HUNTER_MODEL := "res://Player/models/rogue_hooded.glb"
-const ESCAPEE_MODEL := "res://Player/models/mage.glb" # chỉ có lưới, không có animation
-const ANIM_MODEL := "res://Player/models/knight.glb" # đệ tử mượn khung xương + animation của Knight
-const ESCAPEE_HIDDEN := ["Mage_Hat"] # bỏ mũ phù thủy, thay bằng búi tóc
+# Mô hình ma tu / đệ tử của dự án, 3 mức chi tiết theo cài đặt đồ họa
+# (ProjectSettings "game/graphics_quality": 0 Thấp, 1 Vừa, 2 Cao; UI ghi lúc mở game).
+# Tam giác: Thấp ~4,5k, Vừa ~10k, Cao ~31k. Gốc ở chân, cao 1 đơn vị, nhìn về +Z.
+const MODELS := {
+	true: ["res://Player/models/ma_tu_thap.glb", "res://Player/models/ma_tu_vua.glb", "res://Player/models/ma_tu_cao.glb"],
+	false: ["res://Player/models/de_tu_thap.glb", "res://Player/models/de_tu_vua.glb", "res://Player/models/de_tu_cao.glb"],
+}
+const QUALITY_SETTING := "game/graphics_quality"
+const HUNTER_TALL := 2.05 # mét (mô hình ma tu xòe tay, cầm kiếm)
+const ESCAPEE_TALL := 1.9
 const HALO_SWORDS := 3 # phi kiếm lơ lửng sau lưng ma tu
-const HUNTER_TEXTURE := "res://Player/models/ma_tu_texture.png" # bảng màu Rogue tô tím đen
-const ESCAPEE_TEXTURE := "res://Player/models/de_tu_texture.png" # bảng màu Mage tô trắng ngọc
-const MODEL_SCALE := 0.72 # model KayKit cao ~2.4 m, thu về ~1.75 m
-const LOOP_ANIMS := ["Idle", "Running_A", "Lie_Idle", "Sit_Floor_Idle", "Jump_Idle"]
 const RUN_SPEED_MIN := 0.6 # m/s, chậm hơn thì đứng yên
-const BLEND := 0.15
-# Cạy rương: lặp đoạn ngồi xổm của anim PickUp tới lui, tay mò mẫm ở ổ khóa.
-const LOCK_ANIM := "PickUp"
-const LOCK_FROM := 0.4 # giây trong anim: đã ngồi xuống
-const LOCK_TO := 0.85 # giây: tay với ra
-const LOCK_SPEED := 0.7
+const POSE_SPEED := 10.0 # mô hình không có xương: tư thế đổi mượt theo tốc độ này
 const CHEST_CHECK := 0.1 # giây giữa hai lần xem có đứng ở rương không
 const HIT_FLASH_TIME := 0.18 # giây người bị trúng chớp đỏ
 
 var _target_pos := Vector3.ZERO
 var _target_yaw := 0.0
-var _anim: AnimationPlayer
+var _pose_node: Node3D # khung giữa _visual và _model: nghiêng, nhún, nằm
 var _model: Node3D
 var _safes: Array[Node] = [] # rương trên bản đồ (lấy một lần)
 var _chest: Node3D # rương đang cạy (đứng yên trong vùng rương chưa mở xong), null = không
 var _chest_check_left := 0.0
-var _anim_name := ""
-var _oneshot_left := 0.0 # đang phát anim một lần (bắn, bị trúng, ném)
+var _anim_name := "" # tư thế đang theo: Idle, Running_A, Lie_Idle, Sit_Floor_Idle, Jump_Idle, PickUp
+var _anim_speed := 1.0
+var _oneshot_left := 0.0 # đang phát tư thế một lần (bắn, bị trúng, ném)
+var _oneshot_total := 0.0
+var _pose_time := 0.0
 var _last_pos := Vector3.ZERO
 var _speed := 0.0 # m/s trên mặt sàn, đo từ vị trí (client không có velocity thật)
 var _visual: Node3D # hình, top_level, nội suy theo khung hình (không có trên server riêng)
@@ -88,8 +89,6 @@ static var _shot_fx: ShotFx # tên lửa, đạn, vụ nổ (pool), một node c
 static var _beam_box: BoxMesh
 static var _hunter_ring: TorusMesh
 static var _hunter_mist: CylinderMesh
-static var _robes := {} # đường dẫn bảng màu -> material dùng chung
-static var _bun_mesh: ArrayMesh
 static var _halo_sword_mesh: ArrayMesh
 static var _feather_mesh: ArrayMesh
 static var _hit_flash_mat: StandardMaterial3D # phủ đỏ lúc bị trúng, dùng chung
@@ -164,32 +163,27 @@ func _build_body() -> void:
 	var label := Label3D.new()
 	label.text = ("▼ " if is_local else "") + display_name
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.position.y = HEIGHT + 0.4
+	label.position.y = HUNTER_TALL + 0.3
 	label.font_size = 48
 	label.modulate = Color(1, 0.9, 0.3) if is_local else Color.WHITE
 	_visual.add_child(label)
 
 
 func _build_model() -> void:
-	var path := HUNTER_MODEL if is_hunter() else ANIM_MODEL
-	var model: Node3D = (load(path) as PackedScene).instantiate()
+	var quality := clampi(int(ProjectSettings.get_setting(QUALITY_SETTING, 0)), 0, 2)
+	var model: Node3D = (load(MODELS[is_hunter()][quality]) as PackedScene).instantiate()
 	_model = model
-	model.scale = Vector3.ONE * MODEL_SCALE * (1.1 if is_hunter() else 1.0)
+	model.scale = Vector3.ONE * (HUNTER_TALL if is_hunter() else ESCAPEE_TALL)
 	model.rotation.y = PI # model nhìn về +Z, nhân vật nhìn về -Z
-	_visual.add_child(model)
+	_pose_node = Node3D.new()
+	_visual.add_child(_pose_node)
+	_pose_node.add_child(model)
 	for node in model.find_children("*", "MeshInstance3D", true, false):
-		var mi := node as MeshInstance3D
-		if mi.get_parent().name.begins_with("handslot") or not is_hunter():
-			mi.visible = false # bỏ vũ khí cầm tay; đệ tử thì bỏ cả người Knight, chỉ mượn khung xương + animation
-		else:
-			mi.material_override = _robe(mi, HUNTER_TEXTURE)
-	if not is_hunter():
-		_wear_disciple_robe(model)
-	for node in model.find_children("*", "MeshInstance3D", true, false):
-		if (node as MeshInstance3D).visible:
-			_body_meshes.append(node as MeshInstance3D)
+		_body_meshes.append(node as MeshInstance3D)
 	if is_hunter():
 		_add_sword_halo()
+	elif absi(peer_id) % 2 == 0:
+		_add_flame_wings()
 	if is_hunter(): # ma khí tím đỏ dưới chân để nhận ra ma tu từ xa
 		if _hunter_ring == null:
 			_hunter_ring = TorusMesh.new()
@@ -216,48 +210,7 @@ func _build_model() -> void:
 		mist.position.y = 0.03
 		mist.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_visual.add_child(mist)
-	var players := model.find_children("*", "AnimationPlayer", true, false)
-	if players.is_empty():
-		return
-	_anim = players[0] as AnimationPlayer
-	for anim_name: String in LOOP_ANIMS:
-		if _anim.has_animation(anim_name):
-			_anim.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR
 	_play("Idle")
-
-
-## Đệ tử: lấy các mảnh thân Mage (tóc bạc, búi tóc trâm ngọc; cùng khung xương
-## Rig KayKit, cùng tư thế gốc) gắn vào khung xương của model mượn animation;
-## skin bám theo tên xương. Đệ tử có peer_id chẵn mọc thêm cánh lửa sau lưng
-## (chọn theo peer_id nên mọi máy thấy giống nhau).
-func _wear_disciple_robe(model: Node3D) -> void:
-	var skeletons := model.find_children("*", "Skeleton3D", true, false)
-	if skeletons.is_empty():
-		return
-	var skeleton := skeletons[0] as Skeleton3D
-	var robe: Node3D = (load(ESCAPEE_MODEL) as PackedScene).instantiate()
-	for node in robe.find_children("*", "MeshInstance3D", true, false):
-		var mi := node as MeshInstance3D
-		if mi.skin == null or mi.name in ESCAPEE_HIDDEN:
-			continue
-		mi.get_parent().remove_child(mi)
-		mi.owner = null
-		skeleton.add_child(mi)
-		mi.skeleton = NodePath("..")
-		mi.transform = Transform3D.IDENTITY
-		mi.material_override = _robe(mi, ESCAPEE_TEXTURE)
-	robe.free()
-	if absi(peer_id) % 2 == 0:
-		_add_flame_wings()
-	var head := skeleton.find_bone("head")
-	if head >= 0: # búi tóc + trâm ngọc thay mũ phù thủy
-		var attach := BoneAttachment3D.new()
-		attach.bone_name = "head"
-		skeleton.add_child(attach)
-		var bun := MeshInstance3D.new()
-		bun.mesh = _hair_bun_mesh()
-		bun.position = Vector3(0, 0.95, -0.15)
-		attach.add_child(bun)
 
 
 ## Cánh lửa: mỗi bên 4 lông vũ lửa xòe ra sau lưng, vỗ nhẹ. Gắn vào hình nhân vật
@@ -265,8 +218,8 @@ func _wear_disciple_robe(model: Node3D) -> void:
 func _add_flame_wings() -> void:
 	for side: float in [-1.0, 1.0]:
 		var wing := Node3D.new()
-		wing.position = Vector3(0.12 * side, 0.95, 0.3)
-		_visual.add_child(wing)
+		wing.position = Vector3(0.12 * side, 1.05, 0.22)
+		_pose_node.add_child(wing)
 		for k in 4:
 			var f := MeshInstance3D.new()
 			f.mesh = _feather()
@@ -280,8 +233,8 @@ func _add_flame_wings() -> void:
 ## Ma tu: 3 thanh phi kiếm lơ lửng xòe hình quạt sau lưng, mũi chĩa lên.
 func _add_sword_halo() -> void:
 	_halo = Node3D.new()
-	_halo.position = Vector3(0, 1.25, 0.42) # sau lưng (nhân vật nhìn về -Z)
-	_visual.add_child(_halo)
+	_halo.position = Vector3(0, 1.35, 0.42) # sau lưng (nhân vật nhìn về -Z)
+	_pose_node.add_child(_halo)
 	for k in HALO_SWORDS:
 		var mi := MeshInstance3D.new()
 		mi.mesh = _halo_sword()
@@ -356,40 +309,6 @@ static func _feather() -> ArrayMesh:
 	return _feather_mesh
 
 
-## Đổi bảng màu của model (cùng UV) sang bản đã tô lại; một material cho mỗi bảng màu.
-static func _robe(mi: MeshInstance3D, texture_path: String) -> Material:
-	if not _robes.has(texture_path):
-		var m := (mi.get_active_material(0) as StandardMaterial3D).duplicate() as StandardMaterial3D
-		m.albedo_texture = load(texture_path)
-		_robes[texture_path] = m
-	return _robes[texture_path]
-
-
-static func _hair_bun_mesh() -> Mesh:
-	if _bun_mesh == null:
-		var hair := StandardMaterial3D.new()
-		hair.albedo_color = Color(0.86, 0.88, 0.93) # tóc bạc
-		var jade := StandardMaterial3D.new()
-		jade.albedo_color = Color(0.4, 0.9, 0.7)
-		var st := SurfaceTool.new()
-		var bun := SphereMesh.new()
-		bun.radius = 0.16
-		bun.height = 0.3
-		bun.radial_segments = 10
-		bun.rings = 5
-		var pin := BoxMesh.new()
-		pin.size = Vector3(0.5, 0.04, 0.04)
-		_bun_mesh = ArrayMesh.new()
-		st.append_from(bun, 0, Transform3D.IDENTITY)
-		st.commit(_bun_mesh)
-		_bun_mesh.surface_set_material(0, hair)
-		st = SurfaceTool.new()
-		st.append_from(pin, 0, Transform3D(Basis(), Vector3(0, 0.02, 0)))
-		st.commit(_bun_mesh)
-		_bun_mesh.surface_set_material(1, jade)
-	return _bun_mesh
-
-
 static func _glow_mat(color: Color) -> StandardMaterial3D:
 	var m := StandardMaterial3D.new()
 	m.albedo_color = color
@@ -399,19 +318,18 @@ static func _glow_mat(color: Color) -> StandardMaterial3D:
 
 
 func _play(anim_name: String, speed := 1.0) -> void:
-	if _anim == null or not _anim.has_animation(anim_name):
-		return
-	_anim.speed_scale = speed
+	_anim_speed = speed
 	if anim_name != _anim_name:
 		_anim_name = anim_name
-		_anim.play(anim_name, BLEND)
+		_pose_time = 0.0
 
 
-## Phát anim một lần (bắn, bị trúng, ném) rồi quay lại anim theo trạng thái.
+## Phát tư thế một lần (bắn, bị trúng, ném) rồi quay lại tư thế theo trạng thái.
 func _play_once(anim_name: String, seconds: float) -> void:
-	if _anim == null or not _anim.has_animation(anim_name):
+	if _pose_node == null:
 		return
 	_oneshot_left = seconds
+	_oneshot_total = seconds
 	_anim_name = ""
 	_play(anim_name)
 
@@ -424,15 +342,19 @@ func _update_anim(delta: float) -> void:
 	_last_pos = pos
 	if delta > 0.0:
 		_speed = lerpf(_speed, flat.length() / delta, minf(1.0, delta * 10.0))
+	_pose_time += delta
 	if _oneshot_left > 0.0:
 		_oneshot_left -= delta
+		_apply_pose(delta)
 		return
 	match state:
 		GameTypes.PlayerState.DOWNED, GameTypes.PlayerState.CARRIED:
 			_play("Lie_Idle")
+			_apply_pose(delta)
 			return
 		GameTypes.PlayerState.IMPRISONED:
 			_play("Sit_Floor_Idle")
+			_apply_pose(delta)
 			return
 	_chest_check_left -= delta
 	if _chest_check_left <= 0.0:
@@ -442,11 +364,61 @@ func _update_anim(delta: float) -> void:
 	if _flying or pos.y > 0.4:
 		_play("Jump_Idle")
 	elif _chest != null:
-		_play_lockpick()
+		_play("PickUp")
 	elif _speed > RUN_SPEED_MIN:
 		_play("Running_A", clampf(_speed / ESCAPEE_SPEED, 0.6, 1.6))
 	else:
 		_play("Idle")
+	_apply_pose(delta)
+
+
+## Mô hình không có khung xương nên cử động bằng cách nghiêng / nhún / xoay cả
+## người trong _pose_node: chạy thì chúi về trước, nhún và lắc; gục thì nằm ngửa;
+## bị nhốt thì ngồi thụp; cạy rương thì cúi người mò; bị trúng thì giật ngửa ra;
+## phóng kiếm / ném thì lao người tới. Chỉ đổi transform một node mỗi frame.
+func _apply_pose(delta: float) -> void:
+	var t := _pose_time
+	var pitch := 0.0 # dương: ngửa ra sau, âm: chúi về trước
+	var roll := 0.0
+	var lift := 0.0
+	var squash := 1.0
+	var forward := 0.0
+	match _anim_name:
+		"Idle":
+			squash = 1.0 + 0.012 * sin(t * 2.2) # thở
+		"Running_A":
+			var step := t * 9.0 * _anim_speed
+			pitch = -0.16
+			roll = 0.07 * sin(step)
+			lift = 0.07 * absf(sin(step))
+		"Lie_Idle":
+			pitch = PI / 2.0
+			lift = 0.18
+		"Sit_Floor_Idle":
+			pitch = 0.12
+			squash = 0.62 + 0.01 * sin(t * 2.0)
+		"Jump_Idle":
+			pitch = -0.3
+			roll = 0.15 * sin(t * 6.0)
+		"PickUp":
+			pitch = -0.4 + 0.06 * sin(t * 7.0)
+			squash = 0.82
+		"Hit_A":
+			pitch = 0.4 * _oneshot_fade()
+		"1H_Ranged_Shoot", "Throw":
+			var k := _oneshot_fade()
+			pitch = -0.3 * k
+			forward = 0.2 * k
+	var w := minf(1.0, delta * POSE_SPEED * (2.0 if _oneshot_left > 0.0 else 1.0))
+	var target := Vector3(pitch, 0.0, roll)
+	_pose_node.rotation = _pose_node.rotation.lerp(target, w)
+	_pose_node.position = _pose_node.position.lerp(Vector3(0, lift, -forward), w)
+	_pose_node.scale = _pose_node.scale.lerp(Vector3(1.0 + (1.0 - squash) * 0.3, squash, 1.0 + (1.0 - squash) * 0.3), w)
+
+
+## Tư thế một lần: mạnh nhất lúc đầu rồi nhạt dần về 0.
+func _oneshot_fade() -> float:
+	return clampf(_oneshot_left / maxf(_oneshot_total, 0.01), 0.0, 1.0)
 
 
 ## Người trốn đang đứng yên trong vùng một rương chưa mở xong (đúng lúc luật
@@ -461,18 +433,6 @@ func _chest_here() -> Node3D:
 		if safe and GameState.rules.safe_progress.get(safe.interactable_id, 1.0) < 1.0 and safe.overlaps_body(self):
 			return safe
 	return null
-
-
-## Ngồi xổm, tay mò tới lui ở ổ khóa (đoạn giữa anim PickUp chạy xuôi rồi ngược).
-func _play_lockpick() -> void:
-	if _anim_name != LOCK_ANIM:
-		_play(LOCK_ANIM, LOCK_SPEED)
-		return
-	var t := _anim.current_animation_position
-	if t >= LOCK_TO and _anim.speed_scale > 0.0:
-		_anim.speed_scale = -LOCK_SPEED
-	elif t <= LOCK_FROM and _anim.speed_scale < 0.0:
-		_anim.speed_scale = LOCK_SPEED
 
 
 ## Đang cạy thì xoay hình quay mặt vào rương (chỉ hình, không đổi hướng thật).
@@ -583,7 +543,7 @@ func _escapee_interact(delta: float) -> void:
 ## hết tầm, dừng ở tường. Một raycast mỗi frame, chỉ lúc đang ngắm.
 func _process(delta: float) -> void:
 	_visual.global_transform = _xf_prev.interpolate_with(_xf_curr, Engine.get_physics_interpolation_fraction())
-	if _anim:
+	if _pose_node:
 		_update_anim(delta)
 	if _halo or not _wings.is_empty():
 		_animate_aura()

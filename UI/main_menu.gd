@@ -6,6 +6,7 @@ extends CanvasLayer
 
 const DECK_SIZE := 5 # khớp MatchConfig.deck_size
 const UiTheme = preload("res://UI/ui_theme.gd")
+const GraphicsSettings = preload("res://UI/graphics_settings.gd")
 
 var match_time := 180.0
 var _deck_checks := {} # ItemType -> Button (ô thẻ bật/tắt)
@@ -24,6 +25,7 @@ var _status: Label
 
 
 func _ready() -> void:
+	GraphicsSettings.load_and_apply(get_viewport()) # trước khi dựng nhân vật / bản đồ
 	var root := Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.theme = UiTheme.get_theme()
@@ -113,6 +115,7 @@ func _ready() -> void:
 	_status.modulate = Color(1, 1, 1, 0.75)
 	_status.add_theme_font_size_override("font_size", 16)
 	box.add_child(_status)
+	_build_quality_row(box)
 
 	# Cột phải: bộ bài người trốn.
 	var right := PanelContainer.new()
@@ -199,6 +202,29 @@ func _update_deck() -> void:
 		var slot := _deck_order.find(type)
 		tile.text = ("%d. " % (slot + 1) if slot >= 0 else "") + str(tile.get_meta(&"label"))
 		UiTheme.color_button(tile, Color(0.95, 0.62, 0.15) if slot >= 0 else UiTheme.MUTED)
+
+
+## Hàng chọn đồ họa: 3 nút Thấp / Vừa / Cao, nút đang chọn sáng màu.
+func _build_quality_row(box: VBoxContainer) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	box.add_child(row)
+	var title := Label.new()
+	title.text = "Đồ họa"
+	title.add_theme_font_size_override("font_size", 18)
+	row.add_child(title)
+	var group := ButtonGroup.new()
+	for level in GraphicsSettings.NAMES.size():
+		var b := Button.new()
+		b.text = GraphicsSettings.NAMES[level]
+		b.toggle_mode = true
+		b.button_group = group
+		b.button_pressed = level == GraphicsSettings.current()
+		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		b.toggled.connect(func(on: bool) -> void:
+			if on:
+				GraphicsSettings.save_and_apply(get_viewport(), level))
+		row.add_child(b)
 
 
 func _offline(role: GameTypes.Role) -> void:

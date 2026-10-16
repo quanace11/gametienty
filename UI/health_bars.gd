@@ -5,7 +5,7 @@ extends Control
 ## Chỉ đọc GameState.rules và vị trí nhân vật, không đổi gì. Vẽ tất cả trong một
 ## lần _draw (một batch), danh sách nhân vật lấy lại mỗi giây.
 
-const HEAD_HEIGHT := 2.45 # mét trên chân, ngay trên tên
+const HEAD_HEIGHT := 2.75 # mét trên chân, ngay trên tên
 const PIP_W := 14.0
 const PIP_H := 9.0
 const PIP_GAP := 2.0

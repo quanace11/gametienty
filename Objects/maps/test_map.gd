@@ -213,7 +213,7 @@ func _add_box(center: Vector3, size: Vector3, color: Color) -> void:
 func _add_lighting() -> void:
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-55, 30, 0)
-	sun.shadow_enabled = true
+	sun.shadow_enabled = int(ProjectSettings.get_setting("game/graphics_quality", 0)) > 0 # đồ họa Thấp: không bóng
 	sun.light_energy = 0.6
 	add_child(sun)
 	var env := Environment.new()
