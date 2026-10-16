@@ -6,17 +6,21 @@ extends Node3D
 ## mảnh sáng văng tung. Phù kiếm (súng lục) là thanh kiếm nhỏ màu ngọc, nổ nhỏ.
 ## Ai bị trúng thật do server tính (GameState), file này chỉ đoán chỗ nổ cho đẹp.
 ## Thời điểm tới nơi giữ đúng `flight` của server: đoạn hóa kiếm ăn vào đầu đường bay.
+## Trúng người thật (EventBus.player_hit) thì thêm một vụ nổ lửa vàng đỏ to hơn
+## ngay chỗ người đó (hit_burst), để trúng nhìn khác hẳn trượt.
 ## Kiếm và vụ nổ lấy từ pool, không tạo/xóa node mỗi phát; _process chỉ chạy
 ## khi có thứ đang bay hoặc đang nổ.
 
-const SWORD_SCALE := 1.5
-const SMALL_SWORD_SCALE := 0.8
+const SWORD_SCALE := 2.3
+const SMALL_SWORD_SCALE := 1.1
 const CONJURE_TIME := 0.16 # giây hóa kiếm trên vai (tối đa, kẹp theo flight)
 const CONJURE_HEIGHT := 0.7 # kiếm hiện cao hơn chỗ bắn bao nhiêu mét
 const SPIN_SPEED := 14.0 # rad/giây, kiếm lăn quanh trục bay
 const EXPLOSION_TIME := 0.6
 const SWORD_BLAST := 1.0 # bán kính kiếm khí lớn nhất, mét
 const SMALL_BLAST := 0.4
+const HIT_BLAST := 1.5 # vụ nổ khi trúng người
+const HIT_HEIGHT := 0.9 # nổ ngang ngực
 const SHARDS := 6
 const HIT_PADDING := 0.3
 
@@ -40,6 +44,7 @@ class Blast:
 	var core: Node3D
 	var shards: Array[Node3D] = []
 	var kind: GameTypes.ShotKind
+	var hit := false # vụ nổ trúng người (màu lửa), về pool riêng
 	var size := 1.0
 	var age := 0.0
 
@@ -49,6 +54,7 @@ var _free_swords: Array[Shot] = []
 var _free_small: Array[Shot] = []
 var _free_blasts: Array[Blast] = []
 var _free_small_blasts: Array[Blast] = []
+var _free_hit_blasts: Array[Blast] = []
 
 ## Bộ mesh một loại kiếm (màu riêng), dùng chung cho mọi thanh cùng loại.
 class SwordSet:
@@ -65,6 +71,7 @@ class SwordSet:
 static var _built := false
 static var _demon: SwordSet # phi kiếm ma tu
 static var _jade: SwordSet # phù kiếm
+static var _fire: SwordSet # vụ nổ trúng người (chỉ dùng vòng, lõi, mảnh)
 static var _shard_dirs: Array[Vector3] = []
 
 
@@ -129,7 +136,7 @@ func _process(delta: float) -> void:
 		b.age += delta
 		if b.age >= EXPLOSION_TIME:
 			b.node.visible = false
-			(_free_blasts if b.kind == GameTypes.ShotKind.RIFLE else _free_small_blasts).append(b)
+			_blast_pool(b.kind, b.hit).append(b)
 			_blasts.remove_at(i)
 		else:
 			_animate_blast(b, b.age / EXPLOSION_TIME)
@@ -156,11 +163,22 @@ func _touches_target(shot: Shot) -> bool:
 	return false
 
 
+## Nổ lửa to ở chỗ người vừa bị trúng (`pos` là chân người đó).
+func hit_burst(kind: GameTypes.ShotKind, pos: Vector3) -> void:
+	_build_shared()
+	_start_blast(kind, true, pos + Vector3.UP * HIT_HEIGHT, HIT_BLAST)
+	set_process(true)
+
+
 func _explode(kind: GameTypes.ShotKind, pos: Vector3) -> void:
 	var big := kind == GameTypes.ShotKind.RIFLE
-	var pool := _free_blasts if big else _free_small_blasts
-	var b: Blast = pool.pop_back() if not pool.is_empty() else _new_blast(kind)
-	b.size = SWORD_BLAST if big else SMALL_BLAST
+	_start_blast(kind, false, pos, SWORD_BLAST if big else SMALL_BLAST)
+
+
+func _start_blast(kind: GameTypes.ShotKind, hit: bool, pos: Vector3, size: float) -> void:
+	var pool := _blast_pool(kind, hit)
+	var b: Blast = pool.pop_back() if not pool.is_empty() else _new_blast(kind, hit)
+	b.size = size
 	b.age = 0.0
 	b.node.global_position = pos
 	b.node.visible = true
@@ -181,6 +199,12 @@ func _animate_blast(b: Blast, t: float) -> void:
 		var d := _shard_dirs[k]
 		b.shards[k].position = (d * 1.6 * fly + Vector3.UP * 0.6 * sin(PI * t)) * b.size
 		b.shards[k].scale = Vector3.ONE * maxf(shard, 0.001)
+
+
+func _blast_pool(kind: GameTypes.ShotKind, hit: bool) -> Array[Blast]:
+	if hit:
+		return _free_hit_blasts
+	return _free_blasts if kind == GameTypes.ShotKind.RIFLE else _free_small_blasts
 
 
 func _take_shot(kind: GameTypes.ShotKind) -> Shot:
@@ -213,10 +237,11 @@ func _new_sword(s: SwordSet) -> Shot:
 	return shot
 
 
-func _new_blast(kind: GameTypes.ShotKind) -> Blast:
-	var s := _demon if kind == GameTypes.ShotKind.RIFLE else _jade
+func _new_blast(kind: GameTypes.ShotKind, hit: bool) -> Blast:
+	var s := _fire if hit else (_demon if kind == GameTypes.ShotKind.RIFLE else _jade)
 	var b := Blast.new()
 	b.kind = kind
+	b.hit = hit
 	b.node = Node3D.new()
 	add_child(b.node)
 	for k in SHARDS:
@@ -246,6 +271,8 @@ static func _build_shared() -> void:
 	_demon = _sword_set(Color(0.3, 0.08, 0.4), Color(0.6, 0.08, 0.35), Color(0.12, 0.08, 0.14), Color(0.75, 0.35, 1.0, 0.45))
 	# Phù kiếm: lưỡi ngọc, chắn vàng, vệt xanh ngọc.
 	_jade = _sword_set(Color(0.55, 0.95, 0.85), Color(0.3, 0.9, 0.8), Color(0.85, 0.65, 0.25), Color(0.45, 1.0, 0.85, 0.45))
+	# Trúng người: lửa vàng cam, lõi trắng vàng.
+	_fire = _sword_set(Color(1.0, 0.6, 0.2), Color(1.0, 0.45, 0.1), Color(0.2, 0.1, 0.05), Color(1.0, 0.7, 0.3, 0.45))
 	for k in SHARDS:
 		var a := TAU * k / SHARDS
 		_shard_dirs.append(Vector3(cos(a), 0.35 * ((k % 3) - 1), sin(a)).normalized())
