@@ -7,6 +7,7 @@ extends RefCounted
 ## giải, LOD gắt. Vừa: ~10k tam giác, texture 1024, có bóng, 100%. Cao: mô hình
 ## gốc ~31k tam giác, texture 2048 + normal map, có bóng, khử răng cưa MSAA 2x.
 ## Mặc định: điện thoại Thấp, máy tính Vừa. Dòng lệnh --quality=0|1|2 ghi đè.
+## Điện thoại luôn khóa 60 FPS: màn 90/120 Hz không vẽ thừa, đỡ nóng máy, tốn pin.
 
 const SETTING := "game/graphics_quality"
 const FILE := "user://cai_dat.cfg"
@@ -14,6 +15,7 @@ const NAMES := ["Thấp", "Vừa", "Cao"]
 const RENDER_SCALE := [0.75, 1.0, 1.0]
 const LOD_THRESHOLD := [4.0, 1.0, 1.0] # pixel lỗi cho phép khi Godot tự hạ LOD mesh
 const MSAA := [Viewport.MSAA_DISABLED, Viewport.MSAA_DISABLED, Viewport.MSAA_2X]
+const MOBILE_MAX_FPS := 60
 
 
 static func current() -> int:
@@ -51,3 +53,5 @@ static func apply(viewport: Viewport, level: int) -> void:
 	viewport.scaling_3d_scale = RENDER_SCALE[level]
 	viewport.mesh_lod_threshold = LOD_THRESHOLD[level]
 	viewport.msaa_3d = MSAA[level]
+	if OS.has_feature("mobile"):
+		Engine.max_fps = MOBILE_MAX_FPS

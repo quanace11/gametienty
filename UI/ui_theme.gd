@@ -15,6 +15,19 @@ const MUTED := Color(0.55, 0.58, 0.66)
 static var _theme: Theme
 
 
+## Lề an toàn (tai thỏ, lỗ camera, góc bo của điện thoại) theo đơn vị của canvas:
+## x = trái, y = trên, z = phải, w = dưới. Máy tính trả 0. Thêm sẵn ít nhất
+## `extra` px để nút không sát mép màn hình.
+static func safe_insets(viewport: Viewport, extra := 0.0) -> Vector4:
+	var win := Vector2(DisplayServer.window_get_size())
+	var safe := Rect2(DisplayServer.get_display_safe_area())
+	if win.x <= 0.0 or win.y <= 0.0 or safe.size.x <= 0.0 or safe.size.y <= 0.0 or not OS.has_feature("mobile"):
+		return Vector4(extra, extra, extra, extra)
+	var k := viewport.get_visible_rect().size / win
+	return Vector4(maxf(extra, safe.position.x * k.x), maxf(extra, safe.position.y * k.y),
+		maxf(extra, (win.x - safe.end.x) * k.x), maxf(extra, (win.y - safe.end.y) * k.y))
+
+
 static func get_theme() -> Theme:
 	if _theme:
 		return _theme

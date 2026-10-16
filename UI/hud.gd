@@ -212,7 +212,8 @@ func _build_top_bar() -> void:
 
 func _build_player_card() -> void:
 	var card := PanelContainer.new()
-	card.position = Vector2(12, 10)
+	var inset := UiTheme.safe_insets(get_viewport(), 12.0)
+	card.position = Vector2(inset.x, maxf(10.0, inset.y))
 	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var hunter := GameState.my_role() == GameTypes.Role.HUNTER
 	card.add_theme_stylebox_override("panel", _pill(UiTheme.RED if hunter else UiTheme.BLUE))

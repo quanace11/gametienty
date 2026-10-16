@@ -4,6 +4,7 @@ extends Control
 ## vào minimap để chọn điểm dịch chuyển (GameState.set_aim_point).
 ## Chỉ đọc GameState / EventBus, vẽ lại 10 lần/giây (đỡ tốn pin điện thoại).
 
+const UiTheme = preload("res://UI/ui_theme.gd")
 const WIDTH := 220.0
 const REDRAW_INTERVAL := 0.1
 const BG := Color(0, 0, 0, 0.55)
@@ -76,7 +77,8 @@ func _process(delta: float) -> void:
 
 ## Góc trên phải (gọi lại khi đổi kích thước màn hình / xoay máy).
 func _place() -> void:
-	position = Vector2(get_viewport_rect().size.x - size.x - 14, 14)
+	var inset := UiTheme.safe_insets(get_viewport(), 14.0)
+	position = Vector2(get_viewport_rect().size.x - size.x - inset.z, inset.y)
 
 
 func _draw() -> void:
