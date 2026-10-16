@@ -8,11 +8,11 @@ Làm bằng Godot 4.6 (GDScript), đội 4 người.
 
 ## Dự án đang ở đâu
 
-- **Giai đoạn hiện tại: offline.** Một người chơi với 4 bot, chọn làm Thợ săn hoặc Người trốn. Không tốn tiền server.
-- **Nhưng code đã là client-server từ đầu.** Bản offline chạy đúng đường code của bản online, nên sau này lên online không phải viết lại. Chế độ tạo phòng/vào phòng qua mạng LAN đã chạy được. Lý do và cách làm: [docs/KIEN_TRUC.md](docs/KIEN_TRUC.md).
-- Mục tiêu 4 tuần: một trận 1v4 offline trọn vẹn (đánh gục, kéo vào tù, cứu đồng đội, kỹ năng, bot thông minh).
+- **Mục tiêu 4 tuần đầu đã xong**: một trận 1v4 offline trọn vẹn với bot, chọn được vai (đánh gục, kéo vào tù, cứu đồng đội, bộ bài, bot cả hai phe). Mới thử trên máy tính.
+- **Code đã là client-server từ đầu.** Bản offline chạy đúng đường code của bản online, nên lên online không phải viết lại. Tạo phòng / vào phòng qua mạng LAN đã chạy. Lý do và cách làm: [docs/KIEN_TRUC.md](docs/KIEN_TRUC.md).
+- **Việc tiếp theo**: chạy trên điện thoại thật, rồi hoàn thiện trận offline, rồi lên online. Chi tiết: mục [Kế hoạch](#kế-hoạch).
 
-Chi tiết việc đã làm và việc còn lại: mục [Tiến độ](#tiến-độ) bên dưới.
+Việc đã làm: mục [Tiến độ](#tiến-độ) bên dưới.
 
 ## Chơi thử
 
@@ -48,10 +48,10 @@ Cập nhật mỗi khi merge một phần lớn. Người mới vào đọc mụ
 | Phần | Nội dung | Ở đâu |
 |---|---|---|
 | Kiến trúc | Server có thẩm quyền, offline / host / server riêng chạy cùng code, gửi trạng thái khi đổi, CI chạy test luật + trận offline + trận online 3 máy | `Core/`, `tools/smoke_test.sh` |
-| Người trốn | Di chuyển, cạy rương có vòng căn (vẽ trên sàn), nhặt tiền, đỡ đồng đội gục, 2 cổng mở trễ 3 giây, thoát là thắng riêng | `Player/`, `Objects/`, `UI/qte_ring.gd` |
+| Người trốn | Di chuyển, cạy rương (ngồi mò ổ khóa, 14 giây) có vòng căn bung ra quanh chân, chạm màn hình để căn (trượt thì mở lại từ đầu), nhặt tiền, đỡ đồng đội gục, 2 cổng mở trễ 3 giây, thoát là thắng riêng | `Player/`, `Objects/`, `UI/qte_ring.gd` |
 | Thợ săn | Súng bắn tên lửa bay thẳng (tường chặn), chạm thì nổ lửa + khói, ngắm tay có luồng xanh + nút Hủy, tự nhắm khi chạm nhanh (không đón đầu), tên lửa bay thật nên né được, bắn xong khựng nhẹ, có máu (bị bắn hết máu thì buông người + chạy chậm), túm người gục kéo vào tù | `Player/player_character.gd`, `Core/match/match_rules.gd` |
 | Nhà tù | Tường cao, bị đốt sau 45 giây, cứu bằng túi máu ném qua tường, đệm lò xo bật ra | `Objects/prison.gd` |
-| Bộ bài | Người trốn chọn 5 thẻ ở menu, trả bằng tiền: túi máu (vùng tròn xanh), lựu đạn làm chậm, súng lục, ván trượt, đệm lò xo, bẫy, hộp gỗ. Thợ săn: radar dấu chân, dịch chuyển (chạm minimap chọn chỗ) | `Items/`, `UI/main_menu.gd` |
+| Bộ bài | Người trốn chọn 5 thẻ ở menu, trả bằng tiền: túi máu (bay chậm, vùng tròn xanh 1,2 m, không ai cần cứu thì nằm chờ 8 giây để chạy tới đón), lựu đạn làm chậm, súng lục, ván trượt, đệm lò xo, bẫy, hộp gỗ. Thợ săn: radar dấu chân, dịch chuyển (chạm minimap chọn chỗ) | `Items/`, `UI/main_menu.gd` |
 | Giao diện | Kiểu game chibi dựng bằng code (`UI/ui_theme.gd`): menu nền trời có nút vai to và ô chọn thẻ; HUD có thanh trên (đồng hồ, chìa, cổng), hàng đầu người trốn theo màu, tim máu + tiền, thông báo nổi; nút cảm ứng viền đậm, thẻ hồi chiêu quét hình quạt; minimap khung bo tròn; bảng kết quả thắng/thua. Giao diện co theo màn hình (stretch `canvas_items`). Nhân vật và camera vẽ nội suy giữa hai lần tính vật lý nên chạy mượt cả trên màn 90/120 Hz | `UI/`, `Player/` |
 | Nhân vật | 2 nhân vật chibi KayKit (CC0): thợ săn là Rogue trùm đầu cầm nỏ (vòng đỏ dưới chân), người trốn là hiệp sĩ. Có animation chạy, đứng, gục, ngồi tù, bay, bắn, bị trúng, ném | `Player/models/` |
 | Bản đồ | Phong cách chibi dựng bằng code: sân cỏ, tường thấp mái ngói, hàng rào cây ở viền, nhà tù ở chính giữa, rương có nắp và đai vàng | `Objects/maps/test_map.gd`, `Objects/safe.gd` |
@@ -61,16 +61,11 @@ Cập nhật mỗi khi merge một phần lớn. Người mới vào đọc mụ
 | Xem người khác | Đã thoát hoặc bị loại thì camera xem đồng đội còn chơi; Tab hoặc nút xanh để đổi người (cả thợ săn) | `Player/follow_camera.gd` |
 | Hiệu năng | Đạn, tên lửa, vụ nổ, túi máu, lựu đạn, vùng xanh, cột sáng dùng pool; vật giống nhau dùng chung mesh/material; server riêng không tạo hình; texture nén ETC2/ASTC cho điện thoại | `Player/shot_fx.gd`, `Items/item_visuals.gd`, `project.godot` |
 
-### Còn lại (theo thứ tự nên làm)
+### Việc nhỏ đang treo
 
-1. **Thử trên điện thoại thật**: tạo export preset Android (cần Android SDK, export template, keystore trên máy dev), đo 60 FPS trên máy tầm thấp, chỉnh cỡ nút cảm ứng cho tay thật. Texture đã bật nén ETC2/ASTC. Đây là việc cần làm sớm nhất vì mọi thứ khác chỉ mới thử trên máy tính.
-2. **Âm thanh** `.ogg` (bắn, nổ, mở rương, cổng mở, bị gục, nhạc nền), chạy theo tín hiệu `EventBus`. Cần chọn bộ âm thanh CC0 (gợi ý: Kenney). Phụ trách: `UI/` hoặc người làm hiệu ứng.
-3. **Bản đồ dựng trong editor** (thay vì bằng code), thêm nhà cửa / đồ vật chibi (gợi ý: KayKit City Builder Bits / Furniture Bits, CC0), nhiều bản đồ. Phụ trách: `Objects/`.
-4. **Cổng, tiền** dùng model đẹp hơn (hiện là khối đơn giản). Phụ trách: `Objects/`.
-5. **NavMesh cho bot** (bot đang đi thẳng tới mục tiêu, kẹt tường thì rẽ ngẫu nhiên). Phụ trách: `AI/`.
-6. **Cân bằng với người thật**: 10 trận bot đo ngày 15/10 (sau khi rương mở chậm lại 14 giây, kim chậm hơn, đạn thợ săn dễ trúng hơn) cho thợ săn thắng tuyệt đối 3/10, thắng một phần 4/10, thua 3/10, trung bình bắt 2,6/4 người (trước đó 1,7/4): thợ săn đang hơi mạnh. Bot chưa giống người nên cần chơi thật rồi chỉnh (`Core/types/match_config.gd`, `Items/item_catalog.gd`).
-7. **Online qua Internet**: server riêng trên VPS, ghép phòng, bù trễ. LAN đã chạy.
-8. Việc nhỏ cần Lead xem: đệm lò xo trong nhà tù (`Objects/prison.gd`) và thẻ đệm lò xo (`Items/placed/jump_pad_node.gd`) đang lặp code hất tung; server tính lại dữ liệu rương gửi xuống mỗi frame khi có người đang cạy (`Core/game_state.gd`), nên gộp 10 lần/giây.
+- Đệm lò xo trong nhà tù (`Objects/prison.gd`) và thẻ đệm lò xo (`Items/placed/jump_pad_node.gd`) đang lặp code hất tung.
+- Server tính lại dữ liệu rương gửi xuống mỗi frame khi có người đang cạy (`Core/game_state.gd`), nên gộp 10 lần/giây. Cần Lead duyệt.
+- Cân bằng: 10 trận bot ngày 15/10 cho thợ săn thắng tuyệt đối 3/10, thắng một phần 4/10, thua 3/10, bắt trung bình 2,6/4 người: thợ săn hơi mạnh. Bot chưa giống người nên chờ trận người thật rồi mới chỉnh (`Core/types/match_config.gd`, `Items/item_catalog.gd`).
 
 ### Asset bên ngoài
 
@@ -80,12 +75,46 @@ Cập nhật mỗi khi merge một phần lớn. Người mới vào đọc mụ
 
 Chỉ thêm asset CC0 hoặc giấy phép cho dùng thương mại, và ghi vào bảng này.
 
-## Lộ trình
+## Kế hoạch
 
-| Tuần | Mục tiêu |
-|---|---|
-| 1 | Khung kiến trúc (xong), di chuyển + dash, két tương tác, NavMesh nháp |
-| 2 | Thợ săn đánh gục, kéo vào tù, cứu đồng đội bằng tay và túi máu (API Core + bản mẫu xong), bot tự mở két |
-| 3 | 3 thẻ kỹ năng, QTE ở két, bot thợ săn tuần tra và đuổi |
-| 4 | Ghép trận 1v4 offline hoàn chỉnh, màn hình kết thúc |
-| Sau đó | Server riêng trên VPS, chơi qua Internet mượt, ghép trận nhiều phòng |
+Ba giai đoạn, làm theo thứ tự; giai đoạn sau chỉ bắt đầu khi giai đoạn trước đạt tiêu chí xong. Cột "Ai" ghi việc cần chủ dự án (máy thật, tài khoản, tiền, người chơi thật); còn lại là code.
+
+### Giai đoạn 1: chạy trên điện thoại thật (đang làm)
+
+Xong khi: APK chạy 60 FPS trên máy tầm thấp (RAM 3 GB, Mali-G52 / Adreno 610), dưới 400 MB RAM, không nóng máy sau 3 trận, nút cảm ứng bấm thoải mái.
+
+| # | Việc | Ai |
+|---|---|---|
+| 1.1 | Export preset Android + CI tự build APK thử (khóa debug), tải về từ GitHub Actions | Code |
+| 1.2 | Lớp đo hiệu năng bật bằng tham số: FPS, thời gian vẽ, RAM, draw call, ghi ra file sau mỗi trận | Code |
+| 1.3 | Cài APK lên một điện thoại tầm thấp, chơi 3 trận mỗi vai, gửi số đo + ảnh + cảm nhận nút | Chủ dự án |
+| 1.4 | Chỉnh theo kết quả: cỡ và chỗ nút, giảm bóng / tam giác / draw call, mức đồ họa thấp | Code |
+
+### Giai đoạn 2: hoàn thiện trận offline
+
+Xong khi: người thật chơi 10 trận trên điện thoại thấy vui, thợ săn thắng (một phần hoặc tuyệt đối) khoảng một nửa số trận, vẫn 60 FPS.
+
+| # | Việc | Ai |
+|---|---|---|
+| 2.1 | Dọn hai việc nhỏ đang treo ở trên | Code, Lead duyệt Core |
+| 2.2 | Âm thanh `.ogg` CC0 (Kenney): bắn, nổ, cạy rương, căn trúng / trượt, cổng mở, bị gục, nhạc nền; chạy theo `EventBus`, có nút tắt tiếng | Code |
+| 2.3 | NavMesh cho bot, tính đường thưa để server nhẹ | Code |
+| 2.4 | Model cổng và tiền chibi (KayKit CC0) | Code |
+| 2.5 | Bản đồ dựng trong editor có nhà cửa / đồ vật, thêm bản đồ thứ hai | Code, chủ dự án góp ý bố cục |
+| 2.6 | Chơi thật với bạn bè, ghi kết quả và chỗ khó chịu | Chủ dự án |
+| 2.7 | Chỉnh số cân bằng theo 2.6 | Code |
+
+### Giai đoạn 3: chơi online qua Internet
+
+Xong khi: 5 người ở 5 mạng khác nhau chơi trọn trận qua VPS, ping 150 ms vẫn chơi được, dưới 8 KB/s mỗi người mỗi chiều, một trận dưới 2% một nhân CPU.
+
+| # | Việc | Ai |
+|---|---|---|
+| 3.1 | Đo băng thông và CPU trận online trong CI | Code |
+| 3.2 | Giả lập ping 150 ms + mất gói, đoán trước di chuyển trên máy người chơi | Code |
+| 3.3 | Phòng có mã, bot lấp chỗ, vào lại khi rớt mạng | Code |
+| 3.4 | Server nhiều phòng một lúc, script cài đặt + tự khởi động lại trên Linux | Code |
+| 3.5 | Thuê VPS (khoảng 5 USD/tháng, gần Việt Nam), mở cổng UDP | Chủ dự án |
+| 3.6 | Chơi thử online với 4 người khác | Chủ dự án |
+
+Sau đó: chế độ 8v2 (kiến trúc đã sẵn), quyết định phát hành (Google Play cần tài khoản nhà phát triển và khóa ký riêng; iOS cần máy Mac và tài khoản Apple Developer).
