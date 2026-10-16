@@ -62,6 +62,7 @@ const BONES: Array[String] = ["hips", "spine", "chest", "neck", "head",
 	"thigh_l", "shin_l", "foot_l", "thigh_r", "shin_r", "foot_r"]
 enum Bone { HIPS, SPINE, CHEST, NECK, HEAD, UPPER_ARM_L, FOREARM_L, HAND_L, UPPER_ARM_R,
 	FOREARM_R, HAND_R, THIGH_L, SHIN_L, FOOT_L, THIGH_R, SHIN_R, FOOT_R }
+const RUN_CADENCE := 12.0 # radian / giây ở tốc độ chạy chuẩn: ~3,8 bước / giây, bước khớp tốc độ chạy, chân không trượt
 const LEG := 0.21 # chiều dài đùi = cẳng chân, theo chiều cao 1 của mô hình
 const CHEST_CHECK := 0.1 # giây giữa hai lần xem có đứng ở rương không
 const HIT_FLASH_TIME := 0.18 # giây người bị trúng chớp đỏ
@@ -83,6 +84,7 @@ var _anim_speed := 1.0
 var _oneshot_left := 0.0 # đang phát tư thế một lần (bắn, bị trúng, ném)
 var _oneshot_total := 0.0
 var _pose_time := 0.0
+var _run_phase := 0.0 # pha bước chạy (radian), cộng dồn theo tốc độ để đổi tốc không giật chân
 var _last_pos := Vector3.ZERO
 var _speed := 0.0 # m/s trên mặt sàn, đo từ vị trí (client không có velocity thật)
 var _visual: Node3D # hình, top_level, nội suy theo khung hình (không có trên server riêng)
@@ -415,6 +417,8 @@ func _update_anim(delta: float) -> void:
 ## phóng kiếm / ném thì lao người tới. Tay chân do _pose_bones.
 func _apply_pose(delta: float) -> void:
 	var t := _pose_time
+	if _anim_name == "Running_A":
+		_run_phase = fmod(_run_phase + delta * RUN_CADENCE * _anim_speed, TAU)
 	var pitch := 0.0 # dương: ngửa ra sau, âm: chúi về trước
 	var roll := 0.0
 	var lift := 0.0
@@ -424,7 +428,7 @@ func _apply_pose(delta: float) -> void:
 		"Idle":
 			squash = 1.0 + 0.008 * sin(t * 2.2) # thở
 		"Running_A":
-			var step := t * 9.0 * _anim_speed
+			var step := _run_phase
 			pitch = -0.12
 			roll = 0.04 * sin(step)
 			lift = 0.05 * absf(sin(step))
@@ -477,29 +481,47 @@ func _pose_bones(delta: float) -> void:
 	var g := _bone_goal
 	g.fill(Vector3.ZERO)
 	match _anim_name:
-		"Idle":
+		"Idle": # thở; tay đung đưa nhẹ, khuỷu và cổ tay theo sau vai một nhịp
 			var b := sin(t * 2.2)
-			g[Bone.CHEST] = Vector3(1.5 * b, 0, 0)
-			g[Bone.HEAD] = Vector3(-1.0 * b, 5.0 * sin(t * 0.6), 0)
-			g[Bone.UPPER_ARM_L] = Vector3(1.5 * b, 0, 2.0 + 2.0 * b)
-			g[Bone.UPPER_ARM_R] = Vector3(-1.5 * b, 0, -2.0 - 2.0 * b)
+			var sway := sin(t * 1.1)
+			var lag := sin(t * 1.1 - 0.8)
+			g[Bone.CHEST] = Vector3(1.5 * b, 2.0 * sin(t * 0.5), 0)
+			g[Bone.HEAD] = Vector3(-1.0 * b, 6.0 * sin(t * 0.6), 0)
+			g[Bone.UPPER_ARM_L] = Vector3(3.0 * sway, 0, 3.0 + 2.0 * b)
+			g[Bone.UPPER_ARM_R] = Vector3(-3.0 * sway, 0, -3.0 - 2.0 * b)
+			g[Bone.FOREARM_L] = Vector3(-4.0 + 4.0 * lag, 0, 0)
+			g[Bone.FOREARM_R] = Vector3(-4.0 - 4.0 * lag, 0, 0)
+			g[Bone.HAND_L] = Vector3(6.0 * sin(t * 1.1 - 1.6), 0, 0)
+			g[Bone.HAND_R] = Vector3(-6.0 * sin(t * 1.1 - 1.6), 0, 0)
 		"Running_A":
-			var step := t * 9.0 * _anim_speed
+			var step := _run_phase
 			var s := sin(step)
 			var c := cos(step)
-			g[Bone.THIGH_L] = Vector3(-32.0 * s, 0, 0)
-			g[Bone.THIGH_R] = Vector3(32.0 * s, 0, 0)
-			g[Bone.SHIN_L] = Vector3(8.0 + 55.0 * maxf(0.0, c), 0, 0) # gối gập lúc chân đưa lên
-			g[Bone.SHIN_R] = Vector3(8.0 + 55.0 * maxf(0.0, -c), 0, 0)
-			g[Bone.FOOT_L] = Vector3(-10.0 * s, 0, 0)
-			g[Bone.FOOT_R] = Vector3(10.0 * s, 0, 0)
-			g[Bone.HIPS] = Vector3(0, 7.0 * s, 0)
-			g[Bone.SPINE] = Vector3(-5.0, 0, 0)
-			g[Bone.CHEST] = Vector3(0, -12.0 * s, 0) # vai xoay ngược hông
-			g[Bone.HEAD] = Vector3(4.0, 5.0 * s, 0)
-			g[Bone.UPPER_ARM_L] = Vector3(28.0 * s + (35.0 if is_hunter() else 0.0), 0, 6.0) # ma tu hạ tay đang chìa ra
-			g[Bone.UPPER_ARM_R] = Vector3(-28.0 * s, 0, -6.0)
-			g[Bone.FOREARM_R] = Vector3(-20.0 - 10.0 * maxf(0.0, s), 0, 0)
+			# Chân: đùi đưa trước / sau, gối gập lúc chân nhấc lên đưa tới, bàn chân lăn.
+			g[Bone.THIGH_L] = Vector3(-34.0 * s, 0, 2.0)
+			g[Bone.THIGH_R] = Vector3(34.0 * s, 0, -2.0)
+			g[Bone.SHIN_L] = Vector3(10.0 + 55.0 * maxf(0.0, c), 0, 0)
+			g[Bone.SHIN_R] = Vector3(10.0 + 55.0 * maxf(0.0, -c), 0, 0)
+			g[Bone.FOOT_L] = Vector3(-12.0 * s + 10.0 * maxf(0.0, c), 0, 0)
+			g[Bone.FOOT_R] = Vector3(12.0 * s + 10.0 * maxf(0.0, -c), 0, 0)
+			g[Bone.HIPS] = Vector3(0, 8.0 * s, 0)
+			g[Bone.SPINE] = Vector3(-6.0, 0, 3.0 * c) # nghiêng nhẹ sang chân đang đỡ
+			g[Bone.CHEST] = Vector3(0, -13.0 * s, 0) # vai xoay ngược hông
+			g[Bone.NECK] = Vector3(0, 6.0 * s, 0) # đầu giữ thẳng hướng chạy
+			g[Bone.HEAD] = Vector3(4.0 + 2.0 * absf(c), 2.0 * s, 0)
+			# Tay đánh ngược chân; khuỷu gập thêm khi tay đưa ra trước, cổ tay trễ nhịp
+			# nên tay mềm, không vung như que cứng. Ma tu hạ cánh tay đang chìa ra.
+			var lag := step - 0.6
+			g[Bone.UPPER_ARM_L] = Vector3(30.0 * s + (35.0 if is_hunter() else 0.0), 0, 8.0 + 4.0 * absf(s))
+			g[Bone.FOREARM_L] = Vector3(-20.0 - 30.0 * maxf(0.0, -sin(lag)), 0, 0)
+			if is_hunter(): # tay cầm kiếm: đánh nhẹ về sau, mũi kiếm chúc xuống, không chĩa ngang
+				g[Bone.UPPER_ARM_R] = Vector3(12.0 - 10.0 * s, 0, -10.0)
+				g[Bone.CHEST].y *= 0.5
+			else:
+				g[Bone.UPPER_ARM_R] = Vector3(-30.0 * s, 0, -8.0 - 4.0 * absf(s))
+				g[Bone.FOREARM_R] = Vector3(-20.0 - 30.0 * maxf(0.0, sin(lag)), 0, 0)
+			g[Bone.HAND_L] = Vector3(14.0 * sin(step - 1.3), 0, 0)
+			g[Bone.HAND_R] = Vector3(-14.0 * sin(step - 1.3), 0, 0)
 		"Lie_Idle":
 			var b := sin(t * 1.6)
 			g[Bone.CHEST] = Vector3(2.0 * b, 0, 0)
@@ -548,12 +570,18 @@ func _pose_bones(delta: float) -> void:
 			g[Bone.HEAD] = Vector3(15.0 * k, 0, 0)
 			g[Bone.UPPER_ARM_L] = Vector3(15.0 * k, 0, 30.0 * k)
 			g[Bone.UPPER_ARM_R] = Vector3(15.0 * k, 0, -30.0 * k)
+			g[Bone.FOREARM_L] = Vector3(-35.0 * k * k, 0, 0) # khuỷu bật theo sau vai
+			g[Bone.FOREARM_R] = Vector3(-35.0 * k * k, 0, 0)
+			g[Bone.HAND_L] = Vector3(20.0 * k, 0, 0)
+			g[Bone.HAND_R] = Vector3(20.0 * k, 0, 0)
 		"1H_Ranged_Shoot", "Throw": # vung tay phải từ sau ra trước
 			var p := 1.0 - _oneshot_fade()
 			var swing := sin(PI * clampf(p * 1.3, 0.0, 1.0))
 			var back := 1.0 - clampf(p * 4.0, 0.0, 1.0) # lấy đà lúc đầu
 			g[Bone.UPPER_ARM_R] = Vector3(-100.0 * swing + 35.0 * back, 0, -10.0 * swing)
-			g[Bone.FOREARM_R] = Vector3(-15.0 * swing, 0, 0)
+			g[Bone.FOREARM_R] = Vector3(-40.0 * back - 10.0 * swing, 0, 0) # lấy đà gập khuỷu, vung ra thì duỗi
+			g[Bone.HAND_R] = Vector3(25.0 * back - 20.0 * swing, 0, 0) # cổ tay hất theo
+			g[Bone.UPPER_ARM_L] = Vector3(20.0 * swing, 0, 15.0 * swing) # tay kia vung ngược giữ thăng bằng
 			g[Bone.CHEST] = Vector3(0, -22.0 * swing + 12.0 * back, 0)
 			g[Bone.SPINE] = Vector3(-6.0 * swing, 0, 0)
 			g[Bone.THIGH_L] = Vector3(-20.0 * swing, 0, 0)
