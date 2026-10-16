@@ -3,7 +3,10 @@ extends Control
 ## lớn bên phải, thanh thẻ đạo cụ có giá tiền ở giữa dưới.
 ## Thợ săn: nút phải là cần ngắm. Kéo ra thì máy mình hiện luồng xanh chỉ
 ## hướng bắn, thả tay là bắn; kéo về giữa hoặc thả tay trên nút "Hủy" thì không bắn;
-## chạm nhanh là tự nhắm / túm người gục. Người trốn: vòng căn hiện ra thì chạm
+## chạm nhanh là tự nhắm / túm người gục. Phía trên cần ngắm có nút TRÓI: sáng
+## lên khi có đệ tử đang gục trong tầm túm, chạm là trói người đó kéo đi (bấm
+## interact như phím E); không ai trong tầm thì nút mờ, chạm không làm gì (không
+## lỡ phóng kiếm). Người trốn: vòng căn hiện ra thì chạm
 ## bất kỳ chỗ trống nào trên màn hình để căn; giữ nút phải để cạy rương,
 ## đỡ đồng đội; đã thoát / bị loại thì nút phải thành nút đổi người xem.
 ## Thẻ ném được (túi cứu, lựu đạn, đệm lò xo, bẫy, hộp gỗ: ItemData.aim_range > 0)
@@ -28,6 +31,9 @@ const REDRAW_INTERVAL := 0.1
 const CARD_DRAG_R := 110.0 # px kéo từ giữa thẻ thì ném xa nhất
 const CARD_DEAD := 0.15 # kéo ít hơn chừng này (phần của CARD_DRAG_R) thì coi như chạm, dùng dưới chân
 const RING_STEPS := 40
+const BIND_R := 46.0
+const BIND_OFFSET := Vector2(-20, -178) # nút Trói so với tâm cần ngắm
+const BIND_RANGE := 1.5 # mét, khớp tầm túm người gục của nhân vật (PICKUP_RANGE)
 
 const MOUSE_FINGER := -1
 const INK := Color(0.12, 0.1, 0.16)
@@ -49,6 +55,7 @@ var _redraw_left := 0.0
 var _item_names := {}
 var _touch := false
 var _pie_points := PackedVector2Array()
+var _bind_ready := false # có đệ tử đang gục trong tầm trói (tính 10 lần/giây)
 
 static var _card_ready: StyleBoxFlat
 static var _card_idle: StyleBoxFlat
@@ -64,6 +71,7 @@ func _process(delta: float) -> void:
 	_redraw_left -= delta
 	if _redraw_left <= 0.0 or _card_slot >= 0: # đang kéo thẻ: vòng dưới đất bám theo nhân vật từng frame
 		_redraw_left = REDRAW_INTERVAL
+		_bind_ready = _hunter() and _downed_in_reach()
 		queue_redraw()
 
 
@@ -101,6 +109,12 @@ func _on_touch(finger: int, pos: Vector2, pressed: bool) -> void:
 			get_viewport().set_input_as_handled()
 		return
 	var kind := ""
+	if _hunter() and not _spectating() and pos.distance_to(_bind_center()) <= BIND_R * 1.2:
+		if _downed_in_reach(): # tính lại lúc chạm, khỏi lệch 0,1 giây
+			_pulse(&"interact")
+		get_viewport().set_input_as_handled()
+		queue_redraw()
+		return
 	if pos.distance_to(_move_center()) <= STICK_R * 1.6:
 		kind = "move"
 	elif pos.distance_to(_aim_center()) <= AIM_R * 1.4:
@@ -261,6 +275,7 @@ func _draw() -> void:
 		draw_arc(k, 13, 0, TAU, 20, Color.WHITE, 3.0)
 		for d: Vector2 in [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT]:
 			draw_line(k + d * 8, k + d * 20, Color.WHITE, 3.0)
+		_bind_button(font, me)
 		if not aiming:
 			_text(font, ac + Vector2(0, AIM_R + 18), "PHI KIẾM", 18, Color.WHITE)
 		elif _card_slot < 0:
@@ -273,6 +288,40 @@ func _draw() -> void:
 	_draw_cards(me, font)
 	if _card_slot >= 0 and _card_slot < me.deck.size():
 		_draw_card_aim(me, font)
+
+
+## Nút Trói của ma tu: đỏ thẫm khi có người gục trong tầm, mờ khi không; đang kéo người thì ghi "Đang trói".
+func _bind_button(font: Font, me: PlayerRecord) -> void:
+	var bc := _bind_center()
+	var carrying := me.carrying_id != 0
+	var ready := _bind_ready and not carrying
+	draw_circle(bc, BIND_R + 3, INK if ready else Color(INK, 0.5))
+	draw_circle(bc, BIND_R, Color(0.75, 0.12, 0.2) if ready else Color(0.35, 0.3, 0.38, 0.55))
+	if ready:
+		draw_circle(bc + Vector2(-BIND_R * 0.3, -BIND_R * 0.35), BIND_R * 0.28, Color(1, 1, 1, 0.25))
+		draw_arc(bc, BIND_R + 8, 0, TAU, 40, Color(1, 0.85, 0.3, 0.8), 3.0) # viền vàng: bấm được
+	# Hình dây trói: hai vòng dây chéo.
+	var rope := Color(1, 0.9, 0.7) if ready else Color(1, 1, 1, 0.45)
+	draw_arc(bc + Vector2(-7, -10), 10, 0, TAU, 16, rope, 3.0)
+	draw_arc(bc + Vector2(7, -10), 10, 0, TAU, 16, rope, 3.0)
+	_text(font, bc + Vector2(0, 16), "ĐANG TRÓI" if carrying else "TRÓI", 15 if carrying else 18, Color.WHITE if ready or carrying else Color(1, 1, 1, 0.6))
+
+
+## Có đệ tử đang gục trong tầm trói của mình không (đọc trạng thái từ GameState, vị trí từ nhân vật).
+func _downed_in_reach() -> bool:
+	var me := _me()
+	var body := _my_entity() as EntityBase
+	if me == null or body == null or me.carrying_id != 0:
+		return false
+	var at := body.flat_position()
+	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
+		var e := node as EntityBase
+		if e == body or e.is_hunter():
+			continue
+		var rec := GameState.rules.record(e.peer_id)
+		if rec and rec.state == GameTypes.PlayerState.DOWNED and at.distance_to(e.flat_position()) <= BIND_RANGE:
+			return true
+	return false
 
 
 func _cancel_button(font: Font, over: bool) -> void:
@@ -444,6 +493,10 @@ func _cards_origin(count: int) -> Vector2:
 
 func _move_center() -> Vector2:
 	return Vector2(MARGIN, get_viewport_rect().size.y - MARGIN)
+
+
+func _bind_center() -> Vector2:
+	return _aim_center() + BIND_OFFSET
 
 
 func _aim_center() -> Vector2:

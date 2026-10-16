@@ -122,7 +122,7 @@ func _set_gate(text: String, color: Color) -> void:
 
 func _hint_text() -> String:
 	if GameState.my_role() == GameTypes.Role.HUNTER:
-		return "Kéo nút PHI KIẾM để ngắm, thả tay là phóng kiếm. Đánh gục đệ tử rồi kéo vào huyết trận!"
+		return "Kéo nút PHI KIẾM để ngắm, thả tay là phóng kiếm. Đánh gục đệ tử, bấm TRÓI rồi kéo vào huyết trận!"
 	return "Đứng ở trận linh để giải, kim tới vùng sáng thì chạm màn hình (hoặc E). Giải đủ thì chạy ra lối ra!"
 
 
