@@ -10,7 +10,7 @@ Làm bằng Godot 4.6 (GDScript), đội 4 người.
 
 - **Mục tiêu 4 tuần đầu đã xong**: một trận 1v4 offline trọn vẹn với bot, chọn được vai (đánh gục, kéo vào tù, cứu đồng đội, bộ bài, bot cả hai phe). Mới thử trên máy tính.
 - **Code đã là client-server từ đầu.** Bản offline chạy đúng đường code của bản online, nên lên online không phải viết lại. Tạo phòng / vào phòng qua mạng LAN đã chạy. Lý do và cách làm: [docs/KIEN_TRUC.md](docs/KIEN_TRUC.md).
-- **Việc tiếp theo**: chạy trên điện thoại thật, rồi hoàn thiện trận offline, rồi lên online. Chi tiết: mục [Kế hoạch](#kế-hoạch).
+- **Việc tiếp theo**: 4 tuần hoàn thiện bản offline (có thử trên điện thoại thật), 5 nhóm làm song song theo thư mục. Online để sang giai đoạn 2. Chi tiết: mục [Kế hoạch](#kế-hoạch).
 
 Việc đã làm: mục [Tiến độ](#tiến-độ) bên dưới.
 
@@ -30,14 +30,15 @@ Mở thư mục này bằng Godot 4.6 rồi bấm Play.
 3. Đọc README trong thư mục module của mình.
 4. Trước khi mở PR: `GODOT=/duong/dan/godot tools/smoke_test.sh` (CI cũng tự chạy).
 
-| Thư mục | Người phụ trách | Nội dung |
+| Thư mục | Nhóm (xem [Kế hoạch](#kế-hoạch)) | Nội dung |
 |---|---|---|
-| `Core/` | A (Lead) | Kiểu dữ liệu, EventBus, trạng thái trận, mạng, interface |
-| `Player/` | B | Điều khiển, di chuyển, đánh/ngã/cứu, camera, anim |
-| `Objects/` | C | Két, cổng, nhà tù, cửa, bẫy, bản đồ |
-| `Items/` | C | Thẻ kỹ năng, vật phẩm |
-| `AI/` | D | Bot, giác quan, NavMesh |
-| `UI/` | | Menu, HUD, theo dõi, minimap |
+| `Core/` | 1 (Lead) | Kiểu dữ liệu, EventBus, trạng thái trận, mạng, interface |
+| `Player/` | 2 | Điều khiển, di chuyển, đánh/ngã/cứu, camera, anim |
+| `UI/` | 2 | Menu, HUD, nút cảm ứng, minimap, cài đặt |
+| `Objects/` | 3 | Rương, cổng, nhà tù, bụi cây, bản đồ |
+| `Items/` | 3 | Thẻ kỹ năng, vật đặt xuống đất |
+| `AI/` | 4 | Bot, NavMesh |
+| `Audio/`, `Fx/` | 5 | Âm thanh, hiệu ứng hạt (chưa có, tạo ở tuần 1) |
 
 ## Tiến độ
 
@@ -77,44 +78,73 @@ Chỉ thêm asset CC0 hoặc giấy phép cho dùng thương mại, và ghi vào
 
 ## Kế hoạch
 
-Ba giai đoạn, làm theo thứ tự; giai đoạn sau chỉ bắt đầu khi giai đoạn trước đạt tiêu chí xong. Cột "Ai" ghi việc cần chủ dự án (máy thật, tài khoản, tiền, người chơi thật); còn lại là code.
+**Giai đoạn 1 (4 tuần): hoàn thiện bản offline.** Xong khi: 60 FPS và dưới 400 MB trên máy tầm thấp (RAM 3 GB, Mali-G52 / Adreno 610), 2 bản đồ, đủ âm thanh, người thật chơi 10 trận thấy vui và thợ săn thắng (một phần hoặc tuyệt đối) khoảng một nửa số trận.
 
-### Giai đoạn 1: chạy trên điện thoại thật (đang làm)
+**Giai đoạn 2: online.** Chưa làm gì; chỉ giữ khung đã có trong Core (server có thẩm quyền, offline / host / server riêng cùng đường code, `Net` với ENet, CI chạy trận online 3 máy). Mọi PR giai đoạn 1 vẫn phải qua CI đó.
 
-Xong khi: APK chạy 60 FPS trên máy tầm thấp (RAM 3 GB, Mali-G52 / Adreno 610), dưới 400 MB RAM, không nóng máy sau 3 trận, nút cảm ứng bấm thoải mái.
+**Đổi bối cảnh tiên hiệp** (ma tu, phi kiếm, huyết trận, trận linh, lối ra phải phá giải): thuật ngữ và 6 ticket luật TH-01..06 ở [docs/TIEN_HIEP.md](docs/TIEN_HIEP.md). Phần giao diện tiên hiệp Lead làm riêng.
 
-| # | Việc | Ai |
+### Nhóm việc (tránh conflict)
+
+Mỗi nhóm chỉ commit trong thư mục mình sở hữu. Có 3 người thêm thì gộp nhóm 5 vào nhóm 2.
+
+| Nhóm | Sở hữu | Việc chính |
 |---|---|---|
-| 1.1 | Export preset Android + CI tự build APK thử (khóa debug), tải về từ GitHub Actions | Code |
-| 1.2 | Lớp đo hiệu năng bật bằng tham số: FPS, thời gian vẽ, RAM, draw call, ghi ra file sau mỗi trận | Code |
-| 1.3 | Cài APK lên một điện thoại tầm thấp, chơi 3 trận mỗi vai, gửi số đo + ảnh + cảm nhận nút | Chủ dự án |
-| 1.4 | Chỉnh theo kết quả: cỡ và chỗ nút, giảm bóng / tam giác / draw call, mức đồ họa thấp | Code |
+| 1. Lõi và build (Lead) | `Core/`, `main.tscn`, `project.godot`, `tools/`, `.github/`, `export_presets.cfg`, `README.md` | Build APK, đo hiệu năng, số cân bằng, duyệt PR, thêm tín hiệu / hàm cho nhóm khác |
+| 2. Điều khiển và giao diện | `Player/`, `UI/` | Nút cảm ứng, icon thẻ, cài đặt, chọn bản đồ, hướng dẫn |
+| 3. Bản đồ và đạo cụ | `Objects/`, `Items/` | Bản đồ trong editor, model cổng / tiền, bản đồ 2, số của thẻ |
+| 4. Bot | `AI/` | NavMesh, hành vi, độ khó |
+| 5. Âm thanh và hiệu ứng | `Audio/`, `Fx/` (mới) | Âm thanh, nhạc nền, hiệu ứng hạt dùng pool |
 
-### Giai đoạn 2: hoàn thiện trận offline
+1. Cần sửa file nhóm khác (kể cả thêm tín hiệu `EventBus`, số trong `match_config.gd`, dòng trong `project.godot`): mở issue cho nhóm đó, không tự sửa.
+2. Nói chuyện giữa các nhóm chỉ qua `EventBus`, group và `Core/interfaces/`. Chốt ngày đầu tuần 1: bản đồ có sẵn `NavigationRegion3D` đã bake (nhóm 3 → 4); danh sách tín hiệu cho âm thanh (nhóm 5 → 1).
+3. Mỗi việc một nhánh `<module>/<việc>`, PR nhỏ, kéo `main` mỗi sáng, `tools/smoke_test.sh` qua trước khi mở PR.
+4. Asset mới ghi trong README của module; nhóm 1 gộp vào bảng asset bên trên.
+5. PR nặng (bản đồ, âm thanh, hiệu ứng) ghi số FPS đo bằng `--perf` trước và sau.
 
-Xong khi: người thật chơi 10 trận trên điện thoại thấy vui, thợ săn thắng (một phần hoặc tuyệt đối) khoảng một nửa số trận, vẫn 60 FPS.
+### Tuần 1: đo trên điện thoại, dựng khung
 
-| # | Việc | Ai |
+| Nhóm | Việc | File |
 |---|---|---|
-| 2.1 | Dọn hai việc nhỏ đang treo ở trên | Code, Lead duyệt Core |
-| 2.2 | Âm thanh `.ogg` CC0 (Kenney): bắn, nổ, cạy rương, căn trúng / trượt, cổng mở, bị gục, nhạc nền; chạy theo `EventBus`, có nút tắt tiếng | Code |
-| 2.3 | NavMesh cho bot, tính đường thưa để server nhẹ | Code |
-| 2.4 | Model cổng và tiền chibi (KayKit CC0) | Code |
-| 2.5 | Bản đồ dựng trong editor có nhà cửa / đồ vật, thêm bản đồ thứ hai | Code, chủ dự án góp ý bố cục |
-| 2.6 | Chơi thật với bạn bè, ghi kết quả và chỗ khó chịu | Chủ dự án |
-| 2.7 | Chỉnh số cân bằng theo 2.6 | Code |
+| 1 | Export preset Android + CI build APK thử (khóa debug) | `export_presets.cfg`, `.github/` |
+| 1 | Lớp đo hiệu năng `--perf`: FPS, thời gian vẽ, RAM, draw call, ghi file sau trận | `Core/debug/`, `Core/main.gd` |
+| 1 | Đăng ký autoload `Audio` rỗng, thêm tín hiệu nhóm 5 cần | `project.godot`, `Core/event_bus.gd` |
+| 1 | Gộp dữ liệu rương gửi xuống còn 10 lần/giây | `Core/game_state.gd` |
+| 1 | Lead cài APK lên máy tầm thấp, chơi 3 trận mỗi vai, gửi số đo | |
+| 2 | Cỡ / khoảng cách nút thành hằng chỉnh được | `UI/touch_controls.gd` |
+| 2 | Màn Cài đặt: âm lượng Nhạc / Hiệu ứng, lưu `user://` | `UI/settings_menu.gd` (mới) |
+| 3 | Bản đồ thử từ code sang `.tscn` (giữ bố cục) + `NavigationRegion3D` đã bake | `Objects/maps/` |
+| 3 | Gộp code hất tung của đệm lò xo trong tù và thẻ đệm lò xo | `Objects/prison.gd`, `Items/placed/` |
+| 4 | Bot đi theo `NavigationAgent3D` (tạm bake lúc vào trận), vẽ đường đi khi `--bot-debug` | `AI/` |
+| 5 | Bộ âm thanh CC0 (Kenney) sang `.ogg`; `audio_director.gd` dùng pool, phát 6 âm cơ bản theo `EventBus` | `Audio/` |
 
-### Giai đoạn 3: chơi online qua Internet
+### Tuần 2: sửa theo số đo, nội dung chính
 
-Xong khi: 5 người ở 5 mạng khác nhau chơi trọn trận qua VPS, ping 150 ms vẫn chơi được, dưới 8 KB/s mỗi người mỗi chiều, một trận dưới 2% một nhân CPU.
-
-| # | Việc | Ai |
+| Nhóm | Việc | File |
 |---|---|---|
-| 3.1 | Đo băng thông và CPU trận online trong CI | Code |
-| 3.2 | Giả lập ping 150 ms + mất gói, đoán trước di chuyển trên máy người chơi | Code |
-| 3.3 | Phòng có mã, bot lấp chỗ, vào lại khi rớt mạng | Code |
-| 3.4 | Server nhiều phòng một lúc, script cài đặt + tự khởi động lại trên Linux | Code |
-| 3.5 | Thuê VPS (khoảng 5 USD/tháng, gần Việt Nam), mở cổng UDP | Chủ dự án |
-| 3.6 | Chơi thử online với 4 người khác | Chủ dự án |
+| 1 | Sửa điểm nặng trong Core, chuyển điểm nặng của nhóm khác thành issue | `Core/` |
+| 1 | `tools/balance.sh`: chạy 20 trận bot, in tỉ lệ thắng, số người bị bắt | `tools/` |
+| 2 | Chỉnh nút theo tay thật; icon 9 thẻ; mức đồ họa Thấp / Cao | `UI/` |
+| 3 | Model cổng thoát và cọc tiền chibi (KayKit CC0); phác bố cục bản đồ 2 cho Lead duyệt | `Objects/` |
+| 4 | Bỏ hẳn đi thẳng / rẽ ngẫu nhiên; thợ săn tuần tra rương; người trốn chạy xa thợ săn | `AI/` |
+| 5 | Đủ âm còn lại (thẻ, tiền, đếm ngược, radar, dịch chuyển), nhạc nền, bus Nhạc / Hiệu ứng | `Audio/` |
 
-Sau đó: chế độ 8v2 (kiến trúc đã sẵn), quyết định phát hành (Google Play cần tài khoản nhà phát triển và khóa ký riêng; iOS cần máy Mac và tài khoản Apple Developer).
+### Tuần 3: bản đồ 2, bot khôn hơn, hiệu ứng, buổi chơi thật
+
+| Nhóm | Việc | File |
+|---|---|---|
+| 1 | Chọn bản đồ trong luật (`MatchConfig.map_id`), CI chạy cả 2 bản đồ; tổ chức buổi chơi 4-5 người thật | `Core/`, `tools/` |
+| 2 | Menu chọn bản đồ, hướng dẫn 3 trang lần đầu chơi, rung khi trúng đạn / căn trượt | `UI/`, `Player/` |
+| 3 | Bản đồ 2 có nhà cửa, đồ vật, bụi cây, NavMesh; trang trí bản đồ 1 | `Objects/maps/` |
+| 4 | Bot né tên lửa, nấp bụi khi bị đuổi, chọn rương xa thợ săn; độ khó Dễ / Thường | `AI/` |
+| 5 | Hiệu ứng hạt dùng pool: bụi khi cạy, tia sáng khi căn trúng, pháo khi thoát, lửa nhà tù | `Fx/` |
+
+### Tuần 4: cân bằng, đóng gói bản thử
+
+| Nhóm | Việc | File |
+|---|---|---|
+| 1 | Chỉnh số trận theo buổi chơi; đo lại cả trận trên máy thật; build APK bản thử; Lead chơi 10 trận chốt | `Core/types/match_config.gd`, `.github/` |
+| 2 | Sửa lỗi giao diện từ buổi chơi; bảng kết quả thêm số liệu | `UI/` |
+| 3 | Chỉnh giá / hồi chiêu thẻ; sửa chỗ kẹt tường trên 2 bản đồ | `Items/item_catalog.gd`, `Objects/maps/` |
+| 4 | Chỉnh độ khó bot cho trận 1 người + 4 bot cân | `AI/` |
+| 5 | Cân âm lượng, nén lại (tổng âm thanh dưới 10 MB) | `Audio/` |
