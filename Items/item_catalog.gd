@@ -10,15 +10,15 @@ static func all() -> Dictionary:
 	var items := {}
 	for it: ItemData in [
 		# Kéo thẻ để chọn chỗ ném (tầm, bán kính vùng); chạm nhanh thì dưới chân.
-		_aimed(ItemData.new(T.MEDKIT, "Túi cứu thương", 10, 6.0, "res://Items/effects/medkit.gd"), 8.0, 1.2),
-		_aimed(ItemData.new(T.STUN_GRENADE, "Lựu đạn làm chậm", 10, 12.0, "res://Items/effects/stun_grenade.gd"), 8.0, 2.5),
-		ItemData.new(T.SPEED_BOOST, "Ván trượt", 5, 12.0, "res://Items/effects/speed_boost.gd"),
-		_aimed(ItemData.new(T.JUMP_PAD, "Đệm lò xo", 6, 8.0, "res://Items/effects/jump_pad.gd"), 6.0, 0.6),
-		_aimed(ItemData.new(T.TRAP, "Bẫy kẹp", 6, 10.0, "res://Items/effects/trap.gd"), 4.0, 0.6),
-		_aimed(ItemData.new(T.CRATE, "Hộp gỗ", 5, 10.0, "res://Items/effects/crate.gd"), 4.0, 0.8),
-		ItemData.new(T.PISTOL, "Súng lục", 4, 1.5, "res://Items/effects/pistol.gd"),
-		_hunter(ItemData.new(T.RADAR, "Radar dấu chân", 0, 15.0, "res://Items/effects/radar.gd")),
-		_hunter(ItemData.new(T.TELEPORT, "Dịch chuyển", 0, 30.0, "res://Items/effects/teleport.gd")),
+		_aimed(ItemData.new(T.MEDKIT, "Trận bàn hồi phục", 10, 6.0, "res://Items/effects/medkit.gd"), 8.0, 1.2),
+		_aimed(ItemData.new(T.STUN_GRENADE, "Định thân phù", 10, 12.0, "res://Items/effects/stun_grenade.gd"), 8.0, 2.5),
+		ItemData.new(T.SPEED_BOOST, "Thần hành phù", 5, 12.0, "res://Items/effects/speed_boost.gd"),
+		_aimed(ItemData.new(T.JUMP_PAD, "Khinh thân trận", 6, 8.0, "res://Items/effects/jump_pad.gd"), 6.0, 0.6),
+		_aimed(ItemData.new(T.TRAP, "Khốn trận", 6, 10.0, "res://Items/effects/trap.gd"), 4.0, 0.6),
+		_aimed(ItemData.new(T.CRATE, "Thạch tường phù", 5, 10.0, "res://Items/effects/crate.gd"), 4.0, 0.8),
+		ItemData.new(T.PISTOL, "Phù kiếm", 4, 1.5, "res://Items/effects/pistol.gd"),
+		_hunter(ItemData.new(T.RADAR, "Thần thức dò tìm", 0, 15.0, "res://Items/effects/radar.gd")),
+		_hunter(ItemData.new(T.TELEPORT, "Huyết độn", 0, 30.0, "res://Items/effects/teleport.gd")),
 	]:
 		items[it.type] = it
 	return items

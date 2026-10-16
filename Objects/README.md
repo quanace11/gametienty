@@ -2,11 +2,11 @@
 
 Vật thể tương tác trên bản đồ. Cài đặt `Interactable` và `MapBase`.
 
-- `safe.gd`: rương có nắp và đai vàng; người trốn đứng yên sát rương để cạy (đông thì nhanh), chạm màn hình / E khi vòng căn hiện ra; trượt thì rương nổ, cột khói đỏ và mở lại từ đầu; mở xong văng tiền
-- `coin.gd`: cọc tiền trên sàn, chạm là nhặt (mesh dùng chung)
-- `exit_gate.gd`: cổng thoát, đủ chìa thì rung 3 giây rồi mở
-- `prison.gd`: nhà tù tường cao không cửa, thợ săn kéo người tới sát tường là nhốt, người bị nhốt mất máu 45 giây rồi bị đốt; chỉ túi máu ném qua tường cứu được. Được cứu thì bước lên đệm lò xo bên trong để bật ra (hướng `exit_side` do bản đồ đặt)
+- `safe.gd`: trận linh nhỏ (xưa là rương): bệ đá, 4 trụ phù văn, linh tinh xanh lơ lửng, vòng trận loang theo tiến độ; người trốn đứng yên sát trận để giải (đông thì nhanh), chạm màn hình / E khi vòng căn hiện ra; trượt thì trận bùng đỏ, cột sáng đỏ và giải lại từ đầu; giải xong linh tinh thành vàng, văng linh thạch
+- `coin.gd`: linh thạch trên sàn (trong code là tiền), chạm là nhặt (mesh dùng chung)
+- `exit_gate.gd`: lối ra kiểu sơn môn (cột đỏ son, mái ngói) có phong ấn đỏ; giải đủ trận linh thì phong ấn rung 3 giây rồi thành cổng xoáy ngọc
+- `prison.gd`: huyết trận (xưa là nhà tù): kết giới đỏ cao không cửa, trận văn đỏ dưới sàn quay nhanh khi có người bị tế, thợ săn kéo người tới sát tường là nhốt, người bị nhốt mất máu 45 giây rồi bị đốt; chỉ túi máu ném qua tường cứu được. Được cứu thì bước lên đệm lò xo bên trong để bật ra (hướng `exit_side` do bản đồ đặt)
 - `bush.gd`: bụi cây để nấp (luật ở `GameState.can_see()`)
-- `maps/test_map.gd`: bản đồ chibi 32 x 20 m dựng bằng code: tường thấp mái ngói, hàng rào cây ở viền, 5 rương (cần 3), 2 cổng hai đầu, 1 nhà tù ở giữa, 8 bụi cây, 20 cọc tiền
+- `maps/test_map.gd`: bản đồ tiên hiệp chibi 32 x 20 m dựng bằng code: tường vôi trắng mái ngói đen có đèn lồng, hàng rào trúc ở viền, cây tùng, 5 trận linh (cần 3), 2 lối ra hai đầu, 1 huyết trận ở giữa, 8 bụi cây, 20 linh thạch
 
 Tiếp theo: bản đồ dựng trong editor có nhà cửa / đồ vật chibi, bản đồ thứ hai, model cổng và tiền đẹp hơn.

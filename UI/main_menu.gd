@@ -53,7 +53,7 @@ func _ready() -> void:
 	title.add_theme_constant_override("outline_size", 14)
 	box.add_child(title)
 	var sub := Label.new()
-	sub.text = "Rượt đuổi 1 thợ săn vs 4 người trốn"
+	sub.text = "Rượt đuổi tiên hiệp: 1 ma tu vs 4 đệ tử"
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.add_theme_font_size_override("font_size", 18)
 	box.add_child(sub)
@@ -66,9 +66,9 @@ func _ready() -> void:
 	_offline_row = HBoxContainer.new()
 	_offline_row.add_theme_constant_override("separation", 12)
 	box.add_child(_offline_row)
-	var hunt := _add_button(_offline_row, "THỢ SĂN", func() -> void: _offline(GameTypes.Role.HUNTER))
+	var hunt := _add_button(_offline_row, "MA TU", func() -> void: _offline(GameTypes.Role.HUNTER))
 	UiTheme.color_button(hunt, UiTheme.RED)
-	var run := _add_button(_offline_row, "NGƯỜI TRỐN", func() -> void: _offline(GameTypes.Role.ESCAPEE))
+	var run := _add_button(_offline_row, "ĐỆ TỬ", func() -> void: _offline(GameTypes.Role.ESCAPEE))
 	for b: Button in [hunt, run]:
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.custom_minimum_size = Vector2(0, 72)
@@ -193,7 +193,7 @@ func _on_deck_toggled(type: int, on: bool) -> void:
 ## Thẻ đã chọn màu vàng có số ô, thẻ chưa chọn màu xám.
 func _update_deck() -> void:
 	Net.my_deck = _deck_order.duplicate()
-	_deck_label.text = "Bộ bài người trốn  %d/%d" % [_deck_order.size(), DECK_SIZE]
+	_deck_label.text = "Bộ phù bảo của đệ tử  %d/%d" % [_deck_order.size(), DECK_SIZE]
 	for type: int in _deck_checks:
 		var tile: Button = _deck_checks[type]
 		var slot := _deck_order.find(type)

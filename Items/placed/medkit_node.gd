@@ -1,10 +1,12 @@
 extends Interactable
-## Túi cứu thương nằm dưới đất (id = obj_id của MatchRules.placed): túi ném ra
-## mà lúc rơi không ai trong vùng cần cứu thì nằm chờ PICKUP_TIME giây (Items
-## đặt lifetime). Người trốn cần cứu / mất máu chạy tới đón là được cứu ngay,
-## túi biến mất. Thợ săn không nhặt được.
+## Trận bàn hồi phục nằm chờ (thẻ túi cứu thương, id = obj_id của MatchRules.placed):
+## trận bàn ném ra mà lúc rơi không ai trong vùng cần cứu thì nằm chờ PICKUP_TIME
+## giây (Items đặt lifetime): đĩa trận lơ lửng xoay, vòng sáng và 5 lá cờ ngũ hành
+## nhỏ quanh mép. Người trốn cần cứu / mất máu chạy tới là được cứu ngay, trận
+## tan. Thợ săn không dùng được.
 
 const RADIUS := 0.8
+const FLAG_SCALE := 0.55
 const MedkitMesh = preload("res://Items/medkit_mesh.gd")
 
 static var _ring_mesh: TorusMesh
@@ -27,7 +29,7 @@ func _ready() -> void:
 		return
 	if _ring_mesh == null:
 		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(0.35, 1.0, 0.45, 0.7)
+		m.albedo_color = Color(1.0, 0.85, 0.35, 0.8)
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		_ring_mesh = TorusMesh.new()
@@ -42,16 +44,25 @@ func _ready() -> void:
 	ring.position.y = 0.04
 	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(ring)
+	for k in MedkitMesh.FLAG_COLORS.size():
+		var a := TAU * k / MedkitMesh.FLAG_COLORS.size()
+		var flag := MeshInstance3D.new()
+		flag.mesh = MedkitMesh.get_flag_mesh(k)
+		flag.position = Vector3(sin(a), 0, cos(a)) * RADIUS
+		flag.rotation.y = a
+		flag.scale = Vector3.ONE * FLAG_SCALE
+		flag.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(flag)
 	_kit = MeshInstance3D.new()
 	_kit.mesh = MedkitMesh.get_mesh()
 	_kit.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_kit)
 
 
-## Túi nhún nhẹ và xoay chậm cho dễ thấy.
+## Trận bàn nhún nhẹ và xoay chậm cho dễ thấy.
 func _process(delta: float) -> void:
 	_t += delta
-	_kit.position.y = 0.3 + 0.08 * sin(_t * 4.0)
+	_kit.position.y = 0.35 + 0.08 * sin(_t * 4.0)
 	_kit.rotation.y = _t * 1.5
 
 

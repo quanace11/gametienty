@@ -129,7 +129,7 @@ func _on_resolved(id: int, _safe_id: int, result: GameTypes.QteResult) -> void:
 			_flash_text = "Hoàn hảo! +tốc"
 			_flash_color = Color(0.5, 1.0, 0.55)
 		GameTypes.QteResult.GOOD:
-			_flash_text = "Được! +tiền"
+			_flash_text = "Được! +linh thạch"
 			_flash_color = Color(0.9, 0.9, 0.5)
 		_:
 			_flash_text = "Trượt! Mở lại từ đầu"

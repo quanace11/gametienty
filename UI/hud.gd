@@ -56,14 +56,14 @@ func _ready() -> void:
 	EventBus.match_ended.connect(_on_match_ended)
 	EventBus.teleport_started.connect(func(id: int, _t: Vector3, s: float) -> void:
 		if id != multiplayer.get_unique_id() and GameState.my_role() == GameTypes.Role.ESCAPEE:
-			_show_toast("Thợ săn dịch chuyển tới cột tím sau %.1f giây!" % s, UiTheme.RED))
+			_show_toast("Ma tu huyết độn tới cột tím sau %.1f giây!" % s, UiTheme.RED))
 	EventBus.footprints_revealed.connect(func(_p: PackedVector3Array, _s: float) -> void:
-		_show_toast("Radar: dấu chân đỏ trên bản đồ", UiTheme.RED))
+		_show_toast("Ma tu dò thần thức: dấu chân đỏ trên bản đồ", UiTheme.RED))
 	EventBus.qte_resolved.connect(func(_id: int, safe_id: int, result: GameTypes.QteResult) -> void:
 		if result == GameTypes.QteResult.FAIL:
-			_show_toast("Rương %d vừa nổ!" % (safe_id + 1), UiTheme.RED))
-	EventBus.gate_opening.connect(func(_s: float) -> void: _show_toast("Đủ chìa! 2 cổng đang mở...", UiTheme.GREEN))
-	EventBus.gate_opened.connect(func() -> void: _show_toast("CỔNG ĐÃ MỞ! Chạy ra cổng!", UiTheme.GREEN))
+			_show_toast("Trận linh %d vừa bùng!" % (safe_id + 1), UiTheme.RED))
+	EventBus.gate_opening.connect(func(_s: float) -> void: _show_toast("Đã giải đủ trận linh! 2 lối ra đang mở...", UiTheme.GREEN))
+	EventBus.gate_opened.connect(func() -> void: _show_toast("LỐI RA ĐÃ MỞ! Chạy ra lối ra!", UiTheme.GREEN))
 	_show_toast(_hint_text(), UiTheme.BLUE, HINT_TIME)
 
 
@@ -88,14 +88,14 @@ func _refresh(rules: MatchRules) -> void:
 	else:
 		_set_text(_timer, "%d:%02d" % [t / 60, t % 60])
 	_timer.add_theme_color_override("font_color", UiTheme.RED if t <= 30 else Color.WHITE)
-	_set_text(_keys, "Chìa %d/%d" % [rules.safes_unlocked(), rules.safes_required()])
+	_set_text(_keys, "Trận linh %d/%d" % [rules.safes_unlocked(), rules.safes_required()])
 	_keys_bar.set_value(float(rules.safes_unlocked()) / maxf(1.0, rules.safes_required()))
 	if rules.gate_open:
-		_set_gate("CỔNG MỞ", UiTheme.GREEN)
+		_set_gate("LỐI RA MỞ", UiTheme.GREEN)
 	elif rules.gate_opening_left > 0.0:
 		_set_gate("Mở sau %.0f" % ceilf(rules.gate_opening_left), UiTheme.GOLD.darkened(0.15))
 	else:
-		_set_gate("Cổng khóa", UiTheme.MUTED)
+		_set_gate("Lối ra phong ấn", UiTheme.MUTED)
 	_team.update_from(rules)
 	var me := rules.record(multiplayer.get_unique_id())
 	if me == null:
@@ -122,8 +122,8 @@ func _set_gate(text: String, color: Color) -> void:
 
 func _hint_text() -> String:
 	if GameState.my_role() == GameTypes.Role.HUNTER:
-		return "Kéo nút BẮN để ngắm, thả tay là bắn. Bắn gục người trốn rồi kéo vào nhà tù!"
-	return "Đứng ở rương để cạy, kim tới vùng sáng thì chạm màn hình (hoặc E). Đủ chìa thì chạy ra cổng!"
+		return "Kéo nút PHI KIẾM để ngắm, thả tay là phóng kiếm. Đánh gục đệ tử rồi kéo vào huyết trận!"
+	return "Đứng ở trận linh để giải, kim tới vùng sáng thì chạm màn hình (hoặc E). Giải đủ thì chạy ra lối ra!"
 
 
 ## Dòng trạng thái của mình; chuỗi rỗng là không có gì đặc biệt (ẩn dải).
@@ -132,17 +132,17 @@ func _my_status(me: PlayerRecord) -> String:
 		if me.stunned_left > 0.0:
 			return "Bị choáng %.1f giây" % me.stunned_left
 		if me.carrying_id != 0:
-			return "Đang kéo người: mang tới nhà tù!"
+			return "Đang kéo người: mang tới huyết trận!"
 		if me.teleport_left > 0.0:
-			return "Đang tụ lực dịch chuyển %.1f giây" % me.teleport_left
+			return "Đang tụ lực huyết độn %.1f giây" % me.teleport_left
 		return ""
 	match me.state:
 		GameTypes.PlayerState.DOWNED:
-			return "Bạn bị gục! Chờ đồng đội đỡ (%d%%)" % roundi(me.rescue_progress * 100)
+			return "Bạn bị gục! Chờ đồng môn đỡ (%d%%)" % roundi(me.rescue_progress * 100)
 		GameTypes.PlayerState.CARRIED:
-			return "Bị kéo đi! Chờ túi máu hoặc súng lục của đồng đội"
+			return "Bị kéo đi! Chờ trận bàn hồi phục hoặc phù kiếm của đồng môn"
 		GameTypes.PlayerState.IMPRISONED:
-			return "Trong tù: bị đốt sau %d giây!" % ceili(me.prison_time_left)
+			return "Trong huyết trận: bị tế huyết sau %d giây!" % ceili(me.prison_time_left)
 		GameTypes.PlayerState.ELIMINATED:
 			return "Bạn đã bị loại. Đang xem người khác (Tab / nút xanh để đổi)"
 		GameTypes.PlayerState.ESCAPED:
@@ -195,7 +195,7 @@ func _build_top_bar() -> void:
 	keys.add_theme_constant_override("separation", 2)
 	keys.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_child(keys)
-	_keys = _label(keys, "Chìa 0/3", 18)
+	_keys = _label(keys, "Trận linh 0/3", 18)
 	_keys_bar = _Bar.new()
 	_keys_bar.custom_minimum_size = Vector2(110, 12)
 	keys.add_child(_keys_bar)
@@ -218,7 +218,7 @@ func _build_player_card() -> void:
 	var box := VBoxContainer.new()
 	box.add_theme_constant_override("separation", 4)
 	card.add_child(box)
-	_role = _label(box, "THỢ SĂN" if hunter else "NGƯỜI TRỐN", 22)
+	_role = _label(box, "MA TU" if hunter else "ĐỆ TỬ", 22)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 10)
 	box.add_child(row)

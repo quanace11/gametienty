@@ -6,13 +6,14 @@ extends EntityBase
 ## bắn súng theo đường thẳng (tự nhắm chỗ người gần nhất phía trước đang đứng,
 ## tường chặn đạn); người trốn giữ để đỡ đồng đội đang gục.
 ## Nút "shoot" (thả cần ngắm / chuột phải): thợ săn bắn theo hướng đã ngắm.
-## Trên máy người chơi, lúc đang ngắm thì vẽ luồng xanh chỉ hướng và tầm bắn
+## Trên máy người chơi, lúc đang ngắm thì vẽ luồng tím chỉ hướng và tầm phi kiếm
 ## (dừng ở tường), chỉ máy đó thấy.
 ## Nút thẻ đạo cụ (skill_1..4) do Core + Items xử lý, file này chỉ lo bị hất
 ## tung (server_launch) khi giẫm đệm lò xo.
 ## Mọi quyết định đúng/sai nằm ở GameState; file này chỉ chọn điểm ngắm và vị trí.
-## Hình: nhân vật chibi KayKit Adventurers (CC0, Player/models/), thợ săn là
-## Rogue trùm đầu cầm nỏ (vòng đỏ dưới chân), người trốn là hiệp sĩ Knight.
+## Hình: nhân vật chibi KayKit Adventurers (CC0, Player/models/), ma tu (thợ săn)
+## là Rogue trùm đầu áo tím đen, ma khí tím đỏ dưới chân, tay không (phi kiếm
+## hóa ra khi bắn); đệ tử (người trốn) là Mage áo trắng xanh, búi tóc trâm ngọc.
 ## Animation chọn trên mọi máy theo trạng thái + tốc độ, không gửi qua mạng.
 ## Hình (model, tên, vòng đỏ) nằm trong một node riêng, mỗi frame vẽ được nội
 ## suy giữa hai lần tính vật lý (60 lần/giây) nên màn hình 90/120 Hz hay FPS
@@ -36,8 +37,11 @@ const AIM_MIN := 0.2 # độ dài hướng ngắm tối thiểu để bắn theo
 const BEAM_HEIGHT := 1.1 # ngang nòng súng (GameState.SHOT_HEIGHT), để raycast luồng ngắm
 
 const HUNTER_MODEL := "res://Player/models/rogue_hooded.glb"
-const ESCAPEE_MODEL := "res://Player/models/knight.glb"
-const HUNTER_PROP := "1H_Crossbow" # đồ cầm tay duy nhất được giữ lại (nỏ của thợ săn)
+const ESCAPEE_MODEL := "res://Player/models/mage.glb" # chỉ có lưới, không có animation
+const ANIM_MODEL := "res://Player/models/knight.glb" # đệ tử mượn khung xương + animation của Knight
+const ESCAPEE_HIDDEN := ["Mage_Hat"] # bỏ mũ phù thủy, thay bằng búi tóc
+const HUNTER_TEXTURE := "res://Player/models/ma_tu_texture.png" # bảng màu Rogue tô tím đen
+const ESCAPEE_TEXTURE := "res://Player/models/de_tu_texture.png" # bảng màu Mage tô trắng ngọc
 const MODEL_SCALE := 0.72 # model KayKit cao ~2.4 m, thu về ~1.75 m
 const LOOP_ANIMS := ["Idle", "Running_A", "Lie_Idle", "Sit_Floor_Idle", "Jump_Idle"]
 const RUN_SPEED_MIN := 0.6 # m/s, chậm hơn thì đứng yên
@@ -81,6 +85,9 @@ const ShotFx = preload("res://Player/shot_fx.gd")
 static var _shot_fx: ShotFx # tên lửa, đạn, vụ nổ (pool), một node cho cả trận
 static var _beam_box: BoxMesh
 static var _hunter_ring: TorusMesh
+static var _hunter_mist: CylinderMesh
+static var _robes := {} # đường dẫn bảng màu -> material dùng chung
+static var _bun_mesh: ArrayMesh
 
 
 func setup(id: int, p_role: GameTypes.Role, p_name: String, pos: Vector3, local: bool) -> void:
@@ -153,7 +160,7 @@ func _build_body() -> void:
 
 
 func _build_model() -> void:
-	var path := HUNTER_MODEL if is_hunter() else ESCAPEE_MODEL
+	var path := HUNTER_MODEL if is_hunter() else ANIM_MODEL
 	var model: Node3D = (load(path) as PackedScene).instantiate()
 	_model = model
 	model.scale = Vector3.ONE * MODEL_SCALE * (1.1 if is_hunter() else 1.0)
@@ -161,27 +168,38 @@ func _build_model() -> void:
 	_visual.add_child(model)
 	for node in model.find_children("*", "MeshInstance3D", true, false):
 		var mi := node as MeshInstance3D
-		# Vũ khí gắn ở tay (handslot_l/r): ẩn hết, trừ nỏ của thợ săn.
-		if mi.get_parent().name.begins_with("handslot") and not (is_hunter() and mi.name == HUNTER_PROP):
-			mi.visible = false
-	if is_hunter(): # vòng đỏ dưới chân để nhận ra thợ săn từ xa
+		if mi.get_parent().name.begins_with("handslot") or not is_hunter():
+			mi.visible = false # bỏ vũ khí cầm tay; đệ tử thì bỏ cả người Knight, chỉ mượn khung xương + animation
+		else:
+			mi.material_override = _robe(mi, HUNTER_TEXTURE)
+	if not is_hunter():
+		_wear_disciple_robe(model)
+	if is_hunter(): # ma khí tím đỏ dưới chân để nhận ra ma tu từ xa
 		if _hunter_ring == null:
-			var m := StandardMaterial3D.new()
-			m.albedo_color = Color(1, 0.2, 0.15, 0.8)
-			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-			m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 			_hunter_ring = TorusMesh.new()
 			_hunter_ring.inner_radius = 0.5
 			_hunter_ring.outer_radius = 0.6
 			_hunter_ring.rings = 24
 			_hunter_ring.ring_segments = 4
-			_hunter_ring.material = m
+			_hunter_ring.material = _glow_mat(Color(0.85, 0.15, 0.55, 0.85))
+			_hunter_mist = CylinderMesh.new()
+			_hunter_mist.top_radius = 0.75
+			_hunter_mist.bottom_radius = 0.75
+			_hunter_mist.height = 0.02
+			_hunter_mist.radial_segments = 24
+			_hunter_mist.rings = 1
+			_hunter_mist.material = _glow_mat(Color(0.35, 0.05, 0.3, 0.45))
 		var ring := MeshInstance3D.new()
 		ring.mesh = _hunter_ring
 		ring.scale = Vector3(1, 0.1, 1)
 		ring.position.y = 0.05
 		ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_visual.add_child(ring)
+		var mist := MeshInstance3D.new()
+		mist.mesh = _hunter_mist
+		mist.position.y = 0.03
+		mist.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_visual.add_child(mist)
 	var players := model.find_children("*", "AnimationPlayer", true, false)
 	if players.is_empty():
 		return
@@ -190,6 +208,78 @@ func _build_model() -> void:
 		if _anim.has_animation(anim_name):
 			_anim.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR
 	_play("Idle")
+
+
+## Đệ tử: lấy các mảnh thân Mage (cùng khung xương Rig KayKit, cùng tư thế gốc)
+## gắn vào khung xương của model mượn animation; skin bám theo tên xương.
+func _wear_disciple_robe(model: Node3D) -> void:
+	var skeletons := model.find_children("*", "Skeleton3D", true, false)
+	if skeletons.is_empty():
+		return
+	var skeleton := skeletons[0] as Skeleton3D
+	var robe: Node3D = (load(ESCAPEE_MODEL) as PackedScene).instantiate()
+	for node in robe.find_children("*", "MeshInstance3D", true, false):
+		var mi := node as MeshInstance3D
+		if mi.skin == null or mi.name in ESCAPEE_HIDDEN:
+			continue
+		mi.get_parent().remove_child(mi)
+		mi.owner = null
+		skeleton.add_child(mi)
+		mi.skeleton = NodePath("..")
+		mi.transform = Transform3D.IDENTITY
+		mi.material_override = _robe(mi, ESCAPEE_TEXTURE)
+	robe.free()
+	var head := skeleton.find_bone("head")
+	if head >= 0: # búi tóc + trâm ngọc thay mũ phù thủy
+		var attach := BoneAttachment3D.new()
+		attach.bone_name = "head"
+		skeleton.add_child(attach)
+		var bun := MeshInstance3D.new()
+		bun.mesh = _hair_bun_mesh()
+		bun.position = Vector3(0, 0.95, -0.15)
+		attach.add_child(bun)
+
+
+## Đổi bảng màu của model (cùng UV) sang bản đã tô lại; một material cho mỗi bảng màu.
+static func _robe(mi: MeshInstance3D, texture_path: String) -> Material:
+	if not _robes.has(texture_path):
+		var m := (mi.get_active_material(0) as StandardMaterial3D).duplicate() as StandardMaterial3D
+		m.albedo_texture = load(texture_path)
+		_robes[texture_path] = m
+	return _robes[texture_path]
+
+
+static func _hair_bun_mesh() -> Mesh:
+	if _bun_mesh == null:
+		var hair := StandardMaterial3D.new()
+		hair.albedo_color = Color(0.12, 0.1, 0.1)
+		var jade := StandardMaterial3D.new()
+		jade.albedo_color = Color(0.4, 0.9, 0.7)
+		var st := SurfaceTool.new()
+		var bun := SphereMesh.new()
+		bun.radius = 0.16
+		bun.height = 0.3
+		bun.radial_segments = 10
+		bun.rings = 5
+		var pin := BoxMesh.new()
+		pin.size = Vector3(0.5, 0.04, 0.04)
+		_bun_mesh = ArrayMesh.new()
+		st.append_from(bun, 0, Transform3D.IDENTITY)
+		st.commit(_bun_mesh)
+		_bun_mesh.surface_set_material(0, hair)
+		st = SurfaceTool.new()
+		st.append_from(pin, 0, Transform3D(Basis(), Vector3(0, 0.02, 0)))
+		st.commit(_bun_mesh)
+		_bun_mesh.surface_set_material(1, jade)
+	return _bun_mesh
+
+
+static func _glow_mat(color: Color) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = color
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	return m
 
 
 func _play(anim_name: String, speed := 1.0) -> void:
@@ -407,7 +497,7 @@ func _process(delta: float) -> void:
 func _build_beam() -> void:
 	if _beam_box == null:
 		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(0.45, 0.9, 1.0, 0.55)
+		m.albedo_color = Color(0.8, 0.45, 1.0, 0.55)
 		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		_beam_box = BoxMesh.new()
