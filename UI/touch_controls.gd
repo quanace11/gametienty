@@ -1,6 +1,10 @@
 extends Control
 ## Điều khiển cảm ứng (chơi được cả bằng chuột): cần di chuyển bên trái, nút
 ## lớn bên phải, thanh thẻ đạo cụ có giá tiền ở giữa dưới.
+## Cần di chuyển nổi: đặt ngón ở đâu trong nửa trái màn hình thì cần hiện ngay
+## dưới ngón đó (không phải nhắm đúng vòng tròn); thả tay thì về chỗ cũ.
+## Mọi nút tránh tai thỏ / lỗ camera / góc bo (vùng an toàn của điện thoại).
+## App bị ẩn (có cuộc gọi, kéo thanh thông báo) thì nhả hết nút, khỏi kẹt chạy.
 ## Thợ săn: nút phải là cần ngắm. Kéo ra thì máy mình hiện luồng xanh chỉ
 ## hướng bắn, thả tay là bắn; kéo về giữa hoặc thả tay trên nút "Hủy" thì không bắn;
 ## chạm nhanh là tự nhắm / túm người gục. Phía trên cần ngắm có nút TRÓI: sáng
@@ -17,7 +21,9 @@ extends Control
 ## Chỉ bấm các action trong InputMap (move_*, aim_*, interact, skill_N) mà
 ## LocalInputSource đọc, không gọi thẳng vào nhân vật hay luật.
 
-const STICK_R := 85.0
+const STICK_R := 95.0
+const MOVE_ZONE := 0.45 # phần bề ngang bên trái nhận cần di chuyển nổi
+const MOVE_ZONE_TOP := 0.28 # phía trên mức này (theo chiều cao) để dành cho bảng HUD
 const AIM_R := 75.0
 const KNOB_R := 36.0
 const MARGIN := 150.0 # tâm cần cách mép dưới / mép bên
@@ -41,6 +47,8 @@ const UiTheme = preload("res://UI/ui_theme.gd")
 
 var _fingers := {} # chỉ số ngón -> "move" | "aim" | "button"
 var _move := Vector2.ZERO
+var _move_origin := Vector2.ZERO # tâm cần đang dùng (chỗ đặt ngón), ZERO = chỗ mặc định
+var _inset := Vector4.ZERO # lề an toàn trái / trên / phải / dưới
 var _aim := Vector2.ZERO
 var _aim_started := 0.0
 var _aim_max := 0.0
@@ -65,6 +73,17 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE # tự xử lý trong _input, chỗ trống thì minimap vẫn nhận
 	_touch = DisplayServer.is_touchscreen_available()
+	_update_inset()
+	get_viewport().size_changed.connect(_update_inset)
+
+
+func _update_inset() -> void:
+	_inset = UiTheme.safe_insets(get_viewport())
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
+		_release_all() # ngón tay rời màn hình lúc app bị ẩn thì không có sự kiện nhả
 
 
 func _process(delta: float) -> void:
@@ -115,9 +134,7 @@ func _on_touch(finger: int, pos: Vector2, pressed: bool) -> void:
 		get_viewport().set_input_as_handled()
 		queue_redraw()
 		return
-	if pos.distance_to(_move_center()) <= STICK_R * 1.6:
-		kind = "move"
-	elif pos.distance_to(_aim_center()) <= AIM_R * 1.4:
+	if pos.distance_to(_aim_center()) <= AIM_R * 1.4:
 		if _spectating():
 			_pulse(&"spectate_next")
 			get_viewport().set_input_as_handled()
@@ -125,22 +142,28 @@ func _on_touch(finger: int, pos: Vector2, pressed: bool) -> void:
 		kind = "aim" if _hunter() else "button"
 	else:
 		var slot := -1 if _spectating() else _card_at(pos)
-		if slot < 0:
+		if slot >= 0:
+			get_viewport().set_input_as_handled()
+			if _card_slot >= 0: # đang kéo một thẻ: ngón khác chạm thẻ thì bỏ qua
+				return
+			if not _aimable(slot):
+				_pulse(InputSource.SKILL_ACTIONS[slot])
+				return
+			kind = "card"
+			_card_slot = slot
+			_card_center = _card_rect(slot).get_center()
+			_card_aim = Vector2.ZERO
+			_card_cancel = false
+		elif not _spectating() and _in_move_zone(pos) and not _fingers.values().has("move"):
+			kind = "move"
+			_move_origin = _clamp_stick(pos)
+			if _in_qte(): # vòng căn đang chạy: chạm bên trái cũng là căn
+				_pulse(&"interact")
+		else:
 			if _in_qte(): # vòng căn đang chạy: chạm bất kỳ đâu là căn (như bấm E)
 				_pulse(&"interact")
 				get_viewport().set_input_as_handled()
 			return
-		get_viewport().set_input_as_handled()
-		if _card_slot >= 0: # đang kéo một thẻ: ngón khác chạm thẻ thì bỏ qua
-			return
-		if not _aimable(slot):
-			_pulse(InputSource.SKILL_ACTIONS[slot])
-			return
-		kind = "card"
-		_card_slot = slot
-		_card_center = _card_rect(slot).get_center()
-		_card_aim = Vector2.ZERO
-		_card_cancel = false
 	_fingers[finger] = kind
 	match kind:
 		"move":
@@ -177,6 +200,7 @@ func _release(finger: int) -> void:
 	match kind:
 		"move":
 			_move = Vector2.ZERO
+			_move_origin = Vector2.ZERO
 			for a: StringName in [&"move_left", &"move_right", &"move_up", &"move_down"]:
 				Input.action_release(a)
 		"aim":
@@ -208,7 +232,7 @@ func _use_card(slot: int, aim: Vector2) -> void:
 
 
 func _set_move(pos: Vector2) -> void:
-	_move = ((pos - _move_center()) / STICK_R).limit_length(1.0)
+	_move = ((pos - _stick_center()) / STICK_R).limit_length(1.0)
 	_press_axis(&"move_left", &"move_right", &"move_up", &"move_down", _move)
 
 
@@ -255,10 +279,10 @@ func _draw() -> void:
 		draw_circle(sc, AIM_R + 3, INK)
 		draw_circle(sc, AIM_R, UiTheme.BLUE)
 		draw_circle(sc + Vector2(-AIM_R * 0.3, -AIM_R * 0.35), AIM_R * 0.28, Color(1, 1, 1, 0.25))
-		_text(font, sc, "Tab\nĐổi người xem", 20, Color.WHITE)
+		_text(font, sc, "Đổi người\nxem" if _touch else "Tab\nĐổi người xem", 20, Color.WHITE)
 		return
 	# Cần di chuyển: đế tròn viền đậm, núm có vệt sáng.
-	var mc := _move_center()
+	var mc := _stick_center()
 	draw_circle(mc, STICK_R + 3, Color(INK, 0.5))
 	draw_circle(mc, STICK_R, Color(0.2, 0.3, 0.45, 0.35))
 	draw_arc(mc, STICK_R, 0, TAU, 48, Color(1, 1, 1, 0.5), 3.0)
@@ -284,7 +308,7 @@ func _draw() -> void:
 		draw_circle(ac, AIM_R + 3, INK)
 		draw_circle(ac, AIM_R, Color(0.33, 0.78, 0.4).darkened(0.15 if held else 0.0))
 		draw_circle(ac + Vector2(-AIM_R * 0.3, -AIM_R * 0.35), AIM_R * 0.28, Color(1, 1, 1, 0.25))
-		_text(font, ac, "E\nGiải / Đỡ", 20, Color.WHITE)
+		_text(font, ac, "Giải / Đỡ" if _touch else "E\nGiải / Đỡ", 20, Color.WHITE)
 	_draw_cards(me, font)
 	if _card_slot >= 0 and _card_slot < me.deck.size():
 		_draw_card_aim(me, font)
@@ -480,7 +504,7 @@ func _my_entity() -> Node3D:
 func _cancel_center() -> Vector2:
 	if _card_slot >= 0:
 		var s := get_viewport_rect().size
-		return Vector2(s.x - 90, s.y * 0.45)
+		return Vector2(s.x - 90 - _inset.z, s.y * 0.45)
 	return _aim_center() + CANCEL_OFFSET
 
 
@@ -488,11 +512,29 @@ func _cancel_center() -> Vector2:
 func _cards_origin(count: int) -> Vector2:
 	var w := count * CARD_SIZE.x + (count - 1) * CARD_GAP
 	var screen := get_viewport_rect().size
-	return Vector2(_aim_center().x - AIM_R - 40 - w, screen.y - CARD_SIZE.y - 16)
+	return Vector2(_aim_center().x - AIM_R - 40 - w, screen.y - CARD_SIZE.y - 16 - _inset.w)
 
 
 func _move_center() -> Vector2:
-	return Vector2(MARGIN, get_viewport_rect().size.y - MARGIN)
+	return Vector2(MARGIN + _inset.x, get_viewport_rect().size.y - MARGIN - _inset.w)
+
+
+## Tâm cần di chuyển: chỗ đặt ngón khi đang giữ, không thì chỗ mặc định.
+func _stick_center() -> Vector2:
+	return _move_origin if _move_origin != Vector2.ZERO else _move_center()
+
+
+## Chạm ở nửa trái, dưới các bảng HUD trên cùng thì là cần di chuyển.
+func _in_move_zone(pos: Vector2) -> bool:
+	var s := get_viewport_rect().size
+	return pos.x < s.x * MOVE_ZONE and pos.y > s.y * MOVE_ZONE_TOP
+
+
+## Cần nổi không vẽ lòi ra ngoài mép màn hình.
+func _clamp_stick(pos: Vector2) -> Vector2:
+	var s := get_viewport_rect().size
+	return Vector2(clampf(pos.x, STICK_R + _inset.x + 8, s.x - STICK_R),
+		clampf(pos.y, STICK_R + _inset.y + 8, s.y - STICK_R - _inset.w - 8))
 
 
 func _bind_center() -> Vector2:
@@ -501,7 +543,7 @@ func _bind_center() -> Vector2:
 
 func _aim_center() -> Vector2:
 	var s := get_viewport_rect().size
-	return Vector2(s.x - MARGIN + 20, s.y - MARGIN + 20)
+	return Vector2(s.x - MARGIN + 20 - _inset.z, s.y - MARGIN + 20 - _inset.w)
 
 
 func _me() -> PlayerRecord:
