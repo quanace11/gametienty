@@ -62,17 +62,19 @@ const LANTERN := Color(0.95, 0.2, 0.15)
 
 var _materials := {} # màu -> material dùng chung
 var _lantern_mesh: SphereMesh
+var _headless := DisplayServer.get_name() == "headless" # server riêng: chỉ dựng va chạm, không dựng hình
 
 func _ready() -> void:
 	# Sân cỏ rộng hơn bản đồ một chút, quảng trường đá xanh quanh huyết trận.
 	_add_box(Vector3(SIZE.x / 2, -0.1, SIZE.y / 2), Vector3(SIZE.x + 8, 0.2, SIZE.y + 8), GRASS)
-	_add_mesh(Vector3(SIZE.x / 2, 0.005, SIZE.y / 2), Vector3(14, 0.01, 12.6), PLAZA)
+	if not _headless:
+		_add_mesh(Vector3(SIZE.x / 2, 0.005, SIZE.y / 2), Vector3(14, 0.01, 12.6), PLAZA)
 	for i in WALLS.size():
 		var r: Rect2 = WALLS[i]
 		var center := r.get_center()
 		var border := i < 4 # 4 cạnh viền là hàng rào cây
 		_add_box(Vector3(center.x, WALL_HEIGHT / 2, center.y), Vector3(r.size.x, WALL_HEIGHT, r.size.y), HEDGE if border else WALL)
-		if not border: # mái ngói chìa ra, nóc mái, đèn lồng ở hai đầu tường
+		if not border and not _headless: # mái ngói chìa ra, nóc mái, đèn lồng ở hai đầu tường
 			_add_mesh(Vector3(center.x, WALL_HEIGHT + CAP / 2, center.y), Vector3(r.size.x + 0.4, CAP, r.size.y + 0.4), ROOF)
 			_add_mesh(Vector3(center.x, WALL_HEIGHT + CAP + 0.06, center.y), Vector3(maxf(r.size.x - 0.2, 0.2), 0.12, maxf(r.size.y - 0.2, 0.2)), ROOF)
 			var along := Vector2(r.size.x, 0) if r.size.x > r.size.y else Vector2(0, r.size.y)
@@ -85,7 +87,8 @@ func _ready() -> void:
 		bush.radius = BUSHES[i].z
 		bush.position = Vector3(BUSHES[i].x, 0, BUSHES[i].y)
 		add_child(bush)
-	_add_trees()
+	if not _headless:
+		_add_trees()
 	for i in SAFES.size():
 		var safe: Interactable = SafeScript.new()
 		safe.interactable_id = i
@@ -107,7 +110,8 @@ func _ready() -> void:
 		prison.position = PRISONS[i]
 		prison.exit_side = Vector3(0, 0, 1) # đệm trong tù bắn người ra phía nam
 		add_child(prison)
-	_add_lighting()
+	if not _headless:
+		_add_lighting()
 
 
 ## Đèn lồng đỏ trên đầu tường (chỉ để nhìn, tự sáng, không đổ bóng).
@@ -201,13 +205,15 @@ func _add_box(center: Vector3, size: Vector3, color: Color) -> void:
 	box.size = size
 	shape.shape = box
 	body.add_child(shape)
+	add_child(body)
+	if _headless:
+		return
 	var mesh := BoxMesh.new()
 	mesh.size = size
 	mesh.material = _material(color)
 	var mi := MeshInstance3D.new()
 	mi.mesh = mesh
 	body.add_child(mi)
-	add_child(body)
 
 
 func _add_lighting() -> void:
@@ -249,7 +255,7 @@ func get_bounds() -> Rect2:
 
 
 func get_bushes() -> Array[Vector3]:
-	return BUSHES
+	return BUSHES.duplicate() # bản sao: hằng là mảng chỉ đọc, GameState xóa / gán lại mỗi trận
 
 
 func get_walls() -> Array[Rect2]:

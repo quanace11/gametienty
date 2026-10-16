@@ -22,6 +22,7 @@ const BURNT_COLOR := Color(1.0, 0.1, 0.1) # trận bùng đỏ khi căn trượt
 
 var _body_parts: Array[MeshInstance3D] = [] # linh tinh + vòng trận, đổi màu theo tiến độ
 var _burn_material: StandardMaterial3D # chỉ tạo khi trận bùng lần đầu (tween màu riêng trận này)
+var _burn_tween: Tween # bùng lần nữa khi đang bùng thì bỏ tween cũ, khỏi bị cắt ngang
 var _label: Label3D
 var _alert: MeshInstance3D
 var _alert_left := 0.0
@@ -235,11 +236,13 @@ func _on_qte_resolved(_id: int, safe_id: int, result: GameTypes.QteResult) -> vo
 	_burn_material.albedo_color = BURNT_COLOR
 	_burn_material.emission = BURNT_COLOR
 	_set_body_material(_burn_material)
-	var tween := create_tween().set_parallel()
-	tween.tween_property(_burn_material, "albedo_color", WOOD_COLOR, 0.8)
-	tween.tween_property(_burn_material, "emission", WOOD_COLOR, 0.8)
-	tween.chain()
-	tween.tween_callback(func() -> void:
+	if _burn_tween:
+		_burn_tween.kill()
+	_burn_tween = create_tween().set_parallel()
+	_burn_tween.tween_property(_burn_material, "albedo_color", WOOD_COLOR, 0.8)
+	_burn_tween.tween_property(_burn_material, "emission", WOOD_COLOR, 0.8)
+	_burn_tween.chain()
+	_burn_tween.tween_callback(func() -> void:
 		_set_body_material(_wood_mat) # xong tween thì về material dùng chung
 		_refresh())
 
