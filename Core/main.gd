@@ -64,6 +64,9 @@ func _on_players_changed() -> void:
 
 
 func _on_match_started(info: Dictionary) -> void:
+	if current_match: # trận cũ còn đang hiện bảng kết quả: bỏ luôn, không đụng Net / GameState
+		remove_child(current_match)
+		current_match.queue_free()
 	current_match = MatchScript.new()
 	current_match.name = "Match" # cùng đường dẫn node trên mọi máy để RPC tìm đúng
 	add_child(current_match)
@@ -72,7 +75,10 @@ func _on_match_started(info: Dictionary) -> void:
 
 
 func _on_match_ended(_result: Dictionary) -> void:
+	var ended := current_match
 	await get_tree().create_timer(RESULT_SCREEN_TIME).timeout
+	if ended != current_match:
+		return # trận này đã đóng (mất kết nối) và đã sang trận khác: đừng đóng nhầm trận mới
 	_close_match()
 	if args.has("quit-after-match"):
 		get_tree().quit()

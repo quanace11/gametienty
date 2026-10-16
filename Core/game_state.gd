@@ -65,7 +65,7 @@ func begin(info: Dictionary, total_safes: int, floor_coins: int = 0) -> void:
 	_footprint_timer = 0.0
 	_bush_of.clear()
 	_shot_progress.clear()
-	_bushes.clear()
+	_bushes = [] # gán mới, không clear(): mảng bản đồ trả về có thể là hằng chỉ đọc
 	_bushes_loaded = false
 	_world_applied = rules.world_dict()
 	_world_sent = _world_applied
