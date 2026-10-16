@@ -40,6 +40,7 @@ const HUNTER_MODEL := "res://Player/models/rogue_hooded.glb"
 const ESCAPEE_MODEL := "res://Player/models/mage.glb" # chỉ có lưới, không có animation
 const ANIM_MODEL := "res://Player/models/knight.glb" # đệ tử mượn khung xương + animation của Knight
 const ESCAPEE_HIDDEN := ["Mage_Hat"] # bỏ mũ phù thủy, thay bằng búi tóc
+const HALO_SWORDS := 3 # phi kiếm lơ lửng sau lưng ma tu
 const HUNTER_TEXTURE := "res://Player/models/ma_tu_texture.png" # bảng màu Rogue tô tím đen
 const ESCAPEE_TEXTURE := "res://Player/models/de_tu_texture.png" # bảng màu Mage tô trắng ngọc
 const MODEL_SCALE := 0.72 # model KayKit cao ~2.4 m, thu về ~1.75 m
@@ -88,6 +89,11 @@ static var _hunter_ring: TorusMesh
 static var _hunter_mist: CylinderMesh
 static var _robes := {} # đường dẫn bảng màu -> material dùng chung
 static var _bun_mesh: ArrayMesh
+static var _halo_sword_mesh: ArrayMesh
+static var _feather_mesh: ArrayMesh
+
+var _halo: Node3D # phi kiếm sau lưng ma tu (chỉ máy có hình)
+var _wings: Array[Node3D] = [] # cánh lửa của đệ tử (một nửa số đệ tử)
 
 
 func setup(id: int, p_role: GameTypes.Role, p_name: String, pos: Vector3, local: bool) -> void:
@@ -174,6 +180,8 @@ func _build_model() -> void:
 			mi.material_override = _robe(mi, HUNTER_TEXTURE)
 	if not is_hunter():
 		_wear_disciple_robe(model)
+	if is_hunter():
+		_add_sword_halo()
 	if is_hunter(): # ma khí tím đỏ dưới chân để nhận ra ma tu từ xa
 		if _hunter_ring == null:
 			_hunter_ring = TorusMesh.new()
@@ -210,8 +218,10 @@ func _build_model() -> void:
 	_play("Idle")
 
 
-## Đệ tử: lấy các mảnh thân Mage (cùng khung xương Rig KayKit, cùng tư thế gốc)
-## gắn vào khung xương của model mượn animation; skin bám theo tên xương.
+## Đệ tử: lấy các mảnh thân Mage (tóc bạc, búi tóc trâm ngọc; cùng khung xương
+## Rig KayKit, cùng tư thế gốc) gắn vào khung xương của model mượn animation;
+## skin bám theo tên xương. Đệ tử có peer_id chẵn mọc thêm cánh lửa sau lưng
+## (chọn theo peer_id nên mọi máy thấy giống nhau).
 func _wear_disciple_robe(model: Node3D) -> void:
 	var skeletons := model.find_children("*", "Skeleton3D", true, false)
 	if skeletons.is_empty():
@@ -229,6 +239,8 @@ func _wear_disciple_robe(model: Node3D) -> void:
 		mi.transform = Transform3D.IDENTITY
 		mi.material_override = _robe(mi, ESCAPEE_TEXTURE)
 	robe.free()
+	if absi(peer_id) % 2 == 0:
+		_add_flame_wings()
 	var head := skeleton.find_bone("head")
 	if head >= 0: # búi tóc + trâm ngọc thay mũ phù thủy
 		var attach := BoneAttachment3D.new()
@@ -238,6 +250,102 @@ func _wear_disciple_robe(model: Node3D) -> void:
 		bun.mesh = _hair_bun_mesh()
 		bun.position = Vector3(0, 0.95, -0.15)
 		attach.add_child(bun)
+
+
+## Cánh lửa: mỗi bên 4 lông vũ lửa xòe ra sau lưng, vỗ nhẹ. Gắn vào hình nhân vật
+## (không theo xương) cho đơn giản; nhân vật nhìn về -Z nên sau lưng là +Z.
+func _add_flame_wings() -> void:
+	for side: float in [-1.0, 1.0]:
+		var wing := Node3D.new()
+		wing.position = Vector3(0.12 * side, 0.95, 0.3)
+		_visual.add_child(wing)
+		for k in 4:
+			var f := MeshInstance3D.new()
+			f.mesh = _feather()
+			f.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			f.rotation = Vector3(0.3, 0.0, -side * (0.5 + 0.3 * k))
+			f.scale = Vector3.ONE * (0.85 - 0.1 * k)
+			wing.add_child(f)
+		_wings.append(wing)
+
+
+## Ma tu: 3 thanh phi kiếm lơ lửng xòe hình quạt sau lưng, mũi chĩa lên.
+func _add_sword_halo() -> void:
+	_halo = Node3D.new()
+	_halo.position = Vector3(0, 1.25, 0.42) # sau lưng (nhân vật nhìn về -Z)
+	_visual.add_child(_halo)
+	for k in HALO_SWORDS:
+		var mi := MeshInstance3D.new()
+		mi.mesh = _halo_sword()
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var a := (k - (HALO_SWORDS - 1) / 2.0) * 0.55
+		mi.position = Vector3(sin(a) * 0.55, cos(a) * 0.35, 0)
+		mi.rotation.z = -a
+		_halo.add_child(mi)
+
+
+## Phi kiếm sau lưng / cánh lửa: lơ lửng, vỗ nhẹ (chỉ đổi transform vài node).
+func _animate_aura() -> void:
+	var t := Time.get_ticks_msec() / 1000.0
+	if _halo:
+		for k in _halo.get_child_count():
+			var c := _halo.get_child(k) as Node3D
+			c.position.y = cos((k - 1) * 0.55) * 0.35 + 0.06 * sin(t * 2.4 + k * 1.3)
+	for k in _wings.size():
+		_wings[k].rotation.y = 0.2 * sin(t * 3.0) * (1.0 if k == 0 else -1.0)
+
+
+static func _halo_sword() -> ArrayMesh:
+	if _halo_sword_mesh == null:
+		var blade := StandardMaterial3D.new()
+		blade.albedo_color = Color(0.55, 0.85, 1.0)
+		blade.emission_enabled = true
+		blade.emission = Color(0.4, 0.5, 1.0)
+		blade.emission_energy_multiplier = 0.9
+		var hilt := StandardMaterial3D.new()
+		hilt.albedo_color = Color(0.15, 0.1, 0.2)
+		var b := BoxMesh.new()
+		b.size = Vector3(0.07, 0.5, 0.02)
+		var tip := PrismMesh.new()
+		tip.size = Vector3(0.07, 0.13, 0.02)
+		var guard := BoxMesh.new()
+		guard.size = Vector3(0.2, 0.04, 0.04)
+		var grip := BoxMesh.new()
+		grip.size = Vector3(0.035, 0.16, 0.035)
+		_halo_sword_mesh = ArrayMesh.new()
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		st.append_from(b, 0, Transform3D(Basis(), Vector3(0, 0.25, 0)))
+		st.append_from(tip, 0, Transform3D(Basis(), Vector3(0, 0.565, 0)))
+		st.set_material(blade)
+		st.commit(_halo_sword_mesh)
+		st = SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		st.append_from(guard, 0, Transform3D.IDENTITY)
+		st.append_from(grip, 0, Transform3D(Basis(), Vector3(0, -0.1, 0)))
+		st.set_material(hilt)
+		st.commit(_halo_sword_mesh)
+	return _halo_sword_mesh
+
+
+## Một lông vũ lửa: tam giác dài, gốc vàng tâm cam, tự sáng, hai mặt.
+static func _feather() -> ArrayMesh:
+	if _feather_mesh == null:
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(1.0, 0.55, 0.15)
+		m.emission_enabled = true
+		m.emission = Color(1.0, 0.35, 0.05)
+		m.emission_energy_multiplier = 0.8
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		var p := PrismMesh.new() # mũi ở +Y; dời gốc về chỗ gắn
+		p.size = Vector3(0.26, 1.15, 0.02)
+		_feather_mesh = ArrayMesh.new()
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		st.append_from(p, 0, Transform3D(Basis(), Vector3(0, 0.575, 0)))
+		st.set_material(m)
+		st.commit(_feather_mesh)
+	return _feather_mesh
 
 
 ## Đổi bảng màu của model (cùng UV) sang bản đã tô lại; một material cho mỗi bảng màu.
@@ -252,7 +360,7 @@ static func _robe(mi: MeshInstance3D, texture_path: String) -> Material:
 static func _hair_bun_mesh() -> Mesh:
 	if _bun_mesh == null:
 		var hair := StandardMaterial3D.new()
-		hair.albedo_color = Color(0.12, 0.1, 0.1)
+		hair.albedo_color = Color(0.86, 0.88, 0.93) # tóc bạc
 		var jade := StandardMaterial3D.new()
 		jade.albedo_color = Color(0.4, 0.9, 0.7)
 		var st := SurfaceTool.new()
@@ -469,6 +577,8 @@ func _process(delta: float) -> void:
 	_visual.global_transform = _xf_prev.interpolate_with(_xf_curr, Engine.get_physics_interpolation_fraction())
 	if _anim:
 		_update_anim(delta)
+	if _halo or not _wings.is_empty():
+		_animate_aura()
 	if not (is_local and is_hunter()):
 		return
 	var dir := Vector2.ZERO

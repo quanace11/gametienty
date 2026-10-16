@@ -9,7 +9,7 @@ extends Interactable
 ## Hình: kết giới đỏ trong suốt, 4 cột đá đầu đỏ ở góc, trận văn đỏ (2 vòng + sao
 ## năm cánh) dưới sàn, quay nhanh hơn khi có người đang bị tế.
 
-const INNER := 3.0 # mét, cạnh trong của khu tường
+const INNER := 4.2 # mét, cạnh trong của khu tường (nửa cạnh ngoài 2,4 m < GameState.PRISON_KEEP_OUT 2,8 m)
 const WALL_HEIGHT := 3.0 # cao hơn tường thường, chỉ đệm lò xo bay qua được
 const WALL_THICK := 0.3
 const REACH := 1.0 # mét ngoài tường: thợ săn đứng trong khoảng này là nhốt được
@@ -137,7 +137,8 @@ static func _build_shared() -> void:
 	blood.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for r: float in [INNER * 0.47, INNER * 0.36]:
+	var zone := INNER / 2 + WALL_THICK + REACH * 0.9 # vòng ngoài kết giới: đứng trong vòng này là nhốt được
+	for r: float in [zone, zone - 0.25, INNER * 0.47, INNER * 0.36]:
 		var ring := TorusMesh.new()
 		ring.inner_radius = r - 0.06
 		ring.outer_radius = r

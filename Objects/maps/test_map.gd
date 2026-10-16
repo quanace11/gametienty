@@ -1,47 +1,48 @@
 extends MapBase
-## Bản đồ thử 32 x 20 m, phong cách tiên hiệp chibi dựng bằng code: sân cỏ ngọc,
+## Bản đồ thử 48 x 30 m, phong cách tiên hiệp chibi dựng bằng code: sân cỏ ngọc,
 ## quảng trường đá xanh ở giữa, tường vôi trắng mái ngói đen có đèn lồng đỏ ở hai
 ## đầu, hàng rào trúc ở viền, huyết trận ở chính giữa, bụi cây để nấp, cây tùng
 ## ngoài viền. Sau này có thể thay
 ## bằng scene dựng trong editor, giữ nguyên các hàm của MapBase.
 
-const SIZE := Vector2(32, 20) # x, z
+const SIZE := Vector2(48, 30) # x, z
 const WALL_HEIGHT := 1.5 # tường thấp kiểu chibi, camera nhìn qua được (vẫn cao hơn đường đạn 1.1 m)
 const CAP := 0.15 # mái ngói trên đầu tường
 ## Tường trên mặt sàn: Rect2(x, z, rộng theo x, sâu theo z), đơn vị mét.
 const WALLS := [
 	# Viền
-	Rect2(0, 0, 32, 0.4), Rect2(0, 19.6, 32, 0.4),
-	Rect2(0, 0, 0.4, 20), Rect2(31.6, 0, 0.4, 20),
+	Rect2(0, 0, 48, 0.4), Rect2(0, 29.6, 48, 0.4),
+	Rect2(0, 0, 0.4, 30), Rect2(47.6, 0, 0.4, 30),
 	# Chướng ngại
-	Rect2(6, 3, 0.8, 6), Rect2(6, 12, 0.8, 5),
-	Rect2(12, 6, 8, 0.8), Rect2(12, 13.2, 8, 0.8),
-	Rect2(24, 2, 0.8, 7), Rect2(24, 11, 0.8, 7),
+	Rect2(9, 4.5, 0.8, 9), Rect2(9, 18, 0.8, 7.5),
+	Rect2(18, 9, 12, 0.8), Rect2(18, 19.8, 12, 0.8),
+	Rect2(36, 3, 0.8, 10.5), Rect2(36, 16.5, 0.8, 10.5),
 ]
 ## 5 trận linh, cần giải 3 (MatchConfig.safes_required).
 const SAFES := [
-	Vector3(9, 0, 2.6), Vector3(22, 0, 2.6), Vector3(16, 0, 2.6), Vector3(9, 0, 17.4), Vector3(22, 0, 17.4),
+	Vector3(13.5, 0, 3.9), Vector3(33, 0, 3.9), Vector3(24, 0, 3.9), Vector3(13.5, 0, 26.1), Vector3(33, 0, 26.1),
 ]
 ## 2 lối ra ở hai đầu đối diện.
-const EXIT_GATES := [Vector3(0.8, 0, 10), Vector3(31.2, 0, 10)]
+const EXIT_GATES := [Vector3(0.8, 0, 15), Vector3(47.2, 0, 15)]
 ## Một huyết trận ở chính giữa, kết giới cao 3 m, chỉ đệm lò xo bay qua được.
-const PRISONS := [Vector3(16, 0, 10)]
+const PRISONS := [Vector3(24, 0, 15)]
 ## Bụi cây để nấp: Vector3(x, z, bán kính).
 const BUSHES: Array[Vector3] = [
-	Vector3(3.5, 10, 1.4), Vector3(28.5, 10, 1.4), Vector3(9.5, 10, 1.3), Vector3(22.5, 10, 1.3),
-	Vector3(12.5, 2.4, 1.2), Vector3(19.5, 17.6, 1.2), Vector3(27.5, 15.5, 1.2), Vector3(4.5, 4.5, 1.2),
+	Vector3(5.25, 15, 1.75), Vector3(42.75, 15, 1.75), Vector3(14.25, 15, 1.62), Vector3(33.75, 15, 1.62),
+	Vector3(18.75, 3.6, 1.5), Vector3(29.25, 26.4, 1.5), Vector3(41.25, 23.25, 1.5), Vector3(6.75, 6.75, 1.5),
+	Vector3(40, 8.5, 1.5), Vector3(8, 21.5, 1.5), Vector3(20.5, 27, 1.4), Vector3(28.5, 2.6, 1.4),
 ]
-const HUNTER_SPAWN := Vector3(16, 0.05, 16.2)
+const HUNTER_SPAWN := Vector3(24, 0.05, 24.3)
 const ESCAPEE_SPAWNS: Array[Vector3] = [
-	Vector3(3, 0.05, 3), Vector3(3, 0.05, 17), Vector3(29, 0.05, 3), Vector3(29, 0.05, 17),
+	Vector3(4.5, 0.05, 4.5), Vector3(4.5, 0.05, 25.5), Vector3(43.5, 0.05, 4.5), Vector3(43.5, 0.05, 25.5),
 ]
 ## Linh thạch rải sẵn trên sàn.
 const COIN_SPOTS: Array[Vector3] = [
-	Vector3(3, 0, 7), Vector3(3, 0, 13), Vector3(29, 0, 7), Vector3(29, 0, 13),
-	Vector3(9, 0, 6), Vector3(9, 0, 10), Vector3(9, 0, 14), Vector3(22, 0, 6), Vector3(22, 0, 10), Vector3(22, 0, 14),
-	Vector3(13, 0, 4), Vector3(19, 0, 4), Vector3(13, 0, 16), Vector3(19, 0, 16),
-	Vector3(16, 0, 5.5), Vector3(16, 0, 14.5), Vector3(27, 0, 1.5), Vector3(5, 0, 18.5),
-	Vector3(27, 0, 18.5), Vector3(5, 0, 1.5),
+	Vector3(4.5, 0, 10.5), Vector3(4.5, 0, 19.5), Vector3(43.5, 0, 10.5), Vector3(43.5, 0, 19.5),
+	Vector3(13.5, 0, 9), Vector3(13.5, 0, 15), Vector3(13.5, 0, 21), Vector3(33, 0, 9), Vector3(33, 0, 15), Vector3(33, 0, 21),
+	Vector3(19.5, 0, 6), Vector3(28.5, 0, 6), Vector3(19.5, 0, 24), Vector3(28.5, 0, 24),
+	Vector3(24, 0, 8.25), Vector3(24, 0, 21.75), Vector3(40.5, 0, 2.25), Vector3(7.5, 0, 27.75),
+	Vector3(40.5, 0, 27.75), Vector3(7.5, 0, 2.25),
 ]
 
 const SafeScript = preload("res://Objects/safe.gd")
@@ -65,7 +66,7 @@ var _lantern_mesh: SphereMesh
 func _ready() -> void:
 	# Sân cỏ rộng hơn bản đồ một chút, quảng trường đá xanh quanh huyết trận.
 	_add_box(Vector3(SIZE.x / 2, -0.1, SIZE.y / 2), Vector3(SIZE.x + 8, 0.2, SIZE.y + 8), GRASS)
-	_add_mesh(Vector3(16, 0.005, 10), Vector3(9, 0.01, 8.4), PLAZA)
+	_add_mesh(Vector3(SIZE.x / 2, 0.005, SIZE.y / 2), Vector3(14, 0.01, 12.6), PLAZA)
 	for i in WALLS.size():
 		var r: Rect2 = WALLS[i]
 		var center := r.get_center()
@@ -154,10 +155,10 @@ func _add_trees() -> void:
 	st.append_from(high, 0, Transform3D(Basis(), Vector3(0, 0.45, 0)))
 	st.set_material(_material(LEAVES))
 	var crown := st.commit()
-	for x in range(-2, 36, 5):
+	for x in range(-2, int(SIZE.x) + 4, 5):
 		for z: float in [-2.2]: # chỉ phía bắc: phía nam gần camera, cây sẽ che màn hình
 			_add_tree(Vector3(x, 0, z), trunk, crown)
-	for z in range(3, 20, 6):
+	for z in range(3, int(SIZE.y), 6):
 		for x: float in [-2.2, SIZE.x + 2.2]:
 			_add_tree(Vector3(x, 0, z), trunk, crown)
 
