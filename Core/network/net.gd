@@ -131,6 +131,8 @@ func _register(player_name: String, deck: Array) -> void:
 	if not multiplayer.is_server():
 		return
 	var id := multiplayer.get_remote_sender_id()
+	if players.has(id):
+		return # đã vào phòng: gửi lại không làm gì (khỏi bị spam đồng bộ cả phòng)
 	if in_match or players.size() >= MAX_PLAYERS:
 		multiplayer.multiplayer_peer.disconnect_peer(id)
 		return
