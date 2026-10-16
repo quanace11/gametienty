@@ -22,6 +22,8 @@ func _ready() -> void:
 	shape.shape = cyl
 	shape.position.y = 0.5
 	add_child(shape)
+	if DisplayServer.get_name() == "headless":
+		return # server riêng: chỉ cần va chạm, không dựng hình
 	if _mesh == null:
 		var mat := StandardMaterial3D.new()
 		mat.albedo_color = Color(0.2, 0.75, 0.95)
