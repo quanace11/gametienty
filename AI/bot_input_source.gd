@@ -25,7 +25,7 @@ const DETOUR_TIME := 0.8
 const THINK_INTERVAL := 0.1 # bot nghĩ 10 lần/giây (đỡ tốn CPU server), giữa hai lần giữ nguyên nút
 const COIN_GRAB_DIST := 5.0 # tiền trong bán kính này thì ghé nhặt
 const SHOOT_DIST := 8.0 # thợ săn bắn súng khi người trốn gần hơn chừng này
-const PRISON_INSIDE := 1.7 # mét từ giữa nhà tù: đang kẹt trong tường
+const PRISON_INSIDE := 2.4 # mét từ giữa nhà tù: đang kẹt trong tường (huyết trận cạnh trong 4,2 m)
 const TELEPORT_DIST := 14.0 # thợ săn: người trốn gần nhất xa hơn chừng này thì dịch chuyển tới
 ## Tỉ lệ bot căn vòng: trúng vùng đậm / vùng mờ, còn lại trượt.
 const QTE_PERFECT_CHANCE := 0.65
