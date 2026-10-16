@@ -53,6 +53,7 @@ const LOCK_FROM := 0.4 # giây trong anim: đã ngồi xuống
 const LOCK_TO := 0.85 # giây: tay với ra
 const LOCK_SPEED := 0.7
 const CHEST_CHECK := 0.1 # giây giữa hai lần xem có đứng ở rương không
+const HIT_FLASH_TIME := 0.18 # giây người bị trúng chớp đỏ
 
 var _target_pos := Vector3.ZERO
 var _target_yaw := 0.0
@@ -91,6 +92,10 @@ static var _robes := {} # đường dẫn bảng màu -> material dùng chung
 static var _bun_mesh: ArrayMesh
 static var _halo_sword_mesh: ArrayMesh
 static var _feather_mesh: ArrayMesh
+static var _hit_flash_mat: StandardMaterial3D # phủ đỏ lúc bị trúng, dùng chung
+
+var _body_meshes: Array[MeshInstance3D] = [] # các mảnh thân đang hiện, để phủ chớp đỏ
+var _flash_left := 0.0
 
 var _halo: Node3D # phi kiếm sau lưng ma tu (chỉ máy có hình)
 var _wings: Array[Node3D] = [] # cánh lửa của đệ tử (một nửa số đệ tử)
@@ -180,6 +185,9 @@ func _build_model() -> void:
 			mi.material_override = _robe(mi, HUNTER_TEXTURE)
 	if not is_hunter():
 		_wear_disciple_robe(model)
+	for node in model.find_children("*", "MeshInstance3D", true, false):
+		if (node as MeshInstance3D).visible:
+			_body_meshes.append(node as MeshInstance3D)
 	if is_hunter():
 		_add_sword_halo()
 	if is_hunter(): # ma khí tím đỏ dưới chân để nhận ra ma tu từ xa
@@ -579,6 +587,10 @@ func _process(delta: float) -> void:
 		_update_anim(delta)
 	if _halo or not _wings.is_empty():
 		_animate_aura()
+	if _flash_left > 0.0:
+		_flash_left -= delta
+		if _flash_left <= 0.0:
+			_set_flash(null)
 	if not (is_local and is_hunter()):
 		return
 	var dir := Vector2.ZERO
@@ -711,9 +723,30 @@ func _refresh_visible() -> void:
 	visible = not _concealed and state != GameTypes.PlayerState.ESCAPED and state != GameTypes.PlayerState.ELIMINATED
 
 
+## Bị trúng: nổ lửa ngay chỗ mình, thân chớp đỏ, giật người (anim Hit_A).
 func _on_hit(id: int, _attacker_id: int, _hp_left: int) -> void:
-	if id == peer_id and state == GameTypes.PlayerState.IDLE:
+	if id != peer_id:
+		return
+	if state == GameTypes.PlayerState.IDLE:
 		_play_once("Hit_A", 0.4)
+	if _visual == null or not visible:
+		return
+	if not is_instance_valid(_shot_fx):
+		_shot_fx = ShotFx.new()
+		get_parent().add_child(_shot_fx)
+	_shot_fx.hit_burst(GameTypes.ShotKind.BULLET if is_hunter() else GameTypes.ShotKind.RIFLE, _visual.global_position)
+	if _hit_flash_mat == null:
+		_hit_flash_mat = StandardMaterial3D.new()
+		_hit_flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_hit_flash_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_hit_flash_mat.albedo_color = Color(1.0, 0.15, 0.1, 0.55)
+	_set_flash(_hit_flash_mat)
+	_flash_left = HIT_FLASH_TIME
+
+
+func _set_flash(mat: Material) -> void:
+	for mi in _body_meshes:
+		mi.material_overlay = mat
 
 
 func _on_attacked(attacker_id: int) -> void:

@@ -9,6 +9,7 @@ extends CanvasLayer
 const UiTheme = preload("res://UI/ui_theme.gd")
 const QteRing = preload("res://UI/qte_ring.gd")
 const Minimap = preload("res://UI/minimap.gd")
+const HealthBars = preload("res://UI/health_bars.gd")
 const ResultsScreen = preload("res://UI/results_screen.gd")
 const TouchControls = preload("res://UI/touch_controls.gd")
 const ALERT_TIME := 3.0
@@ -45,6 +46,7 @@ func _ready() -> void:
 	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.theme = UiTheme.get_theme()
 	add_child(_root)
+	_root.add_child(HealthBars.new()) # dưới cùng: thanh máu trên đầu, các bảng HUD đè lên
 	_root.add_child(QteRing.new())
 	_touch = TouchControls.new()
 	_root.add_child(_touch)
