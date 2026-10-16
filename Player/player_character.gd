@@ -12,9 +12,11 @@ extends EntityBase
 ## tung (server_launch) khi giẫm đệm lò xo.
 ## Mọi quyết định đúng/sai nằm ở GameState; file này chỉ chọn điểm ngắm và vị trí.
 ## Hình: mô hình ma tu (áo đen đỏ, tóc đỏ, cầm kiếm) và đệ tử (áo trắng, búi
-## tóc) của dự án, 3 mức chi tiết theo cài đặt đồ họa. Mô hình không có khung
-## xương nên cử động bằng cách nghiêng / nhún / nằm cả người (_apply_pose); ma tu
-## có ma khí tím đỏ dưới chân và 3 phi kiếm sau lưng, một nửa đệ tử có cánh lửa.
+## tóc) của dự án, 3 mức chi tiết theo cài đặt đồ họa. Mô hình có khung xương
+## người 17 xương (gắn tự động); động tác tính bằng code (_pose_bones): bước chân,
+## đánh tay, gập gối, cúi cạy rương, ngồi, nằm, vung tay phóng kiếm. Cả người
+## nghiêng / nhún / nằm thêm bằng _apply_pose. Ma tu có ma khí tím đỏ dưới chân
+## và 3 phi kiếm sau lưng, một nửa đệ tử có cánh lửa.
 ## Tư thế chọn trên mọi máy theo trạng thái + tốc độ, không gửi qua mạng.
 ## Hình (model, tên, vòng đỏ) nằm trong một node riêng, mỗi frame vẽ được nội
 ## suy giữa hai lần tính vật lý (60 lần/giây) nên màn hình 90/120 Hz hay FPS
@@ -49,7 +51,18 @@ const HUNTER_TALL := 2.05 # mét (mô hình ma tu xòe tay, cầm kiếm)
 const ESCAPEE_TALL := 1.9
 const HALO_SWORDS := 3 # phi kiếm lơ lửng sau lưng ma tu
 const RUN_SPEED_MIN := 0.6 # m/s, chậm hơn thì đứng yên
-const POSE_SPEED := 10.0 # mô hình không có xương: tư thế đổi mượt theo tốc độ này
+const POSE_SPEED := 10.0 # tư thế cả người đổi mượt theo tốc độ này
+const BONE_SPEED := 18.0 # góc từng xương đuổi theo góc đích (bước chạy cần nhanh)
+# Xương do tools rig gắn vào mô hình (tên trong .glb). Góc xương tính theo độ,
+# trục của mô hình: X dương = bên trái nhân vật, Z dương = trước mặt.
+# Xoay quanh X góc âm: chân / tay đang buông đưa ra trước; dương: ra sau.
+# Xoay quanh Z góc dương: tay trái dang ra; tay phải thì góc âm.
+const BONES: Array[String] = ["hips", "spine", "chest", "neck", "head",
+	"upper_arm_l", "forearm_l", "hand_l", "upper_arm_r", "forearm_r", "hand_r",
+	"thigh_l", "shin_l", "foot_l", "thigh_r", "shin_r", "foot_r"]
+enum Bone { HIPS, SPINE, CHEST, NECK, HEAD, UPPER_ARM_L, FOREARM_L, HAND_L, UPPER_ARM_R,
+	FOREARM_R, HAND_R, THIGH_L, SHIN_L, FOOT_L, THIGH_R, SHIN_R, FOOT_R }
+const LEG := 0.21 # chiều dài đùi = cẳng chân, theo chiều cao 1 của mô hình
 const CHEST_CHECK := 0.1 # giây giữa hai lần xem có đứng ở rương không
 const HIT_FLASH_TIME := 0.18 # giây người bị trúng chớp đỏ
 
@@ -57,6 +70,11 @@ var _target_pos := Vector3.ZERO
 var _target_yaw := 0.0
 var _pose_node: Node3D # khung giữa _visual và _model: nghiêng, nhún, nằm
 var _model: Node3D
+var _skeleton: Skeleton3D # null nếu mô hình không có xương
+var _bone_ids := PackedInt32Array() # chỉ số xương trong _skeleton, theo thứ tự BONES
+var _bone_now: Array[Vector3] = [] # góc đang hiện (độ)
+var _bone_goal: Array[Vector3] = [] # góc đích frame này (độ); Array để g bên dưới là tham chiếu, không chép
+var _tall := 1.0 # mét, chiều cao mô hình
 var _safes: Array[Node] = [] # rương trên bản đồ (lấy một lần)
 var _chest: Node3D # rương đang cạy (đứng yên trong vùng rương chưa mở xong), null = không
 var _chest_check_left := 0.0
@@ -173,7 +191,9 @@ func _build_model() -> void:
 	var quality := clampi(int(ProjectSettings.get_setting(QUALITY_SETTING, 0)), 0, 2)
 	var model: Node3D = (load(MODELS[is_hunter()][quality]) as PackedScene).instantiate()
 	_model = model
-	model.scale = Vector3.ONE * (HUNTER_TALL if is_hunter() else ESCAPEE_TALL)
+	_tall = HUNTER_TALL if is_hunter() else ESCAPEE_TALL
+	model.scale = Vector3.ONE * _tall
+	_find_bones(model)
 	model.rotation.y = PI # model nhìn về +Z, nhân vật nhìn về -Z
 	_pose_node = Node3D.new()
 	_visual.add_child(_pose_node)
@@ -211,6 +231,24 @@ func _build_model() -> void:
 		mist.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_visual.add_child(mist)
 	_play("Idle")
+
+
+func _find_bones(model: Node3D) -> void:
+	var found := model.find_children("*", "Skeleton3D", true, false)
+	if found.is_empty():
+		return
+	var skeleton := found[0] as Skeleton3D
+	for bone_name in BONES:
+		var i := skeleton.find_bone(bone_name)
+		if i < 0:
+			push_warning("Mô hình thiếu xương %s, chỉ cử động cả người" % bone_name)
+			_bone_ids.clear()
+			return
+		_bone_ids.append(i)
+	_skeleton = skeleton
+	_bone_now.resize(BONES.size())
+	_bone_goal.resize(BONES.size())
+	_bone_now.fill(Vector3.ZERO)
 
 
 ## Cánh lửa: mỗi bên 4 lông vũ lửa xòe ra sau lưng, vỗ nhẹ. Gắn vào hình nhân vật
@@ -372,10 +410,9 @@ func _update_anim(delta: float) -> void:
 	_apply_pose(delta)
 
 
-## Mô hình không có khung xương nên cử động bằng cách nghiêng / nhún / xoay cả
-## người trong _pose_node: chạy thì chúi về trước, nhún và lắc; gục thì nằm ngửa;
-## bị nhốt thì ngồi thụp; cạy rương thì cúi người mò; bị trúng thì giật ngửa ra;
-## phóng kiếm / ném thì lao người tới. Chỉ đổi transform một node mỗi frame.
+## Cả người trong _pose_node: chạy thì chúi về trước, nhún và lắc; gục thì nằm
+## ngửa; ngồi / cúi thì hạ thấp cho chân chạm đất; bị trúng thì giật ngửa;
+## phóng kiếm / ném thì lao người tới. Tay chân do _pose_bones.
 func _apply_pose(delta: float) -> void:
 	var t := _pose_time
 	var pitch := 0.0 # dương: ngửa ra sau, âm: chúi về trước
@@ -385,35 +422,147 @@ func _apply_pose(delta: float) -> void:
 	var forward := 0.0
 	match _anim_name:
 		"Idle":
-			squash = 1.0 + 0.012 * sin(t * 2.2) # thở
+			squash = 1.0 + 0.008 * sin(t * 2.2) # thở
 		"Running_A":
 			var step := t * 9.0 * _anim_speed
-			pitch = -0.16
-			roll = 0.07 * sin(step)
-			lift = 0.07 * absf(sin(step))
+			pitch = -0.12
+			roll = 0.04 * sin(step)
+			lift = 0.05 * absf(sin(step))
 		"Lie_Idle":
 			pitch = PI / 2.0
 			lift = 0.18
 		"Sit_Floor_Idle":
-			pitch = 0.12
-			squash = 0.62 + 0.01 * sin(t * 2.0)
+			pitch = 0.05
+			lift = -0.44 * _tall # mông chạm đất
 		"Jump_Idle":
-			pitch = -0.3
-			roll = 0.15 * sin(t * 6.0)
+			pitch = -0.25
+			roll = 0.1 * sin(t * 6.0)
 		"PickUp":
-			pitch = -0.4 + 0.06 * sin(t * 7.0)
-			squash = 0.82
+			pitch = -0.08 + 0.03 * sin(t * 7.0)
+			lift = -_knee_drop(50.0, 85.0) * _tall
 		"Hit_A":
-			pitch = 0.4 * _oneshot_fade()
+			pitch = 0.25 * _oneshot_fade()
 		"1H_Ranged_Shoot", "Throw":
 			var k := _oneshot_fade()
-			pitch = -0.3 * k
+			pitch = -0.15 * k
 			forward = 0.2 * k
+	if _skeleton == null: # mô hình không xương: bù bằng cả người
+		match _anim_name:
+			"Sit_Floor_Idle":
+				lift = 0.0
+				squash = 0.62
+			"PickUp":
+				pitch = -0.4
+				squash = 0.82
+				lift = 0.0
 	var w := minf(1.0, delta * POSE_SPEED * (2.0 if _oneshot_left > 0.0 else 1.0))
 	var target := Vector3(pitch, 0.0, roll)
 	_pose_node.rotation = _pose_node.rotation.lerp(target, w)
 	_pose_node.position = _pose_node.position.lerp(Vector3(0, lift, -forward), w)
 	_pose_node.scale = _pose_node.scale.lerp(Vector3(1.0 + (1.0 - squash) * 0.3, squash, 1.0 + (1.0 - squash) * 0.3), w)
+	if _skeleton and _visual.is_visible_in_tree():
+		_pose_bones(delta)
+
+
+## Hông hạ bao nhiêu (theo chiều cao 1) khi đùi đưa trước `thigh` độ và gối gập
+## `knee` độ, để bàn chân vẫn chạm đất.
+static func _knee_drop(thigh: float, knee: float) -> float:
+	return LEG * (1.0 - cos(deg_to_rad(thigh))) + LEG * (1.0 - cos(deg_to_rad(knee - thigh)))
+
+
+## Góc từng xương theo tư thế đang phát (độ), rồi đuổi mượt và đặt vào khung
+## xương. 17 xương, không cấp phát gì mỗi frame.
+func _pose_bones(delta: float) -> void:
+	var t := _pose_time
+	var g := _bone_goal
+	g.fill(Vector3.ZERO)
+	match _anim_name:
+		"Idle":
+			var b := sin(t * 2.2)
+			g[Bone.CHEST] = Vector3(1.5 * b, 0, 0)
+			g[Bone.HEAD] = Vector3(-1.0 * b, 5.0 * sin(t * 0.6), 0)
+			g[Bone.UPPER_ARM_L] = Vector3(1.5 * b, 0, 2.0 + 2.0 * b)
+			g[Bone.UPPER_ARM_R] = Vector3(-1.5 * b, 0, -2.0 - 2.0 * b)
+		"Running_A":
+			var step := t * 9.0 * _anim_speed
+			var s := sin(step)
+			var c := cos(step)
+			g[Bone.THIGH_L] = Vector3(-32.0 * s, 0, 0)
+			g[Bone.THIGH_R] = Vector3(32.0 * s, 0, 0)
+			g[Bone.SHIN_L] = Vector3(8.0 + 55.0 * maxf(0.0, c), 0, 0) # gối gập lúc chân đưa lên
+			g[Bone.SHIN_R] = Vector3(8.0 + 55.0 * maxf(0.0, -c), 0, 0)
+			g[Bone.FOOT_L] = Vector3(-10.0 * s, 0, 0)
+			g[Bone.FOOT_R] = Vector3(10.0 * s, 0, 0)
+			g[Bone.HIPS] = Vector3(0, 7.0 * s, 0)
+			g[Bone.SPINE] = Vector3(-5.0, 0, 0)
+			g[Bone.CHEST] = Vector3(0, -12.0 * s, 0) # vai xoay ngược hông
+			g[Bone.HEAD] = Vector3(4.0, 5.0 * s, 0)
+			g[Bone.UPPER_ARM_L] = Vector3(28.0 * s + (35.0 if is_hunter() else 0.0), 0, 6.0) # ma tu hạ tay đang chìa ra
+			g[Bone.UPPER_ARM_R] = Vector3(-28.0 * s, 0, -6.0)
+			g[Bone.FOREARM_R] = Vector3(-20.0 - 10.0 * maxf(0.0, s), 0, 0)
+		"Lie_Idle":
+			var b := sin(t * 1.6)
+			g[Bone.CHEST] = Vector3(2.0 * b, 0, 0)
+			g[Bone.HEAD] = Vector3(-12.0, 15.0, 0)
+			g[Bone.UPPER_ARM_L] = Vector3(0, 0, 40.0)
+			g[Bone.UPPER_ARM_R] = Vector3(0, 0, -30.0)
+			g[Bone.THIGH_L] = Vector3(-30.0, 0, 6.0)
+			g[Bone.SHIN_L] = Vector3(55.0, 0, 0)
+			g[Bone.THIGH_R] = Vector3(-5.0, 0, -6.0)
+		"Sit_Floor_Idle":
+			var b := sin(t * 2.0)
+			g[Bone.THIGH_L] = Vector3(-80.0, 0, 10.0)
+			g[Bone.THIGH_R] = Vector3(-80.0, 0, -10.0)
+			g[Bone.SHIN_L] = Vector3(35.0, 0, 0)
+			g[Bone.SHIN_R] = Vector3(35.0, 0, 0)
+			g[Bone.SPINE] = Vector3(-6.0 + 2.0 * b, 0, 0)
+			g[Bone.HEAD] = Vector3(14.0, 0, 0) # cúi đầu buồn
+			g[Bone.UPPER_ARM_L] = Vector3(-20.0, 0, 8.0)
+			g[Bone.UPPER_ARM_R] = Vector3(-20.0, 0, -8.0)
+		"Jump_Idle":
+			g[Bone.THIGH_L] = Vector3(-50.0, 0, 0)
+			g[Bone.SHIN_L] = Vector3(75.0, 0, 0)
+			g[Bone.THIGH_R] = Vector3(-15.0, 0, 0)
+			g[Bone.SHIN_R] = Vector3(45.0, 0, 0)
+			g[Bone.UPPER_ARM_L] = Vector3(0, 0, 45.0 + 8.0 * sin(t * 6.0))
+			g[Bone.UPPER_ARM_R] = Vector3(0, 0, -45.0 - 8.0 * sin(t * 6.0))
+		"PickUp": # ngồi xổm cạy rương, hai tay mò khóa
+			var jiggle := 10.0 * sin(t * 14.0)
+			g[Bone.THIGH_L] = Vector3(-50.0, 0, 10.0)
+			g[Bone.THIGH_R] = Vector3(-50.0, 0, -10.0)
+			g[Bone.SHIN_L] = Vector3(85.0, 0, 0)
+			g[Bone.SHIN_R] = Vector3(85.0, 0, 0)
+			g[Bone.FOOT_L] = Vector3(-35.0, 0, 0)
+			g[Bone.FOOT_R] = Vector3(-35.0, 0, 0)
+			g[Bone.SPINE] = Vector3(-18.0, 0, 0)
+			g[Bone.CHEST] = Vector3(-10.0, 0, 0)
+			g[Bone.HEAD] = Vector3(-8.0, 0, 0)
+			g[Bone.UPPER_ARM_L] = Vector3(-45.0, 0, 0)
+			g[Bone.UPPER_ARM_R] = Vector3(-50.0, 0, 0)
+			g[Bone.FOREARM_L] = Vector3(-15.0 + jiggle, 0, 0)
+			g[Bone.FOREARM_R] = Vector3(-35.0 - jiggle, 0, 0)
+		"Hit_A":
+			var k := _oneshot_fade()
+			g[Bone.SPINE] = Vector3(8.0 * k, 0, 0)
+			g[Bone.CHEST] = Vector3(18.0 * k, 0, 0)
+			g[Bone.HEAD] = Vector3(15.0 * k, 0, 0)
+			g[Bone.UPPER_ARM_L] = Vector3(15.0 * k, 0, 30.0 * k)
+			g[Bone.UPPER_ARM_R] = Vector3(15.0 * k, 0, -30.0 * k)
+		"1H_Ranged_Shoot", "Throw": # vung tay phải từ sau ra trước
+			var p := 1.0 - _oneshot_fade()
+			var swing := sin(PI * clampf(p * 1.3, 0.0, 1.0))
+			var back := 1.0 - clampf(p * 4.0, 0.0, 1.0) # lấy đà lúc đầu
+			g[Bone.UPPER_ARM_R] = Vector3(-100.0 * swing + 35.0 * back, 0, -10.0 * swing)
+			g[Bone.FOREARM_R] = Vector3(-15.0 * swing, 0, 0)
+			g[Bone.CHEST] = Vector3(0, -22.0 * swing + 12.0 * back, 0)
+			g[Bone.SPINE] = Vector3(-6.0 * swing, 0, 0)
+			g[Bone.THIGH_L] = Vector3(-20.0 * swing, 0, 0)
+			g[Bone.SHIN_L] = Vector3(20.0 * swing, 0, 0)
+	var w := minf(1.0, delta * BONE_SPEED)
+	for i in _bone_ids.size():
+		var now := _bone_now[i].lerp(g[i], w)
+		_bone_now[i] = now
+		_skeleton.set_bone_pose_rotation(_bone_ids[i], Quaternion.from_euler(now * (PI / 180.0)))
 
 
 ## Tư thế một lần: mạnh nhất lúc đầu rồi nhạt dần về 0.
