@@ -82,6 +82,8 @@ Chỉ thêm asset CC0 hoặc giấy phép cho dùng thương mại, và ghi vào
 
 **Giai đoạn 2: online.** Chưa làm gì; chỉ giữ khung đã có trong Core (server có thẩm quyền, offline / host / server riêng cùng đường code, `Net` với ENet, CI chạy trận online 3 máy). Mọi PR giai đoạn 1 vẫn phải qua CI đó.
 
+**Đổi bối cảnh tiên hiệp** (ma tu, phi kiếm, huyết trận, trận linh, lối ra phải phá giải): thuật ngữ và 15 ticket TH-01..15 chia theo nhóm, tuần ở [docs/TIEN_HIEP.md](docs/TIEN_HIEP.md). Làm cùng các việc trong bảng tuần bên dưới.
+
 ### Nhóm việc (tránh conflict)
 
 Mỗi nhóm chỉ commit trong thư mục mình sở hữu. Có 3 người thêm thì gộp nhóm 5 vào nhóm 2.
