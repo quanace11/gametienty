@@ -76,6 +76,14 @@ const RUN_BOB := 0.02 # hông nhún thêm lúc dồn lực lên một chân
 const FOOT_TOE := 0.07 # từ mắt cá tới đầu ngón / gót (chiều cao 1)
 const FOOT_HEEL := 0.025
 const CROUCH_DROP := 0.13 # hông hạ khi ngồi xổm cạy rương
+# Chuỗi xương phụ trong mô hình (Player/tools/rig): tên chuỗi, độ cứng, lực cản,
+# trọng lực. Cứng thấp, cản thấp thì bay theo quán tính nhiều, lắc lâu.
+const SPRING_CHAINS := [
+	["hair", 1.3, 0.4, 0.1],
+	["sleeve_l", 3.5, 0.4, 0.5],
+	["sleeve_r", 3.5, 0.4, 0.5],
+	["skirt_b", 1.4, 0.5, 0.2],
+]
 const CHEST_CHECK := 0.1 # giây giữa hai lần xem có đứng ở rương không
 const HIT_FLASH_TIME := 0.18 # giây người bị trúng chớp đỏ
 
@@ -85,6 +93,7 @@ var _pose_node: Node3D # khung giữa _visual và _model: nghiêng, nhún, nằm
 var _model: Node3D
 var _skeleton: Skeleton3D # null nếu mô hình không có xương
 var _bone_ids := PackedInt32Array() # chỉ số xương trong _skeleton, theo thứ tự BONES
+var _springs: SpringBoneSimulator3D # tóc, tay áo, vạt áo đung đưa; null nếu mô hình không có
 var _bone_now: Array[Vector3] = [] # góc đang hiện (độ)
 var _bone_goal: Array[Vector3] = [] # góc đích frame này (độ); Array để g bên dưới là tham chiếu, không chép
 var _tall := 1.0 # mét, chiều cao mô hình
@@ -167,6 +176,13 @@ func _snap_visual() -> void:
 	_xf_prev = _xf_curr
 	if _visual:
 		_visual.global_transform = _xf_curr
+	_reset_springs()
+
+
+## Dịch chuyển: tóc / áo bắt đầu lại từ dáng nghỉ, không bị kéo dài cả quãng đường.
+func _reset_springs() -> void:
+	if is_instance_valid(_springs):
+		_springs.reset()
 
 
 ## Chạy sau khi Match đã di chuyển nhân vật trong lần tính vật lý này (node con
@@ -176,6 +192,7 @@ func _physics_process(_delta: float) -> void:
 	_xf_curr = global_transform
 	if _xf_prev.origin.distance_squared_to(_xf_curr.origin) > SNAP_DIST * SNAP_DIST:
 		_xf_prev = _xf_curr # dịch chuyển: nhảy luôn, không trượt ngang bản đồ
+		_reset_springs()
 
 
 ## Vị trí đang vẽ trên màn hình (đã nội suy). Camera và luồng ngắm bám theo đây.
@@ -279,6 +296,37 @@ func _find_bones(model: Node3D) -> void:
 	_bone_now.resize(BONES.size())
 	_bone_goal.resize(BONES.size())
 	_bone_now.fill(Vector3.ZERO)
+	_add_springs(skeleton)
+
+
+## Tóc, tay áo, vạt áo theo lò xo (SpringBoneSimulator3D của Godot, chạy C++):
+## đứng yên thì giữ nguyên dáng, chạy / quay người thì văng theo quán tính rồi lắc về.
+func _add_springs(skeleton: Skeleton3D) -> void:
+	var sim := SpringBoneSimulator3D.new()
+	for c: Array in SPRING_CHAINS:
+		var first := skeleton.find_bone("%s_1" % c[0])
+		if first < 0:
+			continue
+		var last := first
+		var k := 2
+		while skeleton.find_bone("%s_%d" % [c[0], k]) >= 0:
+			last = skeleton.find_bone("%s_%d" % [c[0], k])
+			k += 1
+		var i := sim.setting_count
+		sim.setting_count = i + 1
+		sim.set_root_bone(i, first)
+		sim.set_end_bone(i, last)
+		sim.set_extend_end_bone(i, true)
+		sim.set_end_bone_direction(i, SkeletonModifier3D.BONE_DIRECTION_FROM_PARENT)
+		sim.set_end_bone_length(i, skeleton.get_bone_rest(last).origin.length())
+		sim.set_stiffness(i, c[1])
+		sim.set_drag(i, c[2])
+		sim.set_gravity(i, c[3])
+	if sim.setting_count == 0:
+		sim.free()
+		return
+	skeleton.add_child(sim)
+	_springs = sim
 
 
 ## Cánh lửa: mỗi bên 4 lông vũ lửa xòe ra sau lưng, vỗ nhẹ. Gắn vào hình nhân vật

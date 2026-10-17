@@ -40,6 +40,21 @@ function dseg(p, a, b) {
   const q = [a[0]+ab[0]*t-p[0], a[1]+ab[1]*t-p[1], a[2]+ab[2]*t-p[2]];
   return Math.hypot(q[0], q[1], q[2]);
 }
+// chuỗi xương phụ (tóc, tay áo, vạt áo): đung đưa theo lò xo trong game.
+// Mỗi chuỗi: tên, xương cha, các điểm dọc chuỗi (điểm đầu gắn vào cha), hộp giới hạn
+// đỉnh được ăn theo, bán kính quanh chuỗi, `fade`: đoạn đầu chuỗi chuyển dần từ cha sang,
+// `max`: phần lớn nhất đỉnh theo chuỗi (còn lại theo xương cũ, ví dụ vạt áo vẫn theo chân).
+const CH = [];
+for (const c of L.chains ?? []) {
+  const first = B.length;
+  for (let k = 0; k + 1 < c.points.length; k++) {
+    const nm = `${c.name}_${k + 1}`;
+    L[nm] = c.points[k]; L[nm + '_end'] = c.points[k + 1];
+    B.push([nm, k ? B.length - 1 : B.findIndex(b => b[0] === c.parent), nm, nm + '_end']);
+  }
+  CH.push({...c, first, count: c.points.length - 1});
+}
+const NB0 = 17;
 const NB = B.length, hipY = L.hips[1], neckY = L.neck[1];
 function allowed(i, p) {
   if (LEGS.has(i) && p[1] > hipY + 0.04) return false;
@@ -53,7 +68,7 @@ const Wf = new Float32Array(n * NB);
 for (let v = 0; v < n; v++) {
   const p = [P[3*v], P[3*v+1], P[3*v+2]];
   let s = 0;
-  for (let i = 0; i < NB; i++) {
+  for (let i = 0; i < NB0; i++) {
     if (!allowed(i, p)) continue;
     let d = dseg(p, segA[i], segB[i]);
     if (ARMS.has(i)) d *= L.arm_bias ?? 1.0; // >1: ưu tiên thân hơn tay (vạt áo sát tay)
@@ -61,6 +76,41 @@ for (let v = 0; v < n; v++) {
     const w = 1 / Math.pow(d + 0.012, 4); Wf[v*NB+i] = w; s += w;
   }
   for (let i = 0; i < NB; i++) Wf[v*NB+i] /= s;
+}
+const smooth01 = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+for (const c of CH) {
+  const pts = c.points, segL = [], [lo, hi] = c.box;
+  let tot = 0;
+  for (let k = 0; k < c.count; k++) { const a = pts[k], b = pts[k+1]; const l = Math.hypot(b[0]-a[0], b[1]-a[1], b[2]-a[2]); segL.push(l); tot += l; }
+  const sc = c.scale ?? [1, 1, 1];
+  for (let v = 0; v < n; v++) {
+    const p = [P[3*v], P[3*v+1], P[3*v+2]];
+    if (p.some((x, i) => x < lo[i] || x > hi[i])) continue;
+    if (c.only) { // chỉ ăn đỉnh đang theo chủ yếu các xương này (tay áo: không lấy thân)
+      let top = 0; for (let i = 1; i < NB0; i++) if (Wf[v*NB+i] > Wf[v*NB+top]) top = i;
+      if (!c.only.includes(B[top][0])) continue;
+    }
+    // điểm gần nhất trên chuỗi: khoảng cách (co giãn theo trục) và vị trí dọc chuỗi (0..1)
+    let best = 1e9, along = 0, acc = 0;
+    for (let k = 0; k < c.count; k++) {
+      const a = pts[k], b = pts[k+1];
+      const ab = [0,1,2].map(i => (b[i]-a[i]) * sc[i]), ap = [0,1,2].map(i => (p[i]-a[i]) * sc[i]);
+      const l2 = ab[0]*ab[0]+ab[1]*ab[1]+ab[2]*ab[2];
+      const t = Math.max(0, Math.min(1, (ap[0]*ab[0]+ap[1]*ab[1]+ap[2]*ab[2]) / l2));
+      const d = Math.hypot(ap[0]-ab[0]*t, ap[1]-ab[1]*t, ap[2]-ab[2]*t);
+      if (d < best) { best = d; along = (acc + t * segL[k]) / tot; }
+      acc += segL[k];
+    }
+    if (best > c.r) continue;
+    const bw = (c.max ?? 1) * smooth01(0, c.fade ?? 0.25, along) * (1 - smooth01(c.r * 0.6, c.r, best));
+    if (bw <= 0) continue;
+    for (let i = 0; i < NB; i++) Wf[v*NB+i] *= 1 - bw;
+    // chia cho các đoạn: nội suy giữa tâm hai đoạn kề nhau cho cong mượt
+    let u = along * c.count - 0.5, k0 = Math.floor(u), f = u - k0;
+    if (k0 < 0) { k0 = 0; f = 0; } if (k0 >= c.count - 1) { k0 = c.count - 1; f = 0; }
+    Wf[v*NB + c.first + k0] += bw * (1 - f);
+    if (f > 0) Wf[v*NB + c.first + k0 + 1] += bw * f;
+  }
 }
 // làm mượt trọng số trên lưới (đỉnh trùng vị trí coi là một), cho chỗ chuyển khớp mềm, bớt gai
 const SMOOTH = Number(process.env.SMOOTH ?? L.smooth ?? 0);
