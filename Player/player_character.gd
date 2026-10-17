@@ -101,6 +101,7 @@ var _hip_y := 0.48 # khớp háng, đùi, cẳng chân, mắt cá theo khung xư
 var _thigh_len := LEG
 var _shin_len := LEG
 var _ankle_y := 0.06
+var _leg_splay := Vector2.ZERO # độ, chân trái / phải xòe ra ngoài ở dáng gốc (bàn chân xa hông)
 var _hips_rest := Vector3.ZERO
 var _hips_drop := 0.0 # hông đang hạ bao nhiêu
 var _hips_drop_goal := 0.0
@@ -292,6 +293,10 @@ func _find_bones(model: Node3D) -> void:
 	_thigh_len = Vector2(knee.y - hip.y, knee.z - hip.z).length()
 	_shin_len = Vector2(ankle.y - knee.y, ankle.z - knee.z).length()
 	_ankle_y = ankle.y
+	for side in 2: # dáng gốc đứng dạng chân: đo để khi bước khép bàn chân về dưới hông
+		var h := skeleton.get_bone_global_rest(_bone_ids[Bone.THIGH_L + 3 * side]).origin
+		var f := skeleton.get_bone_global_rest(_bone_ids[Bone.FOOT_L + 3 * side]).origin
+		_leg_splay[side] = rad_to_deg(atan2(f.x - h.x, h.y - f.y))
 	_hips_rest = skeleton.get_bone_rest(_bone_ids[Bone.HIPS]).origin
 	_bone_now.resize(BONES.size())
 	_bone_goal.resize(BONES.size())
@@ -577,14 +582,19 @@ func _pose_bones(delta: float) -> void:
 			_fast_legs = true
 			var swing := (zl - zr) / maxf(2.0 * half, 0.01) # 1: chân trái ở trước, -1: chân phải ở trước
 			g[Bone.HIPS] = Vector3(0, 8.0 * swing, 0)
-			g[Bone.SPINE] = Vector3(-10.0, 0, 3.0 * c) # nghiêng tới và sang chân đang đỡ
+			g[Bone.SPINE] = Vector3(8.0, 0, 3.0 * c) # dương: thân đổ tới (âm là ưỡn ra sau); nghiêng sang chân đang đỡ
 			g[Bone.CHEST] = Vector3(0, -13.0 * swing, 0) # vai xoay ngược hông
 			g[Bone.NECK] = Vector3(0, 6.0 * swing, 0) # đầu giữ thẳng hướng chạy
 			g[Bone.HEAD] = Vector3(6.0 + 2.0 * absf(c), 2.0 * swing, 0)
 			# Tay đánh ngược chân; khuỷu gập thêm khi tay đưa ra trước, cổ tay trễ nhịp
 			# nên tay mềm, không vung như que cứng. Ma tu hạ cánh tay đang chìa ra.
 			var lag := step - 0.6
-			g[Bone.UPPER_ARM_L] = Vector3(30.0 * swing + (35.0 if is_hunter() else 0.0), 0, 8.0 + 4.0 * absf(s))
+			# Ma tu: dáng gốc chìa tay trái thẳng ra trước, khi chạy hạ hẳn xuống cạnh
+			# người rồi mới đánh tay (chìa tay ra trước mà chạy trông như đi ngang).
+			if is_hunter():
+				g[Bone.UPPER_ARM_L] = Vector3(70.0 + 25.0 * swing, 0, 4.0 + 4.0 * absf(s))
+			else:
+				g[Bone.UPPER_ARM_L] = Vector3(30.0 * swing, 0, 8.0 + 4.0 * absf(s))
 			g[Bone.FOREARM_L] = Vector3(-20.0 - 30.0 * maxf(0.0, -sin(lag)), 0, 0)
 			if is_hunter(): # tay cầm kiếm: đánh nhẹ về sau, mũi kiếm chúc xuống, không chĩa ngang
 				g[Bone.UPPER_ARM_R] = Vector3(12.0 - 10.0 * swing, 0, -10.0)
@@ -710,7 +720,10 @@ func _leg_ik(thigh: int, z: float, y: float, roll: float, drop: float) -> void:
 	var knee := PI - at_knee # gối gập
 	var thigh_x := -rad_to_deg(thigh_fwd)
 	var shin_x := rad_to_deg(knee)
-	_bone_goal[thigh] = Vector3(thigh_x, 0, 0)
+	# Khép chân: bàn chân bước gần đường giữa, không dạng háng đi ngang như cua.
+	var splay := _leg_splay[0 if thigh == Bone.THIGH_L else 1]
+	var inward := -splay + (2.0 if thigh == Bone.THIGH_L else -2.0)
+	_bone_goal[thigh] = Vector3(thigh_x, 0, inward)
 	_bone_goal[thigh + 1] = Vector3(shin_x, 0, 0)
 	_bone_goal[thigh + 2] = Vector3(-(thigh_x + shin_x) + roll, 0, 0)
 
