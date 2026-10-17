@@ -63,7 +63,7 @@ const BONES: Array[String] = ["hips", "spine", "chest", "neck", "head",
 enum Bone { HIPS, SPINE, CHEST, NECK, HEAD, UPPER_ARM_L, FOREARM_L, HAND_L, UPPER_ARM_R,
 	FOREARM_R, HAND_R, THIGH_L, SHIN_L, FOOT_L, THIGH_R, SHIN_R, FOOT_R }
 const RUN_CADENCE := 14.0 # radian / giây ở tốc độ chạy chuẩn: ~2,2 chu kỳ (4,5 bước) mỗi giây
-const LEG := 0.21
+const LEG := 0.21 # chiều dài đùi = cẳng chân, theo chiều cao 1, mặc định trước khi đọc khung xương
 # Dáng chạy: mỗi bàn chân đi theo quỹ đạo (chạm đất trượt lùi đúng tốc độ chạy, rồi
 # nhấc lên vòng ra trước); góc đùi / gối tính ngược từ chỗ bàn chân (IK hai đoạn) nên
 # gối luôn gập về trước, bàn chân dẫm đất không trượt. Đơn vị theo chiều cao 1.
@@ -75,7 +75,7 @@ const RUN_DROP := 0.03 # hông hạ thấp khi chạy (gối hơi chùng)
 const RUN_BOB := 0.02 # hông nhún thêm lúc dồn lực lên một chân
 const FOOT_TOE := 0.07 # từ mắt cá tới đầu ngón / gót (chiều cao 1)
 const FOOT_HEEL := 0.025
-const CROUCH_DROP := 0.13 # hông hạ khi ngồi xổm cạy rương # chiều dài đùi = cẳng chân, theo chiều cao 1 của mô hình
+const CROUCH_DROP := 0.13 # hông hạ khi ngồi xổm cạy rương
 const CHEST_CHECK := 0.1 # giây giữa hai lần xem có đứng ở rương không
 const HIT_FLASH_TIME := 0.18 # giây người bị trúng chớp đỏ
 
