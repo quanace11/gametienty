@@ -62,17 +62,18 @@ const BONES: Array[String] = ["hips", "spine", "chest", "neck", "head",
 	"thigh_l", "shin_l", "foot_l", "thigh_r", "shin_r", "foot_r"]
 enum Bone { HIPS, SPINE, CHEST, NECK, HEAD, UPPER_ARM_L, FOREARM_L, HAND_L, UPPER_ARM_R,
 	FOREARM_R, HAND_R, THIGH_L, SHIN_L, FOOT_L, THIGH_R, SHIN_R, FOOT_R }
-const RUN_CADENCE := 14.0 # radian / giây ở tốc độ chạy chuẩn: ~2,2 chu kỳ (4,5 bước) mỗi giây
+const RUN_CADENCE := 11.5 # radian / giây ở tốc độ chạy chuẩn: ~1,8 chu kỳ (3,7 bước) mỗi giây
 const LEG := 0.21 # chiều dài đùi = cẳng chân, theo chiều cao 1, mặc định trước khi đọc khung xương
 # Dáng chạy: mỗi bàn chân đi theo quỹ đạo (chạm đất trượt lùi đúng tốc độ chạy, rồi
 # nhấc lên vòng ra trước); góc đùi / gối tính ngược từ chỗ bàn chân (IK hai đoạn) nên
 # gối luôn gập về trước, bàn chân dẫm đất không trượt. Đơn vị theo chiều cao 1.
-const GAIT_DUTY_RUN := 0.38 # phần chu kỳ bàn chân chạm đất khi chạy nhanh
+const GAIT_DUTY_RUN := 0.34 # phần chu kỳ bàn chân chạm đất khi chạy nhanh
 const GAIT_DUTY_WALK := 0.6 # ... khi đi chậm
-const STEP_LIFT := 0.15 # bàn chân nhấc cao nhất
-const HALF_STRIDE_MAX := 0.2 # bàn chân xa nhất trước / sau hông
-const RUN_DROP := 0.03 # hông hạ thấp khi chạy (gối hơi chùng)
-const RUN_BOB := 0.02 # hông nhún thêm lúc dồn lực lên một chân
+const STEP_LIFT := 0.19 # bàn chân nhấc cao nhất (gót đá lên gần mông khi chạy)
+const STANCE_MAX := 0.26 # quãng bàn chân trượt lùi khi chống, dài nhất chân với tới (hông cao 0,42)
+const GAIT_DUTY_MIN := 0.2 # chạy nhanh: chống ngắn, bay dài như người chạy nước rút
+const RUN_DROP := 0.012 # hông hạ thấp khi chạy (gối hơi chùng)
+const RUN_BOB := 0.022 # hông nhún thêm lúc dồn lực lên một chân
 const FOOT_TOE := 0.07 # từ mắt cá tới đầu ngón / gót (chiều cao 1)
 const FOOT_HEEL := 0.025
 const CROUCH_DROP := 0.13 # hông hạ khi ngồi xổm cạy rương
@@ -574,7 +575,12 @@ func _pose_bones(delta: float) -> void:
 			var v := _speed / _tall # tốc độ theo đơn vị mô hình
 			var duty := lerpf(GAIT_DUTY_WALK, GAIT_DUTY_RUN, clampf((_speed - 1.5) / 3.0, 0.0, 1.0))
 			var cycle := RUN_CADENCE * _anim_speed / TAU # chu kỳ / giây
-			var half := minf(HALF_STRIDE_MAX, 0.5 * duty * v / maxf(cycle, 0.1))
+			cycle = maxf(cycle, 0.1)
+			# Quãng chống = tốc độ × thời gian chống. Chân không với xa hơn được thì chống
+			# ngắn lại (bay lâu hơn) thay vì cho bàn chân trượt trên đất.
+			if v * duty / cycle > STANCE_MAX:
+				duty = maxf(GAIT_DUTY_MIN, STANCE_MAX * cycle / v)
+			var half := 0.5 * v * duty / cycle
 			var p := step / TAU
 			_hips_drop_goal = RUN_DROP + RUN_BOB * (0.5 + 0.5 * cos(TAU * 2.0 * (p - duty * 0.5)))
 			var zl := _leg_gait(Bone.THIGH_L, p, duty, half)
@@ -586,22 +592,25 @@ func _pose_bones(delta: float) -> void:
 			g[Bone.CHEST] = Vector3(0, -13.0 * swing, 0) # vai xoay ngược hông
 			g[Bone.NECK] = Vector3(0, 6.0 * swing, 0) # đầu giữ thẳng hướng chạy
 			g[Bone.HEAD] = Vector3(6.0 + 2.0 * absf(c), 2.0 * swing, 0)
-			# Tay đánh ngược chân; khuỷu gập thêm khi tay đưa ra trước, cổ tay trễ nhịp
-			# nên tay mềm, không vung như que cứng. Ma tu hạ cánh tay đang chìa ra.
+			# Tay đánh ngược chân, khuỷu gập gần vuông như người chạy; gập thêm khi tay
+			# đưa ra trước, cổ tay trễ nhịp nên tay mềm. Góc khuỷu tính từ dáng gốc của
+			# từng mô hình: tu sĩ dáng gốc tay trái giơ lên (phải duỗi ra), tay phải buông.
 			var lag := step - 0.6
-			# Ma tu: dáng gốc chìa tay trái thẳng ra trước, khi chạy hạ hẳn xuống cạnh
-			# người rồi mới đánh tay (chìa tay ra trước mà chạy trông như đi ngang).
+			var fwd_l := maxf(0.0, -sin(lag)) # tay trái đang ra trước
+			var fwd_r := maxf(0.0, sin(lag))
 			if is_hunter():
-				g[Bone.UPPER_ARM_L] = Vector3(70.0 + 25.0 * swing, 0, 4.0 + 4.0 * absf(s))
-			else:
-				g[Bone.UPPER_ARM_L] = Vector3(30.0 * swing, 0, 8.0 + 4.0 * absf(s))
-			g[Bone.FOREARM_L] = Vector3(-20.0 - 30.0 * maxf(0.0, -sin(lag)), 0, 0)
-			if is_hunter(): # tay cầm kiếm: đánh nhẹ về sau, mũi kiếm chúc xuống, không chĩa ngang
+				# Ma tu: dáng gốc chìa tay trái thẳng ra trước, khi chạy hạ hẳn xuống cạnh
+				# người rồi mới đánh tay (chìa tay ra trước mà chạy trông như đi ngang).
+				g[Bone.UPPER_ARM_L] = Vector3(70.0 + 30.0 * swing, 0, 4.0 + 4.0 * absf(s))
+				g[Bone.FOREARM_L] = Vector3(-55.0 - 20.0 * fwd_l, 0, 0)
+				# Tay cầm kiếm: đánh nhẹ về sau, mũi kiếm chúc xuống, không chĩa ngang.
 				g[Bone.UPPER_ARM_R] = Vector3(12.0 - 10.0 * swing, 0, -10.0)
 				g[Bone.CHEST].y *= 0.5
 			else:
-				g[Bone.UPPER_ARM_R] = Vector3(-30.0 * swing, 0, -8.0 - 4.0 * absf(s))
-				g[Bone.FOREARM_R] = Vector3(-20.0 - 30.0 * maxf(0.0, sin(lag)), 0, 0)
+				g[Bone.UPPER_ARM_L] = Vector3(35.0 * swing, 0, 8.0 + 4.0 * absf(s))
+				g[Bone.FOREARM_L] = Vector3(45.0 - 20.0 * fwd_l, 0, 0)
+				g[Bone.UPPER_ARM_R] = Vector3(-35.0 * swing, 0, -8.0 - 4.0 * absf(s))
+				g[Bone.FOREARM_R] = Vector3(-40.0 - 20.0 * fwd_r, 0, 0)
 			g[Bone.HAND_L] = Vector3(14.0 * sin(step - 1.3), 0, 0)
 			g[Bone.HAND_R] = Vector3(-14.0 * sin(step - 1.3), 0, 0)
 		"Lie_Idle":
@@ -685,17 +694,31 @@ func _leg_gait(thigh: int, p: float, duty: float, half: float) -> float:
 	var z: float
 	var y := 0.0
 	var roll: float # độ, dương: mũi chúc xuống
-	var front := half * 0.6 # chạm đất ngay trước hông (không với chân xa), đạp ra sau xa hơn
-	var back := -half * 1.4
+	var front := half * 0.8 # chạm đất ngay trước hông (không với chân xa), đạp ra sau xa hơn
+	var back := -half * 1.2
 	if p < duty:
 		var u := p / duty
 		z = lerpf(front, back, u)
 		roll = -10.0 * (1.0 - u) * (1.0 - u) + 30.0 * u * u * u
 	else:
 		var u := (p - duty) / (1.0 - duty)
-		# Vừa nhấc là gót đá lên sau (chân chưa ra trước), rồi gối đưa cao ra trước.
-		z = lerpf(back, front, smoothstep(0.15, 0.9, u))
-		y = STEP_LIFT * pow(sin(PI * minf(1.0, u * 1.15)), 0.7) * clampf(half / 0.1, 0.3, 1.0)
+		# Quỹ đạo bàn chân khi bước, theo dáng chạy thật: vừa rời đất thì gót đá lên sát
+		# mông (bàn chân còn sau hông, gối đã ra trước), rồi gối kéo cẳng chân vung ra
+		# trước, bàn chân hạ xuống ngay trước hông. Nội suy cong qua 4 điểm.
+		var lift := STEP_LIFT * clampf(half / 0.12, 0.3, 1.0)
+		var k0 := Vector2(back, 0.0)
+		var k1 := Vector2(back * 0.4, lift)
+		var k2 := Vector2(front * 0.9, lift * 0.5)
+		var k3 := Vector2(front, 0.0)
+		var q: Vector2
+		if u < 0.3:
+			q = k0.cubic_interpolate(k1, k0 + Vector2(0.0, -lift), k2, u / 0.3)
+		elif u < 0.65:
+			q = k1.cubic_interpolate(k2, k0, k3, (u - 0.3) / 0.35)
+		else:
+			q = k2.cubic_interpolate(k3, k1, k3 + Vector2(-0.05, -lift * 0.3), (u - 0.65) / 0.35)
+		z = q.x
+		y = maxf(0.0, q.y)
 		roll = lerpf(30.0, -12.0, smoothstep(0.0, 0.7, u))
 	# Lăn bàn chân: mũi chúc xuống thì xoay quanh đầu ngón (mắt cá nhấc lên),
 	# mũi hếch lên thì xoay quanh gót, để bàn chân không lún xuống đất.
