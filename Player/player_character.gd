@@ -11,10 +11,12 @@ extends EntityBase
 ## Nút thẻ đạo cụ (skill_1..4) do Core + Items xử lý, file này chỉ lo bị hất
 ## tung (server_launch) khi giẫm đệm lò xo.
 ## Mọi quyết định đúng/sai nằm ở GameState; file này chỉ chọn điểm ngắm và vị trí.
-## Hình: nhân vật gốc của bộ KayKit Adventurers (CC0), dùng nguyên mô hình, khung
-## xương và động tác có sẵn trong tệp: thợ săn là Barbarian cầm rìu, người trốn là
-## Mage. Động tác đặt thẳng lên khung xương (_pose_bones). Thợ săn có ma khí tím
-## đỏ dưới chân để nhận ra từ xa.
+## Hình: mô hình ma tu (áo đen đỏ, tóc đỏ, cầm kiếm) và đệ tử (áo trắng, búi
+## tóc) của dự án, 3 mức chi tiết theo cài đặt đồ họa. Mô hình có khung xương
+## người 17 xương (gắn tự động); động tác lấy từ thư viện đã chuyển sẵn sang khung
+## xương đó (_pose_bones): đứng, đi, chạy theo mocap người thật; vung kiếm, ném,
+## trúng đòn, nằm, ngồi, nhảy, cúi cạy rương theo bộ KayKit. Ma tu có ma khí tím đỏ dưới chân
+## và 3 phi kiếm sau lưng, một nửa đệ tử có cánh lửa.
 ## Tư thế chọn trên mọi máy theo trạng thái + tốc độ, không gửi qua mạng.
 ## Hình (model, tên, vòng đỏ) nằm trong một node riêng, mỗi frame vẽ được nội
 ## suy giữa hai lần tính vật lý (60 lần/giây) nên màn hình 90/120 Hz hay FPS
@@ -37,37 +39,40 @@ const SNAP_DIST := 6.0 # mét, lệch hơn chừng này (dịch chuyển) thì �
 const AIM_MIN := 0.2 # độ dài hướng ngắm tối thiểu để bắn theo tay, ngắn hơn thì tự nhắm
 const BEAM_HEIGHT := 1.1 # ngang nòng súng (GameState.SHOT_HEIGHT), để raycast luồng ngắm
 
-# Nhân vật KayKit Adventurers 1.0 (Kay Lousberg, CC0), mỗi tệp có sẵn mô hình
-# (~6k tam giác, một texture), khung xương và 76 động tác. Gốc ở chân, nhìn về +Z.
-const MODELS := {true: "res://Player/models/kaykit/Barbarian.glb", false: "res://Player/models/kaykit/Mage.glb"}
-const MODEL_HEIGHT := 2.2 # đơn vị mô hình, từ chân tới đỉnh đầu (không tính mũ)
-const WEAPONS := {true: "1H_Axe", false: ""} # vũ khí cầm tay giữ lại, các món khác trong tệp bỏ đi
-const HUNTER_TALL := 2.05 # mét
+# Mô hình ma tu / đệ tử của dự án, 3 mức chi tiết theo cài đặt đồ họa
+# (ProjectSettings "game/graphics_quality": 0 Thấp, 1 Vừa, 2 Cao; UI ghi lúc mở game).
+# Tam giác: Thấp ~4,5k, Vừa ~10k, Cao ~31k. Gốc ở chân, cao 1 đơn vị, nhìn về +Z.
+const MODELS := {
+	true: ["res://Player/models/ma_tu_thap.glb", "res://Player/models/ma_tu_vua.glb", "res://Player/models/ma_tu_cao.glb"],
+	false: ["res://Player/models/de_tu_thap.glb", "res://Player/models/de_tu_vua.glb", "res://Player/models/de_tu_cao.glb"],
+}
+const QUALITY_SETTING := "game/graphics_quality"
+const HUNTER_TALL := 2.05 # mét (mô hình ma tu xòe tay, cầm kiếm)
 const ESCAPEE_TALL := 1.9
-const LABEL_HEIGHT := 2.7 # mét, tên trên đầu (cao hơn mũ phù thủy)
+const HALO_SWORDS := 3 # phi kiếm lơ lửng sau lưng ma tu
 const RUN_SPEED_MIN := 0.6 # m/s, chậm hơn thì đứng yên
 const POSE_SPEED := 10.0 # mô hình không xương: cả người đổi tư thế mượt theo tốc độ này
-# Tên động tác trong game -> tên động tác trong tệp KayKit.
-const CLIPS := {
-	"Stand": "Idle", "Walk": "Walking_A", "Run": "Running_A",
-	"Attack": "1H_Melee_Attack_Chop", "Throw": "Throw", "Hit": "Hit_A",
-	"Lie": "Lie_Idle", "Sit": "Sit_Floor_Idle", "Jump": "Jump_Idle", "PickUp": "PickUp",
-}
-# Tốc độ đi / chạy của động tác gốc (đơn vị mô hình mỗi giây, đo theo bàn chân chạm
-# đất) và lúc chân trái ra trước nhất (phần chu kỳ), để đi và chạy cùng pha.
-const CLIP_SPEED := {"Walk": 0.63, "Run": 2.2}
-const CLIP_PHASE := {"Walk": 0.84, "Run": 0.0}
-const MAX_RATE := 1.8 # phát nhanh nhất chừng này lần tốc độ gốc; nhanh hơn thì chân trượt chút
-const BONES: Array[String] = ["hips", "spine", "chest", "head",
-	"upperarm.l", "lowerarm.l", "hand.l", "upperarm.r", "lowerarm.r", "hand.r",
-	"upperleg.l", "lowerleg.l", "foot.l", "toes.l", "upperleg.r", "lowerleg.r", "foot.r", "toes.r"]
-enum Bone { HIPS, SPINE, CHEST, HEAD, UPPER_ARM_L, FOREARM_L, HAND_L,
-	UPPER_ARM_R, FOREARM_R, HAND_R, THIGH_L, SHIN_L, FOOT_L, TOES_L,
-	THIGH_R, SHIN_R, FOOT_R, TOES_R }
+# Động tác: thư viện đã chuyển sẵn sang khung xương của từng mô hình
+# (Player/tools/retarget). Đứng, đi, chạy là mocap người thật (CMU); vung kiếm, ném,
+# trúng đòn, nằm, ngồi, nhảy, cúi cạy rương là bộ KayKit Adventurers (CC0).
+const ANIMS := {true: "res://Player/anim/ma_tu.res", false: "res://Player/anim/de_tu.res"}
+const BONES: Array[String] = ["hips", "spine", "chest", "neck", "head",
+	"upper_arm_l", "forearm_l", "hand_l", "upper_arm_r", "forearm_r", "hand_r",
+	"thigh_l", "shin_l", "foot_l", "thigh_r", "shin_r", "foot_r"]
+enum Bone { HIPS, SPINE, CHEST, NECK, HEAD, UPPER_ARM_L, FOREARM_L, HAND_L, UPPER_ARM_R,
+	FOREARM_R, HAND_R, THIGH_L, SHIN_L, FOOT_L, THIGH_R, SHIN_R, FOOT_R }
 const WALK_TO_RUN := Vector2(2.0, 3.4) # m/s: chậm hơn x thì đi bộ hẳn, nhanh hơn y thì chạy hẳn
 const FADE_TIME := 0.2 # giây trộn khi đổi động tác nền (đứng dậy, ngã, nhảy...)
 const PICKUP_HOLD := 0.5 # giây trong động tác cúi nhặt lúc ngồi thấp nhất (giữ khi cạy rương)
 const ONESHOT_RATE := {"Attack": 1.6, "Throw": 2.0, "Hit": 1.3} # phát nhanh hơn gốc cho đòn gọn
+# Chuỗi xương phụ trong mô hình (Player/tools/rig): tên chuỗi, độ cứng, lực cản,
+# trọng lực. Cứng thấp, cản thấp thì bay theo quán tính nhiều, lắc lâu.
+const SPRING_CHAINS := [
+	["hair", 2.0, 0.5, 0.4],
+	["sleeve_l", 3.5, 0.4, 0.5],
+	["sleeve_r", 3.5, 0.4, 0.5],
+	["skirt_b", 1.4, 0.5, 0.2],
+]
 const CHEST_CHECK := 0.1 # giây giữa hai lần xem có đứng ở rương không
 const HIT_FLASH_TIME := 0.18 # giây người bị trúng chớp đỏ
 
@@ -77,8 +82,8 @@ var _pose_node: Node3D # khung giữa _visual và _model: nghiêng, nhún, nằm
 var _model: Node3D
 var _skeleton: Skeleton3D # null nếu mô hình không có xương
 var _bone_ids := PackedInt32Array() # chỉ số xương trong _skeleton, theo thứ tự BONES
-var _tall := 1.0 # mét, chiều cao nhân vật
-var _scale := 1.0 # mét mỗi đơn vị mô hình
+var _springs: SpringBoneSimulator3D # tóc, tay áo, vạt áo đung đưa; null nếu mô hình không có
+var _tall := 1.0 # mét, chiều cao mô hình
 var _clips := {} # tên động tác -> Animation
 var _clip_tracks := {} # tên động tác -> chỉ số track xoay của từng xương theo BONES, rồi track vị trí hông
 var _pose_out: Array[Quaternion] = [] # dáng đang hiện (xoay từng xương)
@@ -122,11 +127,15 @@ static var _shot_fx: ShotFx # tên lửa, đạn, vụ nổ (pool), một node c
 static var _beam_box: BoxMesh
 static var _hunter_ring: TorusMesh
 static var _hunter_mist: CylinderMesh
+static var _halo_sword_mesh: ArrayMesh
+static var _feather_mesh: ArrayMesh
 static var _hit_flash_mat: StandardMaterial3D # phủ đỏ lúc bị trúng, dùng chung
 
 var _body_meshes: Array[MeshInstance3D] = [] # các mảnh thân đang hiện, để phủ chớp đỏ
 var _flash_left := 0.0
 
+var _halo: Node3D # phi kiếm sau lưng ma tu (chỉ máy có hình)
+var _wings: Array[Node3D] = [] # cánh lửa của đệ tử (một nửa số đệ tử)
 
 
 func setup(id: int, p_role: GameTypes.Role, p_name: String, pos: Vector3, local: bool) -> void:
@@ -156,6 +165,13 @@ func _snap_visual() -> void:
 	_xf_prev = _xf_curr
 	if _visual:
 		_visual.global_transform = _xf_curr
+	_reset_springs()
+
+
+## Dịch chuyển: tóc / áo bắt đầu lại từ dáng nghỉ, không bị kéo dài cả quãng đường.
+func _reset_springs() -> void:
+	if is_instance_valid(_springs):
+		_springs.reset()
 
 
 ## Chạy sau khi Match đã di chuyển nhân vật trong lần tính vật lý này (node con
@@ -165,6 +181,7 @@ func _physics_process(_delta: float) -> void:
 	_xf_curr = global_transform
 	if _xf_prev.origin.distance_squared_to(_xf_curr.origin) > SNAP_DIST * SNAP_DIST:
 		_xf_prev = _xf_curr # dịch chuyển: nhảy luôn, không trượt ngang bản đồ
+		_reset_springs()
 
 
 ## Vị trí đang vẽ trên màn hình (đã nội suy). Camera và luồng ngắm bám theo đây.
@@ -192,22 +209,18 @@ func _build_body() -> void:
 	var label := Label3D.new()
 	label.text = ("▼ " if is_local else "") + display_name
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	label.position.y = LABEL_HEIGHT
+	label.position.y = HUNTER_TALL + 0.3
 	label.font_size = 48
 	label.modulate = Color(1, 0.9, 0.3) if is_local else Color.WHITE
 	_visual.add_child(label)
 
 
 func _build_model() -> void:
-	var model: Node3D = (load(MODELS[is_hunter()]) as PackedScene).instantiate()
+	var quality := clampi(int(ProjectSettings.get_setting(QUALITY_SETTING, 0)), 0, 2)
+	var model: Node3D = (load(MODELS[is_hunter()][quality]) as PackedScene).instantiate()
 	_model = model
 	_tall = HUNTER_TALL if is_hunter() else ESCAPEE_TALL
-	_scale = _tall / MODEL_HEIGHT
-	model.scale = Vector3.ONE * _scale
-	for slot in model.find_children("handslot*", "BoneAttachment3D", true, false):
-		for item in slot.get_children():
-			if item.name != WEAPONS[is_hunter()]:
-				item.free()
+	model.scale = Vector3.ONE * _tall
 	_find_bones(model)
 	model.rotation.y = PI # model nhìn về +Z, nhân vật nhìn về -Z
 	_pose_node = Node3D.new()
@@ -215,6 +228,10 @@ func _build_model() -> void:
 	_pose_node.add_child(model)
 	for node in model.find_children("*", "MeshInstance3D", true, false):
 		_body_meshes.append(node as MeshInstance3D)
+	if is_hunter():
+		_add_sword_halo()
+	elif absi(peer_id) % 2 == 0:
+		_add_flame_wings()
 	if is_hunter(): # ma khí tím đỏ dưới chân để nhận ra ma tu từ xa
 		if _hunter_ring == null:
 			_hunter_ring = TorusMesh.new()
@@ -257,12 +274,10 @@ func _find_bones(model: Node3D) -> void:
 			return
 		_bone_ids.append(i)
 	_skeleton = skeleton
-	# Động tác nằm sẵn trong AnimationPlayer của tệp. Lấy ra rồi bỏ node đó: tự đặt
-	# xương ở _pose_bones để trộn đi / chạy và chồng đòn lên thân trên.
-	var player := model.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
+	var lib := load(ANIMS[is_hunter()]) as AnimationLibrary
 	var skel_path := str(model.get_path_to(skeleton))
-	for clip: String in CLIPS:
-		var anim := player.get_animation(CLIPS[clip])
+	for clip in lib.get_animation_list():
+		var anim := lib.get_animation(clip)
 		var tracks := PackedInt32Array()
 		for bone_name in BONES:
 			tracks.append(anim.find_track(NodePath("%s:%s" % [skel_path, bone_name]), Animation.TYPE_ROTATION_3D))
@@ -273,7 +288,133 @@ func _find_bones(model: Node3D) -> void:
 		arr.resize(BONES.size())
 		arr.fill(Quaternion.IDENTITY)
 	_hips_out = skeleton.get_bone_rest(_bone_ids[Bone.HIPS]).origin
-	player.free()
+	_add_springs(skeleton)
+
+
+## Tóc, tay áo, vạt áo theo lò xo (SpringBoneSimulator3D của Godot, chạy C++):
+## đứng yên thì giữ nguyên dáng, chạy / quay người thì văng theo quán tính rồi lắc về.
+func _add_springs(skeleton: Skeleton3D) -> void:
+	var sim := SpringBoneSimulator3D.new()
+	for c: Array in SPRING_CHAINS:
+		var first := skeleton.find_bone("%s_1" % c[0])
+		if first < 0:
+			continue
+		var last := first
+		var k := 2
+		while skeleton.find_bone("%s_%d" % [c[0], k]) >= 0:
+			last = skeleton.find_bone("%s_%d" % [c[0], k])
+			k += 1
+		var i := sim.setting_count
+		sim.setting_count = i + 1
+		sim.set_root_bone(i, first)
+		sim.set_end_bone(i, last)
+		sim.set_extend_end_bone(i, true)
+		sim.set_end_bone_direction(i, SkeletonModifier3D.BONE_DIRECTION_FROM_PARENT)
+		sim.set_end_bone_length(i, skeleton.get_bone_rest(last).origin.length())
+		sim.set_stiffness(i, c[1])
+		sim.set_drag(i, c[2])
+		sim.set_gravity(i, c[3])
+	if sim.setting_count == 0:
+		sim.free()
+		return
+	skeleton.add_child(sim)
+	_springs = sim
+
+
+## Cánh lửa: mỗi bên 4 lông vũ lửa xòe ra sau lưng, vỗ nhẹ. Gắn vào hình nhân vật
+## (không theo xương) cho đơn giản; nhân vật nhìn về -Z nên sau lưng là +Z.
+func _add_flame_wings() -> void:
+	for side: float in [-1.0, 1.0]:
+		var wing := Node3D.new()
+		wing.position = Vector3(0.12 * side, 1.05, 0.22)
+		_pose_node.add_child(wing)
+		for k in 4:
+			var f := MeshInstance3D.new()
+			f.mesh = _feather()
+			f.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			f.rotation = Vector3(0.3, 0.0, -side * (0.5 + 0.3 * k))
+			f.scale = Vector3.ONE * (0.85 - 0.1 * k)
+			wing.add_child(f)
+		_wings.append(wing)
+
+
+## Ma tu: 3 thanh phi kiếm lơ lửng xòe hình quạt sau lưng, mũi chĩa lên.
+func _add_sword_halo() -> void:
+	_halo = Node3D.new()
+	_halo.position = Vector3(0, 1.35, 0.42) # sau lưng (nhân vật nhìn về -Z)
+	_pose_node.add_child(_halo)
+	for k in HALO_SWORDS:
+		var mi := MeshInstance3D.new()
+		mi.mesh = _halo_sword()
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var a := (k - (HALO_SWORDS - 1) / 2.0) * 0.55
+		mi.position = Vector3(sin(a) * 0.55, cos(a) * 0.35, 0)
+		mi.rotation.z = -a
+		_halo.add_child(mi)
+
+
+## Phi kiếm sau lưng / cánh lửa: lơ lửng, vỗ nhẹ (chỉ đổi transform vài node).
+func _animate_aura() -> void:
+	var t := Time.get_ticks_msec() / 1000.0
+	if _halo:
+		for k in _halo.get_child_count():
+			var c := _halo.get_child(k) as Node3D
+			c.position.y = cos((k - 1) * 0.55) * 0.35 + 0.06 * sin(t * 2.4 + k * 1.3)
+	for k in _wings.size():
+		_wings[k].rotation.y = 0.2 * sin(t * 3.0) * (1.0 if k == 0 else -1.0)
+
+
+static func _halo_sword() -> ArrayMesh:
+	if _halo_sword_mesh == null:
+		var blade := StandardMaterial3D.new()
+		blade.albedo_color = Color(0.55, 0.85, 1.0)
+		blade.emission_enabled = true
+		blade.emission = Color(0.4, 0.5, 1.0)
+		blade.emission_energy_multiplier = 0.9
+		var hilt := StandardMaterial3D.new()
+		hilt.albedo_color = Color(0.15, 0.1, 0.2)
+		var b := BoxMesh.new()
+		b.size = Vector3(0.07, 0.5, 0.02)
+		var tip := PrismMesh.new()
+		tip.size = Vector3(0.07, 0.13, 0.02)
+		var guard := BoxMesh.new()
+		guard.size = Vector3(0.2, 0.04, 0.04)
+		var grip := BoxMesh.new()
+		grip.size = Vector3(0.035, 0.16, 0.035)
+		_halo_sword_mesh = ArrayMesh.new()
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		st.append_from(b, 0, Transform3D(Basis(), Vector3(0, 0.25, 0)))
+		st.append_from(tip, 0, Transform3D(Basis(), Vector3(0, 0.565, 0)))
+		st.set_material(blade)
+		st.commit(_halo_sword_mesh)
+		st = SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		st.append_from(guard, 0, Transform3D.IDENTITY)
+		st.append_from(grip, 0, Transform3D(Basis(), Vector3(0, -0.1, 0)))
+		st.set_material(hilt)
+		st.commit(_halo_sword_mesh)
+	return _halo_sword_mesh
+
+
+## Một lông vũ lửa: tam giác dài, gốc vàng tâm cam, tự sáng, hai mặt.
+static func _feather() -> ArrayMesh:
+	if _feather_mesh == null:
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(1.0, 0.55, 0.15)
+		m.emission_enabled = true
+		m.emission = Color(1.0, 0.35, 0.05)
+		m.emission_energy_multiplier = 0.8
+		m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		var p := PrismMesh.new() # mũi ở +Y; dời gốc về chỗ gắn
+		p.size = Vector3(0.26, 1.15, 0.02)
+		_feather_mesh = ArrayMesh.new()
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		st.append_from(p, 0, Transform3D(Basis(), Vector3(0, 0.575, 0)))
+		st.set_material(m)
+		st.commit(_feather_mesh)
+	return _feather_mesh
 
 
 static func _glow_mat(color: Color) -> StandardMaterial3D:
@@ -385,26 +526,25 @@ func _pose_bones(delta: float) -> void:
 	_skeleton.set_bone_pose_position(_bone_ids[Bone.HIPS], _hips_out)
 
 
-## Đứng / đi / chạy theo tốc độ.
+## Đứng / đi / chạy theo tốc độ. Đứng yên thì thở nhẹ ở ngực.
 func _pose_move(delta: float) -> void:
 	var walk := _clips["Walk"] as Animation
 	var run := _clips["Run"] as Animation
-	var walk_v := float(CLIP_SPEED["Walk"]) * _scale # m/s khi phát đúng tốc độ gốc
-	var run_v := float(CLIP_SPEED["Run"]) * _scale
+	var walk_v := float(walk.get_meta("speed")) * _tall # m/s khi phát đúng tốc độ gốc
+	var run_v := float(run.get_meta("speed")) * _tall
 	var run_w := smoothstep(WALK_TO_RUN.x, WALK_TO_RUN.y, _speed)
 	var move_w := smoothstep(RUN_SPEED_MIN * 0.5, RUN_SPEED_MIN * 1.5, _speed)
-	var length := lerpf(walk.length, run.length, run_w) # giây mỗi chu kỳ khi phát tốc độ gốc
 	var stride := lerpf(walk_v * walk.length, run_v * run.length, run_w) # mét mỗi chu kỳ
-	# Người chibi chân ngắn: chạy nhanh quá thì kẹp tốc độ phát, chịu chân trượt chút.
-	_move_phase = fmod(_move_phase + delta * minf(_speed / stride, MAX_RATE / length), 1.0)
-	var stand := _clips["Stand"] as Animation
-	_hips_out = _sample("Stand", fmod(_pose_time, stand.length), _pose_out)
+	_move_phase = fmod(_move_phase + delta * _speed / stride, 1.0)
+	_hips_out = _sample("Stand", 0.0, _pose_out)
 	if move_w > 0.0:
-		var hw := _sample("Walk", fmod(_move_phase + CLIP_PHASE["Walk"], 1.0) * walk.length, _pose_a)
-		var hr := _sample("Run", fmod(_move_phase + CLIP_PHASE["Run"], 1.0) * run.length, _pose_b)
+		var hw := _sample("Walk", _move_phase * walk.length, _pose_a)
+		var hr := _sample("Run", _move_phase * run.length, _pose_b)
 		for i in BONES.size():
 			_pose_out[i] = _pose_out[i].slerp(_pose_a[i].slerp(_pose_b[i], run_w), move_w)
 		_hips_out = _hips_out.lerp(hw.lerp(hr, run_w), move_w)
+	var breath := (1.0 - move_w) * 0.02 * sin(_pose_time * 2.2)
+	_pose_out[Bone.CHEST] = _pose_out[Bone.CHEST] * Quaternion(Vector3.RIGHT, breath)
 
 
 ## Góc các xương của động tác `clip` ở giây `t` vào `out`; trả vị trí hông.
@@ -540,6 +680,8 @@ func _process(delta: float) -> void:
 	_visual.global_transform = _xf_prev.interpolate_with(_xf_curr, Engine.get_physics_interpolation_fraction())
 	if _pose_node:
 		_update_anim(delta)
+	if _halo or not _wings.is_empty():
+		_animate_aura()
 	if _flash_left > 0.0:
 		_flash_left -= delta
 		if _flash_left <= 0.0:
