@@ -13,9 +13,9 @@ extends EntityBase
 ## Mọi quyết định đúng/sai nằm ở GameState; file này chỉ chọn điểm ngắm và vị trí.
 ## Hình: mô hình ma tu (áo đen đỏ, tóc đỏ, cầm kiếm) và đệ tử (áo trắng, búi
 ## tóc) của dự án, 3 mức chi tiết theo cài đặt đồ họa. Mô hình có khung xương
-## người 17 xương (gắn tự động); động tác tính bằng code (_pose_bones): bước chân,
-## đánh tay, gập gối, cúi cạy rương, ngồi, nằm, vung tay phóng kiếm. Cả người
-## nghiêng / nhún / nằm thêm bằng _apply_pose. Ma tu có ma khí tím đỏ dưới chân
+## người 17 xương (gắn tự động); động tác lấy từ thư viện đã chuyển sẵn sang khung
+## xương đó (_pose_bones): đứng, đi, chạy theo mocap người thật; vung kiếm, ném,
+## trúng đòn, nằm, ngồi, nhảy, cúi cạy rương theo bộ KayKit. Ma tu có ma khí tím đỏ dưới chân
 ## và 3 phi kiếm sau lưng, một nửa đệ tử có cánh lửa.
 ## Tư thế chọn trên mọi máy theo trạng thái + tốc độ, không gửi qua mạng.
 ## Hình (model, tên, vòng đỏ) nằm trong một node riêng, mỗi frame vẽ được nội
@@ -51,35 +51,20 @@ const HUNTER_TALL := 2.05 # mét (mô hình ma tu xòe tay, cầm kiếm)
 const ESCAPEE_TALL := 1.9
 const HALO_SWORDS := 3 # phi kiếm lơ lửng sau lưng ma tu
 const RUN_SPEED_MIN := 0.6 # m/s, chậm hơn thì đứng yên
-const POSE_SPEED := 10.0 # tư thế cả người đổi mượt theo tốc độ này
-const BONE_SPEED := 18.0 # góc từng xương đuổi theo góc đích (bước chạy cần nhanh)
-# Xương do tools rig gắn vào mô hình (tên trong .glb). Góc xương tính theo độ,
-# trục của mô hình: X dương = bên trái nhân vật, Z dương = trước mặt.
-# Xoay quanh X góc âm: chân / tay đang buông đưa ra trước; dương: ra sau.
-# Xoay quanh Z góc dương: tay trái dang ra; tay phải thì góc âm.
+const POSE_SPEED := 10.0 # mô hình không xương: cả người đổi tư thế mượt theo tốc độ này
+# Động tác: thư viện đã chuyển sẵn sang khung xương của từng mô hình
+# (Player/tools/retarget). Đứng, đi, chạy là mocap người thật (CMU); vung kiếm, ném,
+# trúng đòn, nằm, ngồi, nhảy, cúi cạy rương là bộ KayKit Adventurers (CC0).
+const ANIMS := {true: "res://Player/anim/ma_tu.res", false: "res://Player/anim/de_tu.res"}
 const BONES: Array[String] = ["hips", "spine", "chest", "neck", "head",
 	"upper_arm_l", "forearm_l", "hand_l", "upper_arm_r", "forearm_r", "hand_r",
 	"thigh_l", "shin_l", "foot_l", "thigh_r", "shin_r", "foot_r"]
 enum Bone { HIPS, SPINE, CHEST, NECK, HEAD, UPPER_ARM_L, FOREARM_L, HAND_L, UPPER_ARM_R,
 	FOREARM_R, HAND_R, THIGH_L, SHIN_L, FOOT_L, THIGH_R, SHIN_R, FOOT_R }
-const RUN_CADENCE := 11.5 # radian / giây ở tốc độ chạy chuẩn: ~1,8 chu kỳ (3,7 bước) mỗi giây
-const LEG := 0.21 # chiều dài đùi = cẳng chân, theo chiều cao 1, mặc định trước khi đọc khung xương
-# Dáng chạy: mỗi bàn chân đi theo quỹ đạo (chạm đất trượt lùi đúng tốc độ chạy, rồi
-# nhấc lên vòng ra trước); góc đùi / gối tính ngược từ chỗ bàn chân (IK hai đoạn) nên
-# gối luôn gập về trước, bàn chân dẫm đất không trượt. Đơn vị theo chiều cao 1.
-const GAIT_DUTY_RUN := 0.34 # phần chu kỳ bàn chân chạm đất khi chạy nhanh
-const GAIT_DUTY_WALK := 0.6 # ... khi đi chậm
-const STEP_LIFT := 0.19 # bàn chân nhấc cao nhất (gót đá lên gần mông khi chạy)
-const STANCE_MAX := 0.26 # quãng bàn chân trượt lùi khi chống, dài nhất chân với tới (hông cao 0,42)
-const STANCE_WALK := 0.34 # ... khi đi bộ: chân gần thẳng, bàn chân trước - sau đều nhau nên với xa hơn
-const WALK_FULL := 2.0 # m/s, chậm hơn thì đi bộ hẳn (đẩy cần điều khiển ít, bị làm chậm)
-const RUN_FULL := 4.0 # m/s, nhanh hơn thì chạy hẳn; ở giữa trộn dần
-const GAIT_DUTY_MIN := 0.2 # chạy nhanh: chống ngắn, bay dài như người chạy nước rút
-const RUN_DROP := 0.012 # hông hạ thấp khi chạy (gối hơi chùng)
-const RUN_BOB := 0.022 # hông nhún thêm lúc dồn lực lên một chân
-const FOOT_TOE := 0.09 # từ mắt cá tới đầu ngón / gót (chiều cao 1)
-const FOOT_HEEL := 0.025
-const CROUCH_DROP := 0.13 # hông hạ khi ngồi xổm cạy rương
+const WALK_TO_RUN := Vector2(2.0, 3.4) # m/s: chậm hơn x thì đi bộ hẳn, nhanh hơn y thì chạy hẳn
+const FADE_TIME := 0.2 # giây trộn khi đổi động tác nền (đứng dậy, ngã, nhảy...)
+const PICKUP_HOLD := 0.5 # giây trong động tác cúi nhặt lúc ngồi thấp nhất (giữ khi cạy rương)
+const ONESHOT_RATE := {"Attack": 1.6, "Throw": 2.0, "Hit": 1.3} # phát nhanh hơn gốc cho đòn gọn
 # Chuỗi xương phụ trong mô hình (Player/tools/rig): tên chuỗi, độ cứng, lực cản,
 # trọng lực. Cứng thấp, cản thấp thì bay theo quán tính nhiều, lắc lâu.
 const SPRING_CHAINS := [
@@ -98,31 +83,26 @@ var _model: Node3D
 var _skeleton: Skeleton3D # null nếu mô hình không có xương
 var _bone_ids := PackedInt32Array() # chỉ số xương trong _skeleton, theo thứ tự BONES
 var _springs: SpringBoneSimulator3D # tóc, tay áo, vạt áo đung đưa; null nếu mô hình không có
-var _bone_now: Array[Vector3] = [] # góc đang hiện (độ)
-var _bone_goal: Array[Vector3] = [] # góc đích frame này (độ); Array để g bên dưới là tham chiếu, không chép
 var _tall := 1.0 # mét, chiều cao mô hình
-var _hip_y := 0.48 # khớp háng, đùi, cẳng chân, mắt cá theo khung xương (chiều cao 1)
-var _thigh_len := LEG
-var _shin_len := LEG
-var _ankle_y := 0.06
-var _leg_splay := Vector2.ZERO # độ, chân trái / phải xòe ra ngoài ở dáng gốc (bàn chân xa hông)
-var _hips_rest := Vector3.ZERO
-var _hips_drop := 0.0 # hông đang hạ bao nhiêu
-var _hips_drop_goal := 0.0
-var _fast_legs := false # chân đang theo IK: đặt góc ngay, không làm mượt (khỏi trượt)
+var _clips := {} # tên động tác -> Animation
+var _clip_tracks := {} # tên động tác -> chỉ số track xoay của từng xương theo BONES, rồi track vị trí hông
+var _pose_out: Array[Quaternion] = [] # dáng đang hiện (xoay từng xương)
+var _pose_from: Array[Quaternion] = [] # dáng lúc bắt đầu đổi động tác nền
+var _pose_a: Array[Quaternion] = [] # chỗ tạm để trộn đi / chạy, tư thế một lần
+var _pose_b: Array[Quaternion] = []
+var _pose_one: Array[Quaternion] = []
+var _hips_out := Vector3.ZERO
+var _hips_from := Vector3.ZERO
+var _fade := 1.0
+var _move_phase := 0.0 # pha bước đi / chạy (0..1), cộng dồn theo quãng đường
 var _safes: Array[Node] = [] # rương trên bản đồ (lấy một lần)
 var _chest: Node3D # rương đang cạy (đứng yên trong vùng rương chưa mở xong), null = không
 var _chest_check_left := 0.0
-var _anim_name := "" # tư thế đang theo: Idle, Running_A, Lie_Idle, Sit_Floor_Idle, Jump_Idle, PickUp
-var _anim_speed := 1.0
-var _oneshot_name := "" # tư thế một lần đang phát (vung kiếm, bị trúng, ném), chồng lên phần thân trên
-var _oneshot_left := 0.0
-var _oneshot_total := 0.0
+var _anim_name := "" # động tác nền: Move (đứng / đi / chạy), Lie, Sit, Jump, PickUp
+var _oneshot_name := "" # tư thế một lần đang phát (Attack, Throw, Hit), "" = không
+var _oneshot_time := 0.0
+var _oneshot_length := 0.0
 var _pose_time := 0.0
-var _run_phase := 0.0 # pha bước chạy (radian), cộng dồn theo tốc độ để đổi tốc không giật chân
-var _walk := 0.0 # 1: đi bộ, 0: chạy (_update_gait)
-var _gait_hz := 1.0 # chu kỳ bước / giây
-var _duty := GAIT_DUTY_RUN # phần chu kỳ bàn chân chạm đất
 var _last_pos := Vector3.ZERO
 var _speed := 0.0 # m/s trên mặt sàn, đo từ vị trí (client không có velocity thật)
 var _visual: Node3D # hình, top_level, nội suy theo khung hình (không có trên server riêng)
@@ -278,7 +258,7 @@ func _build_model() -> void:
 		mist.position.y = 0.03
 		mist.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_visual.add_child(mist)
-	_play("Idle")
+	_anim_name = "Move"
 
 
 func _find_bones(model: Node3D) -> void:
@@ -294,21 +274,20 @@ func _find_bones(model: Node3D) -> void:
 			return
 		_bone_ids.append(i)
 	_skeleton = skeleton
-	var hip := skeleton.get_bone_global_rest(_bone_ids[Bone.THIGH_L]).origin
-	var knee := skeleton.get_bone_global_rest(_bone_ids[Bone.SHIN_L]).origin
-	var ankle := skeleton.get_bone_global_rest(_bone_ids[Bone.FOOT_L]).origin
-	_hip_y = hip.y
-	_thigh_len = Vector2(knee.y - hip.y, knee.z - hip.z).length()
-	_shin_len = Vector2(ankle.y - knee.y, ankle.z - knee.z).length()
-	_ankle_y = ankle.y
-	for side in 2: # dáng gốc đứng dạng chân: đo để khi bước khép bàn chân về dưới hông
-		var h := skeleton.get_bone_global_rest(_bone_ids[Bone.THIGH_L + 3 * side]).origin
-		var f := skeleton.get_bone_global_rest(_bone_ids[Bone.FOOT_L + 3 * side]).origin
-		_leg_splay[side] = rad_to_deg(atan2(f.x - h.x, h.y - f.y))
-	_hips_rest = skeleton.get_bone_rest(_bone_ids[Bone.HIPS]).origin
-	_bone_now.resize(BONES.size())
-	_bone_goal.resize(BONES.size())
-	_bone_now.fill(Vector3.ZERO)
+	var lib := load(ANIMS[is_hunter()]) as AnimationLibrary
+	var skel_path := str(model.get_path_to(skeleton))
+	for clip in lib.get_animation_list():
+		var anim := lib.get_animation(clip)
+		var tracks := PackedInt32Array()
+		for bone_name in BONES:
+			tracks.append(anim.find_track(NodePath("%s:%s" % [skel_path, bone_name]), Animation.TYPE_ROTATION_3D))
+		tracks.append(anim.find_track(NodePath("%s:hips" % skel_path), Animation.TYPE_POSITION_3D))
+		_clips[clip] = anim
+		_clip_tracks[clip] = tracks
+	for arr: Array[Quaternion] in [_pose_out, _pose_from, _pose_a, _pose_b, _pose_one]:
+		arr.resize(BONES.size())
+		arr.fill(Quaternion.IDENTITY)
+	_hips_out = skeleton.get_bone_rest(_bone_ids[Bone.HIPS]).origin
 	_add_springs(skeleton)
 
 
@@ -446,24 +425,17 @@ static func _glow_mat(color: Color) -> StandardMaterial3D:
 	return m
 
 
-func _play(anim_name: String, speed := 1.0) -> void:
-	_anim_speed = speed
-	if anim_name != _anim_name:
-		_anim_name = anim_name
-		_pose_time = 0.0
-
-
-## Phát tư thế một lần (vung kiếm, bị trúng, ném) chồng lên tư thế đang có: đang
-## chạy thì chân vẫn chạy, chỉ thân trên ra đòn; đứng yên thì bước tới một bước.
-func _play_once(anim_name: String, seconds: float) -> void:
-	if _pose_node == null:
+## Phát tư thế một lần (vung kiếm, ném, bị trúng) chồng lên phần thân trên: chân
+## vẫn đứng / đi / chạy theo động tác nền nên không bị trượt.
+func _play_once(anim_name: String) -> void:
+	if _pose_node == null or not _clips.has(anim_name):
 		return
 	_oneshot_name = anim_name
-	_oneshot_left = seconds
-	_oneshot_total = seconds
+	_oneshot_time = 0.0
+	_oneshot_length = (_clips[anim_name] as Animation).length / ONESHOT_RATE[anim_name]
 
 
-## Mọi máy: chọn anim theo trạng thái và tốc độ đo được.
+## Mọi máy: chọn động tác nền theo trạng thái và tốc độ đo được.
 func _update_anim(delta: float) -> void:
 	var pos := _visual.global_position
 	var flat := pos - _last_pos
@@ -472,353 +444,116 @@ func _update_anim(delta: float) -> void:
 	if delta > 0.0:
 		_speed = lerpf(_speed, flat.length() / delta, minf(1.0, delta * 10.0))
 	_pose_time += delta
-	_oneshot_left = maxf(0.0, _oneshot_left - delta)
+	if _oneshot_name != "":
+		_oneshot_time += delta
+		if _oneshot_time >= _oneshot_length:
+			_oneshot_name = ""
+	var base := "Move"
 	match state:
 		GameTypes.PlayerState.DOWNED, GameTypes.PlayerState.CARRIED:
-			_play("Lie_Idle")
-			_apply_pose(delta)
-			return
+			base = "Lie"
 		GameTypes.PlayerState.IMPRISONED:
-			_play("Sit_Floor_Idle")
-			_apply_pose(delta)
-			return
-	_chest_check_left -= delta
-	if _chest_check_left <= 0.0:
-		_chest_check_left = CHEST_CHECK
-		_chest = _chest_here()
-	_face_chest(delta)
-	if _flying or pos.y > 0.4:
-		_play("Jump_Idle")
-	elif _chest != null:
-		_play("PickUp")
-	elif _speed > RUN_SPEED_MIN:
-		_play("Running_A", clampf(_speed / ESCAPEE_SPEED, 0.6, 1.6))
-	else:
-		_play("Idle")
-	_apply_pose(delta)
-
-
-## Cả người trong _pose_node: chạy thì chúi về trước, nhún và lắc; gục thì nằm
-## ngửa; ngồi / cúi thì hạ thấp cho chân chạm đất; bị trúng thì giật ngửa;
-## phóng kiếm / ném thì lao người tới. Tay chân do _pose_bones.
-func _apply_pose(delta: float) -> void:
-	var t := _pose_time
-	if _anim_name == "Running_A":
-		_update_gait()
-		_run_phase = fmod(_run_phase + delta * TAU * _gait_hz, TAU)
-	var pitch := 0.0 # dương: ngửa ra sau, âm: chúi về trước
-	var roll := 0.0
-	var lift := 0.0
-	var squash := 1.0
-	match _anim_name:
-		"Idle":
-			squash = 1.0 + 0.008 * sin(t * 2.2) # thở
-		"Running_A":
-			pitch = -0.04 # nghiêng người bằng sống lưng, nhún bằng hông (_pose_bones)
-			roll = 0.03 * sin(_run_phase)
-		"Lie_Idle":
-			pitch = PI / 2.0
-			lift = 0.18
-		"Sit_Floor_Idle":
-			pitch = 0.05
-			lift = -0.44 * _tall # mông chạm đất
-		"Jump_Idle":
-			pitch = -0.25
-			roll = 0.1 * sin(t * 6.0)
-		"PickUp":
-			pitch = 0.02 * sin(t * 7.0)
-	if _oneshot_left > 0.0 and _oneshot_name == "Hit_A":
-		pitch += 0.25 * _oneshot_fade()
-	if _skeleton == null: # mô hình không xương: bù bằng cả người
-		match _anim_name:
-			"Sit_Floor_Idle":
-				lift = 0.0
-				squash = 0.62
-			"PickUp":
-				pitch = -0.4
-				squash = 0.82
-	var w := minf(1.0, delta * POSE_SPEED * (2.0 if _oneshot_left > 0.0 else 1.0))
-	var target := Vector3(pitch, 0.0, roll)
-	_pose_node.rotation = _pose_node.rotation.lerp(target, w)
-	_pose_node.position = _pose_node.position.lerp(Vector3(0, lift, 0), w)
-	_pose_node.scale = _pose_node.scale.lerp(Vector3(1.0 + (1.0 - squash) * 0.3, squash, 1.0 + (1.0 - squash) * 0.3), w)
+			base = "Sit"
+		_:
+			_chest_check_left -= delta
+			if _chest_check_left <= 0.0:
+				_chest_check_left = CHEST_CHECK
+				_chest = _chest_here()
+			_face_chest(delta)
+			if _flying or pos.y > 0.4:
+				base = "Jump"
+			elif _chest != null:
+				base = "PickUp"
+	if base != _anim_name:
+		_anim_name = base
+		_pose_time = 0.0
+		_fade = 0.0 # trộn từ dáng đang hiện sang động tác mới
+		_pose_from.assign(_pose_out)
+		_hips_from = _hips_out
 	if _skeleton and _visual.is_visible_in_tree():
 		_pose_bones(delta)
+	elif _skeleton == null:
+		_pose_whole_body(delta)
 
 
-## Nhịp bước theo tốc độ. Chạy: nhịp theo RUN_CADENCE, nhanh hơn thì bước dài ra;
-## chân không với tới thì chống ngắn lại, bay lâu hơn (không cho bàn chân trượt).
-## Đi bộ: bàn chân luôn có một chân chạm đất, bước đủ ngắn để chân gần thẳng, nên
-## nhịp tự nhanh lên theo tốc độ thay vì nhảy cóc.
-func _update_gait() -> void:
-	_walk = 1.0 - clampf((_speed - WALK_FULL) / (RUN_FULL - WALK_FULL), 0.0, 1.0)
-	var v := _speed / _tall # tốc độ theo đơn vị mô hình
-	var reach := lerpf(STANCE_MAX, STANCE_WALK, _walk)
-	_duty = lerpf(GAIT_DUTY_RUN, GAIT_DUTY_WALK, _walk)
-	var hz := maxf(RUN_CADENCE * _anim_speed / TAU, 0.1)
-	hz = maxf(hz, lerpf(hz, v * _duty / reach, _walk))
-	if v * _duty / hz > reach:
-		_duty = maxf(GAIT_DUTY_MIN, reach * hz / v)
-	_gait_hz = hz
+## Mô hình không có khung xương: chỉ nghiêng / nằm / hạ cả người.
+func _pose_whole_body(delta: float) -> void:
+	var pitch := 0.0
+	var squash := 1.0
+	match _anim_name:
+		"Lie":
+			pitch = PI / 2.0
+		"Sit":
+			squash = 0.62
+		"PickUp":
+			pitch = -0.4
+			squash = 0.82
+	var w := minf(1.0, delta * POSE_SPEED)
+	_pose_node.rotation = _pose_node.rotation.lerp(Vector3(pitch, 0.0, 0.0), w)
+	_pose_node.scale = _pose_node.scale.lerp(Vector3(1.0 + (1.0 - squash) * 0.3, squash, 1.0 + (1.0 - squash) * 0.3), w)
 
 
-## Góc từng xương theo tư thế đang phát (độ), rồi đuổi mượt và đặt vào khung
-## xương. 17 xương, không cấp phát gì mỗi frame.
+## Đặt khung xương theo thư viện động tác. Đi / chạy / đứng trộn theo tốc độ, cùng
+## một pha bước (hai động tác đã cắt cho cùng bắt đầu lúc chân trái chạm đất) và
+## phát nhanh chậm theo tốc độ thật nên bàn chân không trượt. Đổi động tác nền thì
+## trộn từ dáng cũ trong FADE_TIME. Tư thế một lần chồng lên thân trên. Không cấp
+## phát gì mỗi frame.
 func _pose_bones(delta: float) -> void:
 	var t := _pose_time
-	var g := _bone_goal
-	g.fill(Vector3.ZERO)
-	_hips_drop_goal = 0.0
-	_fast_legs = false
 	match _anim_name:
-		"Idle": # thở; tay đung đưa nhẹ, khuỷu và cổ tay theo sau vai một nhịp
-			var b := sin(t * 2.2)
-			var sway := sin(t * 1.1)
-			var lag := sin(t * 1.1 - 0.8)
-			g[Bone.CHEST] = Vector3(1.5 * b, 2.0 * sin(t * 0.5), 0)
-			g[Bone.HEAD] = Vector3(-1.0 * b, 6.0 * sin(t * 0.6), 0)
-			g[Bone.UPPER_ARM_L] = Vector3(3.0 * sway, 0, 3.0 + 2.0 * b)
-			g[Bone.UPPER_ARM_R] = Vector3(-3.0 * sway, 0, -3.0 - 2.0 * b)
-			g[Bone.FOREARM_L] = Vector3(-4.0 + 4.0 * lag, 0, 0)
-			g[Bone.FOREARM_R] = Vector3(-4.0 - 4.0 * lag, 0, 0)
-			g[Bone.HAND_L] = Vector3(6.0 * sin(t * 1.1 - 1.6), 0, 0)
-			g[Bone.HAND_R] = Vector3(-6.0 * sin(t * 1.1 - 1.6), 0, 0)
-		"Running_A":
-			var step := _run_phase
-			var s := sin(step)
-			var c := cos(step)
-			# Chân: IK theo quỹ đạo bàn chân; chân phải lệch nửa chu kỳ.
-			var v := _speed / _tall # tốc độ theo đơn vị mô hình
-			var duty := _duty
-			var half := 0.5 * v * duty / _gait_hz
-			var p := step / TAU
-			var wk := _walk
-			_hips_drop_goal = lerpf(RUN_DROP, 0.004, wk) + RUN_BOB * (1.0 - 0.7 * wk) * (0.5 + 0.5 * cos(TAU * 2.0 * (p - duty * 0.5)))
-			var zl := _leg_gait(Bone.THIGH_L, p, duty, half)
-			var zr := _leg_gait(Bone.THIGH_R, fmod(p + 0.5, 1.0), duty, half)
-			_fast_legs = true
-			var swing := (zl - zr) / maxf(2.0 * half, 0.01) # 1: chân trái ở trước, -1: chân phải ở trước
-			g[Bone.HIPS] = Vector3(0, 8.0 * swing, 0)
-			g[Bone.SPINE] = Vector3(8.0, 0, 3.0 * c) # dương: thân đổ tới (âm là ưỡn ra sau); nghiêng sang chân đang đỡ
-			g[Bone.CHEST] = Vector3(0, -13.0 * swing, 0) # vai xoay ngược hông
-			g[Bone.NECK] = Vector3(0, 6.0 * swing, 0) # đầu giữ thẳng hướng chạy
-			g[Bone.HEAD] = Vector3(6.0 + 2.0 * absf(c), 2.0 * swing, 0)
-			# Tay đánh ngược chân, khuỷu gập gần vuông như người chạy; gập thêm khi tay
-			# đưa ra trước, cổ tay trễ nhịp nên tay mềm. Góc khuỷu tính từ dáng gốc của
-			# từng mô hình: tu sĩ dáng gốc tay trái giơ lên (phải duỗi ra), tay phải buông.
-			var lag := step - 0.6
-			var fwd_l := maxf(0.0, -sin(lag)) # tay trái đang ra trước
-			var fwd_r := maxf(0.0, sin(lag))
-			if is_hunter():
-				# Ma tu: dáng gốc chìa tay trái thẳng ra trước, khi chạy hạ hẳn xuống cạnh
-				# người rồi mới đánh tay (chìa tay ra trước mà chạy trông như đi ngang).
-				g[Bone.UPPER_ARM_L] = Vector3(70.0 + 30.0 * swing, 0, 4.0 + 4.0 * absf(s))
-				g[Bone.FOREARM_L] = Vector3(-55.0 - 20.0 * fwd_l, 0, 0)
-				# Tay cầm kiếm: đánh nhẹ về sau, mũi kiếm chúc xuống, không chĩa ngang.
-				g[Bone.UPPER_ARM_R] = Vector3(12.0 - 10.0 * swing, 0, -10.0)
-				g[Bone.CHEST].y *= 0.5
-			else:
-				g[Bone.UPPER_ARM_L] = Vector3(35.0 * swing, 0, 8.0 + 4.0 * absf(s))
-				g[Bone.FOREARM_L] = Vector3(45.0 - 20.0 * fwd_l, 0, 0)
-				g[Bone.UPPER_ARM_R] = Vector3(-35.0 * swing, 0, -8.0 - 4.0 * absf(s))
-				g[Bone.FOREARM_R] = Vector3(-40.0 - 20.0 * fwd_r, 0, 0)
-			g[Bone.HAND_L] = Vector3(14.0 * sin(step - 1.3), 0, 0)
-			g[Bone.HAND_R] = Vector3(-14.0 * sin(step - 1.3), 0, 0)
-			if wk > 0.0: # đi bộ: thân thẳng, tay buông cạnh người đung đưa nhẹ, khuỷu hơi cong
-				g[Bone.SPINE] = g[Bone.SPINE].lerp(Vector3(3.0, 0, 1.5 * c), wk)
-				g[Bone.CHEST] = g[Bone.CHEST].lerp(Vector3(0, -6.0 * swing, 0), wk)
-				g[Bone.NECK] = g[Bone.NECK].lerp(Vector3(0, 3.0 * swing, 0), wk)
-				g[Bone.HEAD] = g[Bone.HEAD].lerp(Vector3(3.0, swing, 0), wk)
-				g[Bone.HAND_L] *= 1.0 - 0.5 * wk
-				g[Bone.HAND_R] *= 1.0 - 0.5 * wk
-				if is_hunter():
-					g[Bone.UPPER_ARM_L] = g[Bone.UPPER_ARM_L].lerp(Vector3(78.0 + 18.0 * swing, 0, 4.0), wk)
-					g[Bone.FOREARM_L] = g[Bone.FOREARM_L].lerp(Vector3(-25.0 - 10.0 * fwd_l, 0, 0), wk)
-					g[Bone.UPPER_ARM_R] = g[Bone.UPPER_ARM_R].lerp(Vector3(6.0 - 8.0 * swing, 0, -8.0), wk)
-				else:
-					g[Bone.UPPER_ARM_L] = g[Bone.UPPER_ARM_L].lerp(Vector3(18.0 * swing, 0, 6.0), wk)
-					g[Bone.FOREARM_L] = g[Bone.FOREARM_L].lerp(Vector3(90.0 - 10.0 * fwd_l, 0, 0), wk)
-					g[Bone.UPPER_ARM_R] = g[Bone.UPPER_ARM_R].lerp(Vector3(-18.0 * swing, 0, -6.0), wk)
-					g[Bone.FOREARM_R] = g[Bone.FOREARM_R].lerp(Vector3(-12.0 - 10.0 * fwd_r, 0, 0), wk)
-		"Lie_Idle":
-			var b := sin(t * 1.6)
-			g[Bone.CHEST] = Vector3(2.0 * b, 0, 0)
-			g[Bone.HEAD] = Vector3(-12.0, 15.0, 0)
-			g[Bone.UPPER_ARM_L] = Vector3(0, 0, 40.0)
-			g[Bone.UPPER_ARM_R] = Vector3(0, 0, -30.0)
-			g[Bone.THIGH_L] = Vector3(-30.0, 0, 6.0)
-			g[Bone.SHIN_L] = Vector3(55.0, 0, 0)
-			g[Bone.THIGH_R] = Vector3(-5.0, 0, -6.0)
-		"Sit_Floor_Idle":
-			var b := sin(t * 2.0)
-			g[Bone.THIGH_L] = Vector3(-80.0, 0, 10.0)
-			g[Bone.THIGH_R] = Vector3(-80.0, 0, -10.0)
-			g[Bone.SHIN_L] = Vector3(35.0, 0, 0)
-			g[Bone.SHIN_R] = Vector3(35.0, 0, 0)
-			g[Bone.SPINE] = Vector3(-6.0 + 2.0 * b, 0, 0)
-			g[Bone.HEAD] = Vector3(14.0, 0, 0) # cúi đầu buồn
-			g[Bone.UPPER_ARM_L] = Vector3(-20.0, 0, 8.0)
-			g[Bone.UPPER_ARM_R] = Vector3(-20.0, 0, -8.0)
-		"Jump_Idle":
-			g[Bone.THIGH_L] = Vector3(-50.0, 0, 0)
-			g[Bone.SHIN_L] = Vector3(75.0, 0, 0)
-			g[Bone.THIGH_R] = Vector3(-15.0, 0, 0)
-			g[Bone.SHIN_R] = Vector3(45.0, 0, 0)
-			g[Bone.UPPER_ARM_L] = Vector3(0, 0, 45.0 + 8.0 * sin(t * 6.0))
-			g[Bone.UPPER_ARM_R] = Vector3(0, 0, -45.0 - 8.0 * sin(t * 6.0))
-		"PickUp": # ngồi xổm cạy rương, hai tay mò khóa
-			var jiggle := 10.0 * sin(t * 14.0)
-			_hips_drop_goal = CROUCH_DROP
-			_leg_ik(Bone.THIGH_L, 0.05, 0.0, 0.0, CROUCH_DROP) # bàn chân phẳng trên đất, gối gập ra trước
-			_leg_ik(Bone.THIGH_R, -0.02, 0.0, 0.0, CROUCH_DROP)
-			g[Bone.THIGH_L].z = 10.0
-			g[Bone.THIGH_R].z = -10.0
-			g[Bone.SPINE] = Vector3(-18.0, 0, 0)
-			g[Bone.CHEST] = Vector3(-10.0, 0, 0)
-			g[Bone.HEAD] = Vector3(-8.0, 0, 0)
-			g[Bone.UPPER_ARM_L] = Vector3(-45.0, 0, 0)
-			g[Bone.UPPER_ARM_R] = Vector3(-50.0, 0, 0)
-			g[Bone.FOREARM_L] = Vector3(-15.0 + jiggle, 0, 0)
-			g[Bone.FOREARM_R] = Vector3(-35.0 - jiggle, 0, 0)
-	if _oneshot_left > 0.0:
-		_pose_oneshot(g)
-	# Ra đòn: xương đuổi nhanh gấp đôi cho đòn dứt khoát, không bị nhòe.
-	var w := minf(1.0, delta * BONE_SPEED * (2.0 if _oneshot_left > 0.0 else 1.0))
-	var w_legs := minf(1.0, delta * BONE_SPEED * 3.0) if _fast_legs else w
-	for i in _bone_ids.size():
-		var now := _bone_now[i].lerp(g[i], w_legs if i >= Bone.THIGH_L else w)
-		_bone_now[i] = now
-		_skeleton.set_bone_pose_rotation(_bone_ids[i], Quaternion.from_euler(now * (PI / 180.0)))
-	_hips_drop = lerpf(_hips_drop, _hips_drop_goal, w_legs)
-	_skeleton.set_bone_pose_position(_bone_ids[Bone.HIPS], _hips_rest - Vector3(0, _hips_drop, 0))
+		"Move":
+			_pose_move(delta)
+		"PickUp": # ngồi xổm cạy rương: dừng ở lúc cúi thấp nhất
+			_hips_out = _sample("PickUp", minf(t, PICKUP_HOLD), _pose_out)
+		_:
+			var clip := _clips[_anim_name] as Animation
+			_hips_out = _sample(_anim_name, fmod(t, clip.length), _pose_out)
+	if _fade < 1.0:
+		_fade = minf(1.0, _fade + delta / FADE_TIME)
+		var k := smoothstep(0.0, 1.0, _fade)
+		for i in BONES.size():
+			_pose_out[i] = _pose_from[i].slerp(_pose_out[i], k)
+		_hips_out = _hips_from.lerp(_hips_out, k)
+	if _oneshot_name != "":
+		var into := minf(1.0, _oneshot_time / 0.08) # vào đòn nhanh, ra đòn chậm hơn
+		var out := minf(1.0, (_oneshot_length - _oneshot_time) / 0.15)
+		var k := smoothstep(0.0, 1.0, minf(into, out))
+		_sample(_oneshot_name, _oneshot_time * ONESHOT_RATE[_oneshot_name], _pose_one)
+		for i in range(Bone.SPINE, Bone.HAND_R + 1):
+			_pose_out[i] = _pose_out[i].slerp(_pose_one[i], k)
+	for i in BONES.size():
+		_skeleton.set_bone_pose_rotation(_bone_ids[i], _pose_out[i])
+	_skeleton.set_bone_pose_position(_bone_ids[Bone.HIPS], _hips_out)
 
 
-## Tư thế một lần chồng lên tư thế nền đã có trong `g`. Vung kiếm / ném: lấy đà
-## (tay phải vòng lên sau vai, vai xoay ra sau, tay kia chỉ về trước) rồi quật
-## xuống chéo qua người, vai xoay theo, thân đổ tới, tay kia kéo về; giữ một chút
-## rồi về tư thế nền. Đứng yên thì bước chân trái tới, chân sau nhón; đang chạy thì
-## chân cứ chạy (bước thêm sẽ làm bàn chân trượt).
-func _pose_oneshot(g: Array[Vector3]) -> void:
-	var p := 1.0 - _oneshot_fade() # 0 → 1 trong lúc phát
-	if _oneshot_name == "Hit_A": # giật ngửa, hai tay bật ra, cộng lên tư thế nền
-		var k := 1.0 - p
-		g[Bone.SPINE] += Vector3(8.0 * k, 0, 0)
-		g[Bone.CHEST] += Vector3(18.0 * k, 0, 0)
-		g[Bone.HEAD] += Vector3(15.0 * k, 0, 0)
-		g[Bone.UPPER_ARM_L] = g[Bone.UPPER_ARM_L].lerp(Vector3(15.0, 0, 30.0), k)
-		g[Bone.UPPER_ARM_R] = g[Bone.UPPER_ARM_R].lerp(Vector3(15.0, 0, -30.0), k)
-		g[Bone.FOREARM_L] = g[Bone.FOREARM_L].lerp(Vector3(-35.0, 0, 0), k * k) # khuỷu bật theo sau vai
-		g[Bone.FOREARM_R] = g[Bone.FOREARM_R].lerp(Vector3(-35.0, 0, 0), k * k)
-		g[Bone.HAND_L] += Vector3(20.0 * k, 0, 0)
-		g[Bone.HAND_R] += Vector3(20.0 * k, 0, 0)
-		return
-	var wind := smoothstep(0.0, 0.28, p) # lấy đà
-	var strike := smoothstep(0.28, 0.5, p) # quật tới
-	var on := wind * (1.0 - smoothstep(0.72, 1.0, p)) # cả đòn, về 0 lúc hết
-	var slash := _oneshot_name == "1H_Ranged_Shoot"
-	# Tay phải (tay kiếm của ma tu, tay ném của cả hai): [lấy đà, quật tới].
-	_blend(g, Bone.UPPER_ARM_R, Vector3(-140.0, 0, -35.0) if slash else Vector3(-150.0, 0, -40.0),
-			Vector3(-55.0, 0, 30.0) if slash else Vector3(-70.0, 0, 15.0), strike, on)
-	_blend(g, Bone.FOREARM_R, Vector3(-75.0, 0, 0) if slash else Vector3(-95.0, 0, 0),
-			Vector3(-10.0, 0, 0) if slash else Vector3(-5.0, 0, 0), strike, on)
-	_blend(g, Bone.HAND_R, Vector3(35.0, 0, 0), Vector3(-25.0, 0, 0), strike, on)
-	_blend(g, Bone.SPINE, Vector3(-4.0, 0, 0), Vector3(9.0, 0, 0), strike, on)
-	_blend(g, Bone.CHEST, Vector3(-4.0, -22.0, 0), Vector3(2.0, 24.0, 0), strike, on) # dương Y: vai phải ra trước
-	_blend(g, Bone.NECK, Vector3(-2.0, 14.0, 0), Vector3(-4.0, -16.0, 0), strike, on) # mắt vẫn nhìn theo hướng đánh
-	# Tay trái chỉ về phía đánh rồi kéo về cạnh sườn. Dáng gốc ma tu chìa tay trái
-	# ra trước, đệ tử thì buông tay và gập khuỷu lên.
-	if is_hunter():
-		_blend(g, Bone.UPPER_ARM_L, Vector3(-5.0, 0, -5.0), Vector3(75.0, 0, 20.0), strike, on)
-		_blend(g, Bone.FOREARM_L, Vector3.ZERO, Vector3(-50.0, 0, 0), strike, on)
-	else:
-		_blend(g, Bone.UPPER_ARM_L, Vector3(-60.0, 0, 10.0), Vector3(25.0, 0, 15.0), strike, on)
-		_blend(g, Bone.FOREARM_L, Vector3(75.0, 0, 0), Vector3(30.0, 0, 0), strike, on)
-	if _anim_name != "Idle":
-		return
-	# Đứng yên: bước chân trái tới theo đòn, hông hạ, chân sau nhón gót.
-	var step := strike * on
-	var lift := 0.06 * sin(PI * strike) * on # nhấc bàn chân lúc bước
-	_hips_drop_goal = 0.03 * step
-	_leg_ik(Bone.THIGH_L, 0.16 * step, lift, -10.0 * sin(PI * strike) * on, _hips_drop_goal)
-	_leg_ik(Bone.THIGH_R, -0.1 * step, 0.0, 20.0 * step, _hips_drop_goal)
-	for i in range(Bone.THIGH_L, Bone.FOOT_R + 1): # vào / ra đòn từ dáng đứng gốc, không giật chân
-		g[i] *= on
+## Đứng / đi / chạy theo tốc độ. Đứng yên thì thở nhẹ ở ngực.
+func _pose_move(delta: float) -> void:
+	var walk := _clips["Walk"] as Animation
+	var run := _clips["Run"] as Animation
+	var walk_v := float(walk.get_meta("speed")) * _tall # m/s khi phát đúng tốc độ gốc
+	var run_v := float(run.get_meta("speed")) * _tall
+	var run_w := smoothstep(WALK_TO_RUN.x, WALK_TO_RUN.y, _speed)
+	var move_w := smoothstep(RUN_SPEED_MIN * 0.5, RUN_SPEED_MIN * 1.5, _speed)
+	var stride := lerpf(walk_v * walk.length, run_v * run.length, run_w) # mét mỗi chu kỳ
+	_move_phase = fmod(_move_phase + delta * _speed / stride, 1.0)
+	_hips_out = _sample("Stand", 0.0, _pose_out)
+	if move_w > 0.0:
+		var hw := _sample("Walk", _move_phase * walk.length, _pose_a)
+		var hr := _sample("Run", _move_phase * run.length, _pose_b)
+		for i in BONES.size():
+			_pose_out[i] = _pose_out[i].slerp(_pose_a[i].slerp(_pose_b[i], run_w), move_w)
+		_hips_out = _hips_out.lerp(hw.lerp(hr, run_w), move_w)
+	var breath := (1.0 - move_w) * 0.02 * sin(_pose_time * 2.2)
+	_pose_out[Bone.CHEST] = _pose_out[Bone.CHEST] * Quaternion(Vector3.RIGHT, breath)
 
 
-## g[bone] từ tư thế nền tới tư thế lấy đà `wind_pose` rồi quật tới `strike_pose`
-## (theo `strike`), trộn với tư thế nền theo `on`.
-static func _blend(g: Array[Vector3], bone: int, wind_pose: Vector3, strike_pose: Vector3, strike: float, on: float) -> void:
-	g[bone] = g[bone].lerp(wind_pose.lerp(strike_pose, strike), on)
-
-
-## Một chân khi chạy, pha `p` (0..1): đoạn đầu (duty) bàn chân dẫm đất trượt lùi từ
-## +half tới -half đúng tốc độ thân; đoạn sau nhấc lên vòng ra trước. Bàn chân lăn
-## gót - mũi: chạm gót, đè phẳng, nhón mũi đẩy đi, lúc bay mũi chúc rồi hếch lại.
-## Đặt góc đùi / cẳng / bàn chân vào _bone_goal; trả về vị trí trước-sau của bàn chân.
-func _leg_gait(thigh: int, p: float, duty: float, half: float) -> float:
-	var z: float
-	var y := 0.0
-	var roll: float # độ, dương: mũi chúc xuống
-	var front := half * lerpf(0.8, 1.0, _walk) # chạy: chạm đất ngay trước hông, đạp ra sau xa hơn
-	var back := -half * lerpf(1.2, 1.0, _walk) # đi: trước - sau đều nhau
-	if p < duty:
-		var u := p / duty
-		z = lerpf(front, back, u)
-		roll = -10.0 * (1.0 - u) * (1.0 - u) + 30.0 * u * u * u
-	else:
-		var u := (p - duty) / (1.0 - duty)
-		# Quỹ đạo bàn chân khi bước, theo dáng chạy thật: vừa rời đất thì gót đá lên sát
-		# mông (bàn chân còn sau hông, gối đã ra trước), rồi gối kéo cẳng chân vung ra
-		# trước, bàn chân hạ xuống ngay trước hông. Nội suy cong qua 4 điểm.
-		var lift := STEP_LIFT * clampf(half / 0.12, 0.3, 1.0) * (1.0 - 0.65 * _walk) # đi bộ nhấc chân thấp
-		var k0 := Vector2(back, 0.0)
-		var k1 := Vector2(back * 0.4, lift)
-		var k2 := Vector2(front * 0.9, lift * 0.5)
-		var k3 := Vector2(front, 0.0)
-		var q: Vector2
-		if u < 0.3:
-			q = k0.cubic_interpolate(k1, k0 + Vector2(0.0, -lift), k2, u / 0.3)
-		elif u < 0.65:
-			q = k1.cubic_interpolate(k2, k0, k3, (u - 0.3) / 0.35)
-		else:
-			q = k2.cubic_interpolate(k3, k1, k3 + Vector2(-0.05, -lift * 0.3), (u - 0.65) / 0.35)
-		z = q.x
-		y = maxf(0.0, q.y)
-		roll = lerpf(30.0, -12.0, smoothstep(0.0, 0.7, u))
-	# Lăn bàn chân: mũi chúc xuống thì xoay quanh đầu ngón (mắt cá nhấc lên),
-	# mũi hếch lên thì xoay quanh gót, để bàn chân không lún xuống đất.
-	var r := deg_to_rad(roll)
-	y = maxf(y, FOOT_TOE * sin(r) if roll > 0.0 else FOOT_HEEL * sin(-r))
-	_leg_ik(thigh, z, y, roll, _hips_drop_goal)
-	return z
-
-
-## IK hai đoạn (đùi, cẳng chân) trong mặt phẳng trước-sau: mắt cá tới (z, y) với
-## y tính từ mặt đất, hông đang hạ `drop`. Gối luôn gập về trước. Bàn chân giữ
-## phẳng với đất rồi cộng thêm `roll`.
-func _leg_ik(thigh: int, z: float, y: float, roll: float, drop: float) -> void:
-	var d := Vector2(z, y + _ankle_y - (_hip_y - drop)) # (trước, lên) từ khớp háng
-	var reach := (_thigh_len + _shin_len) * 0.999
-	var dist := clampf(d.length(), 0.05, reach)
-	var a1 := _thigh_len
-	var a2 := _shin_len
-	var at_hip := acos(clampf((a1 * a1 + dist * dist - a2 * a2) / (2.0 * a1 * dist), -1.0, 1.0))
-	var at_knee := acos(clampf((a1 * a1 + a2 * a2 - dist * dist) / (2.0 * a1 * a2), -1.0, 1.0))
-	var thigh_fwd := atan2(d.x, -d.y) + at_hip # góc đùi so với thẳng xuống, dương: ra trước
-	var knee := PI - at_knee # gối gập
-	var thigh_x := -rad_to_deg(thigh_fwd)
-	var shin_x := rad_to_deg(knee)
-	# Khép chân: bàn chân bước gần đường giữa, không dạng háng đi ngang như cua.
-	var splay := _leg_splay[0 if thigh == Bone.THIGH_L else 1]
-	var inward := -splay + (2.0 if thigh == Bone.THIGH_L else -2.0)
-	_bone_goal[thigh] = Vector3(thigh_x, 0, inward)
-	_bone_goal[thigh + 1] = Vector3(shin_x, 0, 0)
-	_bone_goal[thigh + 2] = Vector3(-(thigh_x + shin_x) + roll, 0, 0)
-
-
-## Tư thế một lần: mạnh nhất lúc đầu rồi nhạt dần về 0.
-func _oneshot_fade() -> float:
-	return clampf(_oneshot_left / maxf(_oneshot_total, 0.01), 0.0, 1.0)
+## Góc các xương của động tác `clip` ở giây `t` vào `out`; trả vị trí hông.
+func _sample(clip: String, t: float, out: Array[Quaternion]) -> Vector3:
+	var anim := _clips[clip] as Animation
+	var tracks := _clip_tracks[clip] as PackedInt32Array
+	for i in BONES.size():
+		out[i] = anim.rotation_track_interpolate(tracks[i], t)
+	return anim.position_track_interpolate(tracks[BONES.size()], t)
 
 
 ## Người trốn đang đứng yên trong vùng một rương chưa mở xong (đúng lúc luật
@@ -1070,7 +805,7 @@ func client_update(delta: float) -> void:
 
 func _on_state_changed(_new_state: GameTypes.PlayerState) -> void:
 	_refresh_visible()
-	_oneshot_left = 0.0 # đổi trạng thái (gục, bị nhốt...) thì bỏ anim đang phát dở
+	_oneshot_name = "" # đổi trạng thái (gục, bị nhốt...) thì bỏ đòn đang phát dở
 
 
 func set_concealed(concealed: bool) -> void:
@@ -1088,7 +823,7 @@ func _on_hit(id: int, _attacker_id: int, _hp_left: int) -> void:
 	if id != peer_id:
 		return
 	if state == GameTypes.PlayerState.IDLE:
-		_play_once("Hit_A", 0.4)
+		_play_once("Hit")
 	if _visual == null or not visible:
 		return
 	if not is_instance_valid(_shot_fx):
@@ -1111,12 +846,12 @@ func _set_flash(mat: Material) -> void:
 
 func _on_attacked(attacker_id: int) -> void:
 	if attacker_id == peer_id:
-		_play_once("1H_Ranged_Shoot", 0.55)
+		_play_once("Attack")
 
 
 func _on_item_used(id: int, _type: GameTypes.ItemType, _target_id: int, _target_pos: Vector3) -> void:
 	if id == peer_id and state == GameTypes.PlayerState.IDLE:
-		_play_once("Throw", 0.55)
+		_play_once("Throw")
 
 
 ## Vẽ đạn của chính nhân vật này: súng thợ săn bắn tên lửa có lửa đuôi, chạm
