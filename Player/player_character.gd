@@ -266,8 +266,13 @@ func _find_bones(model: Node3D) -> void:
 	if found.is_empty():
 		return
 	var skeleton := found[0] as Skeleton3D
+	var names: Array[String] = [] # tên thật trong tệp: GLB xuất từ Godot đổi "." thành "_" (upperarm_l)
 	for bone_name in BONES:
 		var i := skeleton.find_bone(bone_name)
+		if i < 0:
+			bone_name = bone_name.replace(".", "_")
+			i = skeleton.find_bone(bone_name)
+		names.append(bone_name)
 		if i < 0:
 			push_warning("Mô hình thiếu xương %s, chỉ cử động cả người" % bone_name)
 			_bone_ids.clear()
@@ -283,7 +288,7 @@ func _find_bones(model: Node3D) -> void:
 			continue
 		var anim := player.get_animation(CLIPS[clip])
 		var tracks := PackedInt32Array()
-		for bone_name in BONES:
+		for bone_name in names:
 			tracks.append(anim.find_track(NodePath("%s:%s" % [skel_path, bone_name]), Animation.TYPE_ROTATION_3D))
 		tracks.append(anim.find_track(NodePath("%s:hips" % skel_path), Animation.TYPE_POSITION_3D))
 		_clips[clip] = anim
