@@ -1,10 +1,21 @@
 extends Node3D
-## Bụi cây chibi: chùm cầu xanh, không chặn đường. Ai đứng trong bụi thì phe
+## Bụi cỏ cao để nấp: 3 khóm cỏ (mô hình bui_co, giảm từ grass.glb 30k tam giác)
+## xoay lệch nhau thành một bụi tròn, không chặn đường. Ai đứng trong bụi thì phe
 ## kia không thấy (luật ở GameState.can_see, server không gửi vị trí). Máy nào
 ## có nhân vật của mình đứng trong bụi thì bụi đó trong mờ để còn thấy mình.
-## Cả chùm cầu là một mesh dùng chung (bụi bán kính 1 m), mỗi bụi một lần vẽ.
+## Mức chi tiết theo cài đặt đồ họa (ProjectSettings "game/graphics_quality"):
+## mỗi khóm Thấp ~250, Vừa ~400, Cao ~800 tam giác (mỗi bụi 3 khóm). Cả bụi là
+## một mesh dùng chung (bụi bán kính 1 m, cao ~1,1 m), mỗi bụi một lần vẽ.
 
 const CHECK_INTERVAL := 0.1
+const MODELS := [ # theo mức đồ họa 0 Thấp, 1 Vừa, 2 Cao
+	"res://Objects/models/bui_co/bui_co_thap.obj",
+	"res://Objects/models/bui_co/bui_co_vua.obj",
+	"res://Objects/models/bui_co/bui_co_cao.obj",
+]
+const LEAF_TEXTURE := "res://Objects/models/bui_co/la_co.jpg"
+const HEIGHT := 1.1 # mét, ngang hông nhân vật chibi
+const TINT := Color(0.62, 0.9, 0.62) # nhuộm lá ngọc của ảnh gốc cho hợp sân cỏ
 
 var index := 0 ## chỉ số trong MapBase.get_bushes()
 var radius := 1.4
@@ -14,7 +25,7 @@ var _see_through := false
 var _check_left := 0.0
 var _me: Node3D
 
-static var _leaf_mesh: ArrayMesh # chùm cầu của bụi bán kính 1 m
+static var _leaf_mesh: ArrayMesh # bụi bán kính 1 m
 static var _solid: StandardMaterial3D
 static var _faded: StandardMaterial3D
 
@@ -23,42 +34,61 @@ func _ready() -> void:
 	if DisplayServer.get_name() == "headless": # server riêng: luật bụi cây nằm ở GameState, không cần hình
 		set_process(false)
 		return
-	_build_shared()
 	_mesh = MeshInstance3D.new()
-	_mesh.mesh = _leaf_mesh
+	_mesh.mesh = leaf_mesh()
 	_mesh.material_override = _solid
-	_mesh.scale = Vector3.ONE * radius
+	_mesh.scale = Vector3(radius, 1.0, radius)
+	_mesh.rotation.y = index * 1.3 # mỗi bụi xoay một kiểu cho đỡ giống nhau
 	add_child(_mesh)
+
+
+## Mesh bụi bán kính 1 m dùng chung (bản đồ cũng dùng để vẽ bụi trang trí).
+static func leaf_mesh() -> ArrayMesh:
+	_build_shared()
+	return _leaf_mesh
+
+
+static func leaf_material() -> StandardMaterial3D:
+	_build_shared()
+	return _solid
 
 
 static func _build_shared() -> void:
 	if _leaf_mesh:
 		return
-	# Một cầu giữa + một vòng cầu quanh, cao thấp khác nhau cho giống bụi.
-	var leaf := SphereMesh.new()
-	leaf.radius = 0.5
-	leaf.height = 1.0
-	leaf.radial_segments = 8
-	leaf.rings = 4
+	var quality := clampi(int(ProjectSettings.get_setting("game/graphics_quality", 0)), 0, MODELS.size() - 1)
+	var clump: Mesh = load(MODELS[quality])
+	# Khóm cỏ gốc dài ~1,6 m, rộng ~0,6 m: 3 khóm xoay 60° thành bụi tròn đường kính ~2 m.
+	var aabb := clump.get_aabb()
+	var s := 2.0 / maxf(aabb.size.x, 0.01)
+	var h := HEIGHT / maxf(aabb.size.y, 0.01)
+	var lift := -aabb.position.y * h
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	st.append_from(leaf, 0, _leaf_xf(Vector3(0, 0.45, 0), 0.85))
-	var count := 6
-	for i in count:
-		var a := TAU * i / count + 0.4
-		var r := 0.6 + 0.1 * (i % 2)
-		st.append_from(leaf, 0, _leaf_xf(Vector3(cos(a) * r, 0.3, sin(a) * r), 0.55 + 0.1 * ((i + 1) % 2)))
+	for i in 3:
+		var basis := Basis(Vector3.UP, PI / 3 * i).scaled(Vector3(s * (1.0 - 0.12 * i), h * (1.0 - 0.1 * (i % 2)), s * (1.0 - 0.12 * i)))
+		st.append_from(clump, 0, Transform3D(basis, Vector3(0, lift, 0)))
 	_leaf_mesh = st.commit()
-	_solid = StandardMaterial3D.new()
-	_solid.albedo_color = Color(0.3, 0.6, 0.35)
-	_faded = StandardMaterial3D.new()
-	_faded.albedo_color = Color(0.3, 0.6, 0.35, 0.35)
-	_faded.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	# Ảnh lá lấm tấm: cần mipmap kẻo nhìn xa bị nhiễu hạt (file .import không vào git nên tạo ở đây).
+	var img := (load(LEAF_TEXTURE) as Texture2D).get_image()
+	if img.is_compressed():
+		img.decompress()
+	if not img.has_mipmaps():
+		img.generate_mipmaps()
+	var tex := ImageTexture.create_from_image(img)
+	_solid = _leaf_mat(tex, 1.0)
+	_faded = _leaf_mat(tex, 0.35)
 	RenderWarmup.register(_faded) # chỉ hiện khi mình bước vào bụi
 
 
-static func _leaf_xf(pos: Vector3, size: float) -> Transform3D:
-	return Transform3D(Basis().scaled(Vector3(size, size * 0.8, size)), pos)
+static func _leaf_mat(tex: Texture2D, alpha: float) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_texture = tex
+	m.albedo_color = Color(TINT, alpha)
+	m.cull_mode = BaseMaterial3D.CULL_DISABLED # lá cỏ một mặt
+	if alpha < 1.0:
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	return m
 
 
 func _process(delta: float) -> void:

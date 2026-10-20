@@ -1,14 +1,15 @@
 class_name ExitGate
 extends Interactable
-## Lối ra (trong code gọi là cổng thoát): sơn môn đá có phong ấn đỏ, khóa cho tới
-## khi giải đủ trận linh. Đủ thì cả 2 lối ra rung, phong ấn nháy trong
-## MatchConfig.gate_open_delay giây rồi vỡ thành cổng xoáy ngọc. Mở rồi thì đệ
-## tử bước vào là thoát.
+## Lối ra (trong code gọi là cổng thoát): cửa phong ấn trong tường động phủ, khung
+## gỗ son, tấm phong ấn cam sáng, khóa cho tới khi giải đủ trận linh. Đủ thì cả 2
+## lối ra rung, phong ấn nháy trong MatchConfig.gate_open_delay giây rồi thành
+## cửa ngọc. Mở rồi thì đệ tử bước vào là thoát. Cửa quay ngang theo trục z của
+## nó (bản đồ xoay node để đặt vào tường dọc hay ngang).
 
 const SIZE := Vector3(0.8, 3.0, 2.4)
-const LOCKED_COLOR := Color(0.9, 0.1, 0.15, 0.6) # phong ấn đỏ
+const LOCKED_COLOR := Color(1.0, 0.55, 0.12, 0.8) # phong ấn cam
 const OPEN_COLOR := Color(0.4, 1.0, 0.85, 0.75) # cổng xoáy ngọc
-const FLASH_COLOR := Color(1.0, 0.7, 0.2, 0.7)
+const FLASH_COLOR := Color(1.0, 0.92, 0.45, 0.85)
 const SEAL_Y := 1.25 # tâm phong ấn
 
 var _mesh: MeshInstance3D # phong ấn / cổng xoáy
@@ -16,7 +17,7 @@ var _label: Label3D
 
 # Dùng chung cho mọi lối ra: khung sơn môn, phong ấn ba màu (khóa / nháy / mở) đổi bằng material_override.
 static var _frame: ArrayMesh
-static var _box: CylinderMesh
+static var _box: BoxMesh # tấm phong ấn lấp khung cửa
 static var _locked_mat: StandardMaterial3D
 static var _flash_mat: StandardMaterial3D
 static var _open_mat: StandardMaterial3D
@@ -43,7 +44,6 @@ func _ready() -> void:
 	_mesh.mesh = _box
 	_mesh.material_override = _locked_mat
 	_mesh.position.y = SEAL_Y
-	_mesh.rotation.z = PI / 2 # mặt tròn quay ra hai phía cổng (trục X)
 	_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_mesh)
 
@@ -67,22 +67,18 @@ func _ready() -> void:
 static func _build_shared() -> void:
 	if _box:
 		return
-	_box = CylinderMesh.new()
-	_box.top_radius = SIZE.z * 0.4
-	_box.bottom_radius = _box.top_radius
-	_box.height = 0.08
-	_box.radial_segments = 20
-	_box.rings = 1
+	_box = BoxMesh.new()
+	_box.size = Vector3(0.1, 2.1, SIZE.z - 0.45)
 	_locked_mat = _seal_mat(LOCKED_COLOR)
 	_flash_mat = _seal_mat(FLASH_COLOR)
 	_open_mat = _seal_mat(OPEN_COLOR)
 	RenderWarmup.register(_flash_mat) # đổi màu khi cổng mở
 	RenderWarmup.register(_open_mat)
-	# Sơn môn: 2 cột đỏ son, xà ngang, mái ngói đen hai tầng.
+	# Khung cửa: 2 cột gỗ son, xà ngang, mái ngói đen hai tầng, viền vàng.
 	var red := StandardMaterial3D.new()
-	red.albedo_color = Color(0.65, 0.12, 0.1)
+	red.albedo_color = Color(0.55, 0.2, 0.08)
 	var roof := StandardMaterial3D.new()
-	roof.albedo_color = Color(0.15, 0.17, 0.2)
+	roof.albedo_color = Color(0.78, 0.5, 0.16) # mái đồng vàng, nhìn từ trên vẫn nhận ra cửa
 	var gold := StandardMaterial3D.new()
 	gold.albedo_color = Color(0.95, 0.75, 0.25)
 	var post_h := SIZE.y - 0.4
