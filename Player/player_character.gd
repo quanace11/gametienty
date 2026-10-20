@@ -11,9 +11,9 @@ extends EntityBase
 ## Nút thẻ đạo cụ (skill_1..4) do Core + Items xử lý, file này chỉ lo bị hất
 ## tung (server_launch) khi giẫm đệm lò xo.
 ## Mọi quyết định đúng/sai nằm ở GameState; file này chỉ chọn điểm ngắm và vị trí.
-## Hình: nhân vật gốc của bộ KayKit Adventurers (CC0), dùng nguyên mô hình, khung
-## xương và động tác có sẵn trong tệp: thợ săn là Barbarian cầm rìu, người trốn là
-## Mage. Động tác đặt thẳng lên khung xương (_pose_bones). Thợ săn có ma khí tím
+## Hình: thợ săn là ma tu của dự án, người trốn là Mage của bộ KayKit Adventurers
+## (CC0). Cả hai dùng động tác KayKit (ma tu dùng bản đã chuyển sang khung xương
+## của nó), đặt thẳng lên khung xương (_pose_bones). Thợ săn có ma khí tím
 ## đỏ dưới chân để nhận ra từ xa.
 ## Tư thế chọn trên mọi máy theo trạng thái + tốc độ, không gửi qua mạng.
 ## Hình (model, tên, vòng đỏ) nằm trong một node riêng, mỗi frame vẽ được nội
@@ -37,10 +37,17 @@ const SNAP_DIST := 6.0 # mét, lệch hơn chừng này (dịch chuyển) thì �
 const AIM_MIN := 0.2 # độ dài hướng ngắm tối thiểu để bắn theo tay, ngắn hơn thì tự nhắm
 const BEAM_HEIGHT := 1.1 # ngang nòng súng (GameState.SHOT_HEIGHT), để raycast luồng ngắm
 
-# Nhân vật KayKit Adventurers 1.0 (Kay Lousberg, CC0), mỗi tệp có sẵn mô hình
-# (~6k tam giác, một texture), khung xương và 76 động tác. Gốc ở chân, nhìn về +Z.
-const MODELS := {true: "res://Player/models/kaykit/Barbarian.glb", false: "res://Player/models/kaykit/Mage.glb"}
-const MODEL_HEIGHT := 2.2 # đơn vị mô hình, từ chân tới đỉnh đầu (không tính mũ)
+# Thợ săn: ma tu của dự án (gắn xương AccuRig), mỗi mức đồ họa một tệp
+# (ProjectSettings "game/graphics_quality": 0 Thấp ~6k tam giác, 1 Vừa ~20k, 2 Cao ~60k).
+# Động tác KayKit đã chuyển sẵn sang khung xương của nó, 18 xương chính mang tên
+# KayKit (Player/tools/retarget/). Người trốn: Mage của KayKit Adventurers 1.0
+# (Kay Lousberg, CC0, ~6k tam giác, khung xương và 76 động tác). Gốc ở chân, nhìn về +Z.
+const MODELS := {
+	true: ["res://Player/models/ma_tu/ma_tu_thap.glb", "res://Player/models/ma_tu/ma_tu_vua.glb", "res://Player/models/ma_tu/ma_tu_cao.glb"],
+	false: ["res://Player/models/kaykit/Mage.glb"],
+}
+const QUALITY_SETTING := "game/graphics_quality"
+const MODEL_HEIGHT := {true: 1.85, false: 2.2} # đơn vị mô hình, từ chân tới đỉnh đầu (không tính mũ, búi tóc)
 const WEAPONS := {true: "1H_Axe", false: ""} # vũ khí cầm tay giữ lại, các món khác trong tệp bỏ đi
 const HUNTER_TALL := 2.05 # mét
 const ESCAPEE_TALL := 1.9
@@ -55,7 +62,8 @@ const CLIPS := {
 }
 # Tốc độ đi / chạy của động tác gốc (đơn vị mô hình mỗi giây, đo theo bàn chân chạm
 # đất) và lúc chân trái ra trước nhất (phần chu kỳ), để đi và chạy cùng pha.
-const CLIP_SPEED := {"Walk": 0.63, "Run": 2.2}
+# Ma tu cao hơn KayKit nên động tác đã chuyển bước dài hơn theo tỉ lệ chiều cao hông (x2,65).
+const CLIP_SPEED := {true: {"Walk": 1.67, "Run": 5.82}, false: {"Walk": 0.63, "Run": 2.2}}
 const CLIP_PHASE := {"Walk": 0.84, "Run": 0.0}
 const MAX_RATE := 1.8 # phát nhanh nhất chừng này lần tốc độ gốc; nhanh hơn thì chân trượt chút
 const BONES: Array[String] = ["hips", "spine", "chest", "head",
@@ -199,10 +207,12 @@ func _build_body() -> void:
 
 
 func _build_model() -> void:
-	var model: Node3D = (load(MODELS[is_hunter()]) as PackedScene).instantiate()
+	var files: Array = MODELS[is_hunter()]
+	var quality := clampi(int(ProjectSettings.get_setting(QUALITY_SETTING, 0)), 0, files.size() - 1)
+	var model: Node3D = (load(files[quality]) as PackedScene).instantiate()
 	_model = model
 	_tall = HUNTER_TALL if is_hunter() else ESCAPEE_TALL
-	_scale = _tall / MODEL_HEIGHT
+	_scale = _tall / float(MODEL_HEIGHT[is_hunter()])
 	model.scale = Vector3.ONE * _scale
 	for slot in model.find_children("handslot*", "BoneAttachment3D", true, false):
 		for item in slot.get_children():
@@ -389,8 +399,9 @@ func _pose_bones(delta: float) -> void:
 func _pose_move(delta: float) -> void:
 	var walk := _clips["Walk"] as Animation
 	var run := _clips["Run"] as Animation
-	var walk_v := float(CLIP_SPEED["Walk"]) * _scale # m/s khi phát đúng tốc độ gốc
-	var run_v := float(CLIP_SPEED["Run"]) * _scale
+	var speeds: Dictionary = CLIP_SPEED[is_hunter()]
+	var walk_v := float(speeds["Walk"]) * _scale # m/s khi phát đúng tốc độ gốc
+	var run_v := float(speeds["Run"]) * _scale
 	var run_w := smoothstep(WALK_TO_RUN.x, WALK_TO_RUN.y, _speed)
 	var move_w := smoothstep(RUN_SPEED_MIN * 0.5, RUN_SPEED_MIN * 1.5, _speed)
 	var length := lerpf(walk.length, run.length, run_w) # giây mỗi chu kỳ khi phát tốc độ gốc

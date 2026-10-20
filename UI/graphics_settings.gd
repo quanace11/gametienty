@@ -3,11 +3,12 @@ extends RefCounted
 ## apply() lúc mở game và mỗi lần đổi: ghi mức vào ProjectSettings
 ## "game/graphics_quality" (0, 1, 2) để module khác đọc khi dựng hình (mô hình
 ## nhân vật, bóng đổ của bản đồ), rồi chỉnh viewport.
-## Thấp: mô hình ~4,5k tam giác, texture 512, không bóng, vẽ 3D ở 75% độ phân
-## giải, LOD gắt. Vừa: ~10k tam giác, texture 1024, có bóng, 100%. Cao: mô hình
-## gốc ~31k tam giác, texture 2048 + normal map, có bóng, khử răng cưa MSAA 2x.
+## Thấp: ma tu ~6k tam giác, không bóng, vẽ 3D ở 75% độ phân giải, LOD gắt.
+## Vừa: ma tu ~20k tam giác, có bóng, 100%. Cao: ma tu ~60k tam giác, có bóng,
+## khử răng cưa MSAA 2x.
 ## Mặc định: điện thoại Thấp, máy tính Vừa. Dòng lệnh --quality=0|1|2 ghi đè.
-## Điện thoại luôn khóa 60 FPS: màn 90/120 Hz không vẽ thừa, đỡ nóng máy, tốn pin.
+## Khung hình: 30 / 60 / Tối đa (không khóa, cho màn 90/120 Hz), lưu riêng. Mặc định
+## 60: màn 90/120 Hz không vẽ thừa, đỡ nóng máy, tốn pin.
 
 const SETTING := "game/graphics_quality"
 const FILE := "user://cai_dat.cfg"
@@ -15,7 +16,9 @@ const NAMES := ["Thấp", "Vừa", "Cao"]
 const RENDER_SCALE := [0.75, 1.0, 1.0]
 const LOD_THRESHOLD := [4.0, 1.0, 1.0] # pixel lỗi cho phép khi Godot tự hạ LOD mesh
 const MSAA := [Viewport.MSAA_DISABLED, Viewport.MSAA_DISABLED, Viewport.MSAA_2X]
-const MOBILE_MAX_FPS := 60
+const FPS_CHOICES := [30, 60, 0] # 0 = không khóa
+const FPS_NAMES := ["30", "60", "Tối đa"]
+const DEFAULT_FPS := 1
 
 
 static func current() -> int:
@@ -36,6 +39,26 @@ static func load_and_apply(viewport: Viewport) -> void:
 		if a.begins_with("--quality="):
 			level = a.get_slice("=", 1).to_int()
 	apply(viewport, level)
+	apply_fps(int(cfg.get_value("do_hoa", "fps", DEFAULT_FPS)))
+
+
+static func current_fps() -> int:
+	var cfg := ConfigFile.new()
+	cfg.load(FILE)
+	return clampi(int(cfg.get_value("do_hoa", "fps", DEFAULT_FPS)), 0, FPS_CHOICES.size() - 1)
+
+
+## Đổi khung hình (từ menu): lưu lại rồi áp dụng ngay.
+static func save_and_apply_fps(choice: int) -> void:
+	var cfg := ConfigFile.new()
+	cfg.load(FILE)
+	cfg.set_value("do_hoa", "fps", clampi(choice, 0, FPS_CHOICES.size() - 1))
+	cfg.save(FILE)
+	apply_fps(choice)
+
+
+static func apply_fps(choice: int) -> void:
+	Engine.max_fps = FPS_CHOICES[clampi(choice, 0, FPS_CHOICES.size() - 1)]
 
 
 ## Đổi mức (từ menu): lưu lại rồi áp dụng. Mô hình nhân vật đổi từ trận sau.
@@ -53,5 +76,3 @@ static func apply(viewport: Viewport, level: int) -> void:
 	viewport.scaling_3d_scale = RENDER_SCALE[level]
 	viewport.mesh_lod_threshold = LOD_THRESHOLD[level]
 	viewport.msaa_3d = MSAA[level]
-	if OS.has_feature("mobile"):
-		Engine.max_fps = MOBILE_MAX_FPS
