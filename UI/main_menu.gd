@@ -204,26 +204,34 @@ func _update_deck() -> void:
 		UiTheme.color_button(tile, Color(0.95, 0.62, 0.15) if slot >= 0 else UiTheme.MUTED)
 
 
-## Hàng chọn đồ họa: 3 nút Thấp / Vừa / Cao, nút đang chọn sáng màu.
+## Hàng chọn đồ họa (Thấp / Vừa / Cao) và khung hình (30 / 60 / Tối đa), nút đang chọn sáng màu.
 func _build_quality_row(box: VBoxContainer) -> void:
+	_build_choice_row(box, "Đồ họa", GraphicsSettings.NAMES, GraphicsSettings.current(),
+		func(level: int) -> void: GraphicsSettings.save_and_apply(get_viewport(), level))
+	_build_choice_row(box, "FPS", GraphicsSettings.FPS_NAMES, GraphicsSettings.current_fps(),
+		func(choice: int) -> void: GraphicsSettings.save_and_apply_fps(choice))
+
+
+func _build_choice_row(box: VBoxContainer, title_text: String, names: Array, selected: int, on_pick: Callable) -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	box.add_child(row)
 	var title := Label.new()
-	title.text = "Đồ họa"
+	title.text = title_text
+	title.custom_minimum_size.x = 70
 	title.add_theme_font_size_override("font_size", 18)
 	row.add_child(title)
 	var group := ButtonGroup.new()
-	for level in GraphicsSettings.NAMES.size():
+	for i in names.size():
 		var b := Button.new()
-		b.text = GraphicsSettings.NAMES[level]
+		b.text = names[i]
 		b.toggle_mode = true
 		b.button_group = group
-		b.button_pressed = level == GraphicsSettings.current()
+		b.button_pressed = i == selected
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		b.toggled.connect(func(on: bool) -> void:
 			if on:
-				GraphicsSettings.save_and_apply(get_viewport(), level))
+				on_pick.call(i))
 		row.add_child(b)
 
 

@@ -11,9 +11,9 @@ extends EntityBase
 ## Nút thẻ đạo cụ (skill_1..4) do Core + Items xử lý, file này chỉ lo bị hất
 ## tung (server_launch) khi giẫm đệm lò xo.
 ## Mọi quyết định đúng/sai nằm ở GameState; file này chỉ chọn điểm ngắm và vị trí.
-## Hình: nhân vật gốc của bộ KayKit Adventurers (CC0), dùng nguyên mô hình, khung
-## xương và động tác có sẵn trong tệp: thợ săn là Barbarian cầm rìu, người trốn là
-## Mage. Động tác đặt thẳng lên khung xương (_pose_bones). Thợ săn có ma khí tím
+## Hình: thợ săn là ma tu của dự án, người trốn là Mage của bộ KayKit Adventurers
+## (CC0). Cả hai dùng động tác KayKit (ma tu dùng bản đã chuyển sang khung xương
+## của nó), đặt thẳng lên khung xương (_pose_bones). Thợ săn có ma khí tím
 ## đỏ dưới chân để nhận ra từ xa.
 ## Tư thế chọn trên mọi máy theo trạng thái + tốc độ, không gửi qua mạng.
 ## Hình (model, tên, vòng đỏ) nằm trong một node riêng, mỗi frame vẽ được nội
@@ -37,25 +37,36 @@ const SNAP_DIST := 6.0 # mét, lệch hơn chừng này (dịch chuyển) thì �
 const AIM_MIN := 0.2 # độ dài hướng ngắm tối thiểu để bắn theo tay, ngắn hơn thì tự nhắm
 const BEAM_HEIGHT := 1.1 # ngang nòng súng (GameState.SHOT_HEIGHT), để raycast luồng ngắm
 
-# Nhân vật KayKit Adventurers 1.0 (Kay Lousberg, CC0), mỗi tệp có sẵn mô hình
-# (~6k tam giác, một texture), khung xương và 76 động tác. Gốc ở chân, nhìn về +Z.
-const MODELS := {true: "res://Player/models/kaykit/Barbarian.glb", false: "res://Player/models/kaykit/Mage.glb"}
-const MODEL_HEIGHT := 2.2 # đơn vị mô hình, từ chân tới đỉnh đầu (không tính mũ)
+# Thợ săn: ma tu của dự án (gắn xương AccuRig), mỗi mức đồ họa một tệp
+# (ProjectSettings "game/graphics_quality": 0 Thấp ~6k tam giác, 1 Vừa ~20k, 2 Cao ~60k).
+# Động tác KayKit đã chuyển sẵn sang khung xương của nó, 18 xương chính mang tên
+# KayKit (Player/tools/retarget/). Người trốn: Mage của KayKit Adventurers 1.0
+# (Kay Lousberg, CC0, ~6k tam giác, khung xương và 76 động tác). Gốc ở chân, nhìn về +Z.
+const MODELS := {
+	true: ["res://Player/models/ma_tu/ma_tu_thap.glb", "res://Player/models/ma_tu/ma_tu_vua.glb", "res://Player/models/ma_tu/ma_tu_cao.glb"],
+	false: ["res://Player/models/kaykit/Mage.glb"],
+}
+const QUALITY_SETTING := "game/graphics_quality"
+const MODEL_HEIGHT := {true: 1.85, false: 2.2} # đơn vị mô hình, từ chân tới đỉnh đầu (không tính mũ, búi tóc)
 const WEAPONS := {true: "1H_Axe", false: ""} # vũ khí cầm tay giữ lại, các món khác trong tệp bỏ đi
 const HUNTER_TALL := 2.05 # mét
 const ESCAPEE_TALL := 1.9
 const LABEL_HEIGHT := 2.7 # mét, tên trên đầu (cao hơn mũ phù thủy)
 const RUN_SPEED_MIN := 0.6 # m/s, chậm hơn thì đứng yên
 const POSE_SPEED := 10.0 # mô hình không xương: cả người đổi tư thế mượt theo tốc độ này
-# Tên động tác trong game -> tên động tác trong tệp KayKit.
+# Tên động tác trong game -> tên động tác trong tệp. Chỉ Stand và Run bắt buộc; tệp
+# thiếu động tác nào thì bỏ qua (ma tu chỉ giữ đứng, chạy, phóng phi kiếm, chém khi
+# túm người, kéo người): thiếu Walk thì đi chậm dùng Run, thiếu tư thế nền thì đứng / chạy.
 const CLIPS := {
 	"Stand": "Idle", "Walk": "Walking_A", "Run": "Running_A",
-	"Attack": "1H_Melee_Attack_Chop", "Throw": "Throw", "Hit": "Hit_A",
+	"Attack": "Spellcast_Shoot", "Grab": "1H_Melee_Attack_Chop", "Drag": "Drag",
+	"Throw": "Throw", "Hit": "Hit_A",
 	"Lie": "Lie_Idle", "Sit": "Sit_Floor_Idle", "Jump": "Jump_Idle", "PickUp": "PickUp",
 }
 # Tốc độ đi / chạy của động tác gốc (đơn vị mô hình mỗi giây, đo theo bàn chân chạm
 # đất) và lúc chân trái ra trước nhất (phần chu kỳ), để đi và chạy cùng pha.
-const CLIP_SPEED := {"Walk": 0.63, "Run": 2.2}
+# Ma tu cao hơn KayKit nên động tác đã chuyển bước dài hơn theo tỉ lệ chiều cao hông (x2,65).
+const CLIP_SPEED := {true: {"Walk": 1.67, "Run": 5.82}, false: {"Walk": 0.63, "Run": 2.2}}
 const CLIP_PHASE := {"Walk": 0.84, "Run": 0.0}
 const MAX_RATE := 1.8 # phát nhanh nhất chừng này lần tốc độ gốc; nhanh hơn thì chân trượt chút
 const BONES: Array[String] = ["hips", "spine", "chest", "head",
@@ -67,7 +78,8 @@ enum Bone { HIPS, SPINE, CHEST, HEAD, UPPER_ARM_L, FOREARM_L, HAND_L,
 const WALK_TO_RUN := Vector2(2.0, 3.4) # m/s: chậm hơn x thì đi bộ hẳn, nhanh hơn y thì chạy hẳn
 const FADE_TIME := 0.2 # giây trộn khi đổi động tác nền (đứng dậy, ngã, nhảy...)
 const PICKUP_HOLD := 0.5 # giây trong động tác cúi nhặt lúc ngồi thấp nhất (giữ khi cạy rương)
-const ONESHOT_RATE := {"Attack": 1.6, "Throw": 2.0, "Hit": 1.3} # phát nhanh hơn gốc cho đòn gọn
+const ONESHOT_RATE := {"Attack": 1.6, "Grab": 1.6, "Throw": 2.0, "Hit": 1.3}
+const DRAG_FADE := 6.0 # tay phải đưa ra sau / thu về khi bắt đầu / thôi kéo người (lần mỗi giây) # phát nhanh hơn gốc cho đòn gọn
 const CHEST_CHECK := 0.1 # giây giữa hai lần xem có đứng ở rương không
 const HIT_FLASH_TIME := 0.18 # giây người bị trúng chớp đỏ
 
@@ -89,6 +101,9 @@ var _pose_one: Array[Quaternion] = []
 var _hips_out := Vector3.ZERO
 var _hips_from := Vector3.ZERO
 var _fade := 1.0
+var _walk_is_run := false # tệp không có Walk: đi chậm dùng Run
+var _dragging := false # thợ săn đang kéo người (đọc từ luật, mọi máy)
+var _drag_w := 0.0 # độ chồng tư thế kéo lên tay phải (0..1)
 var _move_phase := 0.0 # pha bước đi / chạy (0..1), cộng dồn theo quãng đường
 var _safes: Array[Node] = [] # rương trên bản đồ (lấy một lần)
 var _chest: Node3D # rương đang cạy (đứng yên trong vùng rương chưa mở xong), null = không
@@ -199,10 +214,12 @@ func _build_body() -> void:
 
 
 func _build_model() -> void:
-	var model: Node3D = (load(MODELS[is_hunter()]) as PackedScene).instantiate()
+	var files: Array = MODELS[is_hunter()]
+	var quality := clampi(int(ProjectSettings.get_setting(QUALITY_SETTING, 0)), 0, files.size() - 1)
+	var model: Node3D = (load(files[quality]) as PackedScene).instantiate()
 	_model = model
 	_tall = HUNTER_TALL if is_hunter() else ESCAPEE_TALL
-	_scale = _tall / MODEL_HEIGHT
+	_scale = _tall / float(MODEL_HEIGHT[is_hunter()])
 	model.scale = Vector3.ONE * _scale
 	for slot in model.find_children("handslot*", "BoneAttachment3D", true, false):
 		for item in slot.get_children():
@@ -262,6 +279,8 @@ func _find_bones(model: Node3D) -> void:
 	var player := model.find_children("*", "AnimationPlayer", true, false)[0] as AnimationPlayer
 	var skel_path := str(model.get_path_to(skeleton))
 	for clip: String in CLIPS:
+		if not player.has_animation(CLIPS[clip]):
+			continue
 		var anim := player.get_animation(CLIPS[clip])
 		var tracks := PackedInt32Array()
 		for bone_name in BONES:
@@ -269,6 +288,10 @@ func _find_bones(model: Node3D) -> void:
 		tracks.append(anim.find_track(NodePath("%s:hips" % skel_path), Animation.TYPE_POSITION_3D))
 		_clips[clip] = anim
 		_clip_tracks[clip] = tracks
+	if not _clips.has("Walk"):
+		_walk_is_run = true
+		_clips["Walk"] = _clips["Run"]
+		_clip_tracks["Walk"] = _clip_tracks["Run"]
 	for arr: Array[Quaternion] in [_pose_out, _pose_from, _pose_a, _pose_b, _pose_one]:
 		arr.resize(BONES.size())
 		arr.fill(Quaternion.IDENTITY)
@@ -323,6 +346,15 @@ func _update_anim(delta: float) -> void:
 				base = "Jump"
 			elif _chest != null:
 				base = "PickUp"
+	if not _clips.has(base):
+		base = "Move"
+	if is_hunter():
+		var rec := GameState.rules.record(peer_id) if GameState.rules else null
+		var dragging := rec != null and rec.carrying_id != 0
+		if dragging and not _dragging:
+			_play_once("Grab") # túm người gục
+		_dragging = dragging
+	_drag_w = move_toward(_drag_w, 1.0 if _dragging else 0.0, delta * DRAG_FADE)
 	if base != _anim_name:
 		_anim_name = base
 		_pose_time = 0.0
@@ -373,6 +405,10 @@ func _pose_bones(delta: float) -> void:
 		for i in BONES.size():
 			_pose_out[i] = _pose_from[i].slerp(_pose_out[i], k)
 		_hips_out = _hips_from.lerp(_hips_out, k)
+	if _drag_w > 0.0 and _clips.has("Drag"): # kéo người: tay phải duỗi ra sau
+		_sample("Drag", 0.0, _pose_a)
+		for i in range(Bone.UPPER_ARM_R, Bone.HAND_R + 1):
+			_pose_out[i] = _pose_out[i].slerp(_pose_a[i], _drag_w)
 	if _oneshot_name != "":
 		var into := minf(1.0, _oneshot_time / 0.08) # vào đòn nhanh, ra đòn chậm hơn
 		var out := minf(1.0, (_oneshot_length - _oneshot_time) / 0.15)
@@ -389,8 +425,10 @@ func _pose_bones(delta: float) -> void:
 func _pose_move(delta: float) -> void:
 	var walk := _clips["Walk"] as Animation
 	var run := _clips["Run"] as Animation
-	var walk_v := float(CLIP_SPEED["Walk"]) * _scale # m/s khi phát đúng tốc độ gốc
-	var run_v := float(CLIP_SPEED["Run"]) * _scale
+	var speeds: Dictionary = CLIP_SPEED[is_hunter()]
+	var walk_key := "Run" if _walk_is_run else "Walk"
+	var walk_v := float(speeds[walk_key]) * _scale # m/s khi phát đúng tốc độ gốc
+	var run_v := float(speeds["Run"]) * _scale
 	var run_w := smoothstep(WALK_TO_RUN.x, WALK_TO_RUN.y, _speed)
 	var move_w := smoothstep(RUN_SPEED_MIN * 0.5, RUN_SPEED_MIN * 1.5, _speed)
 	var length := lerpf(walk.length, run.length, run_w) # giây mỗi chu kỳ khi phát tốc độ gốc
@@ -400,7 +438,7 @@ func _pose_move(delta: float) -> void:
 	var stand := _clips["Stand"] as Animation
 	_hips_out = _sample("Stand", fmod(_pose_time, stand.length), _pose_out)
 	if move_w > 0.0:
-		var hw := _sample("Walk", fmod(_move_phase + CLIP_PHASE["Walk"], 1.0) * walk.length, _pose_a)
+		var hw := _sample("Walk", fmod(_move_phase + CLIP_PHASE[walk_key], 1.0) * walk.length, _pose_a)
 		var hr := _sample("Run", fmod(_move_phase + CLIP_PHASE["Run"], 1.0) * run.length, _pose_b)
 		for i in BONES.size():
 			_pose_out[i] = _pose_out[i].slerp(_pose_a[i].slerp(_pose_b[i], run_w), move_w)
