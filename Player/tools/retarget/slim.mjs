@@ -38,6 +38,7 @@ for (const m of doc.getRoot().listMeshes()) for (const p of m.listPrimitives()) 
 await doc.transform(dedup(), weld(), prune());
 let tris = 0;
 for (const m of doc.getRoot().listMeshes()) for (const p of m.listPrimitives()) tris += p.getIndices().getCount()/3;
-await doc.transform(simplify({ simplifier: MeshoptSimplifier, ratio: Number(target)/tris, error: 0.02, lockBorder: false }), prune());
+// Lưới đã giảm sẵn (Blender, README.md): chỉ gắn ảnh và dọn, không giản lược thêm.
+if (Number(target) < tris) await doc.transform(simplify({ simplifier: MeshoptSimplifier, ratio: Number(target)/tris, error: 0.02, lockBorder: false }), prune());
 for (const m of doc.getRoot().listMeshes()) for (const p of m.listPrimitives()) console.log('sau', p.getIndices().getCount()/3, 'đỉnh', p.getAttribute('POSITION').getCount());
 await io.write(out, doc);

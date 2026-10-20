@@ -11,9 +11,9 @@ extends EntityBase
 ## Nút thẻ đạo cụ (skill_1..4) do Core + Items xử lý, file này chỉ lo bị hất
 ## tung (server_launch) khi giẫm đệm lò xo.
 ## Mọi quyết định đúng/sai nằm ở GameState; file này chỉ chọn điểm ngắm và vị trí.
-## Hình: thợ săn là ma tu của dự án, người trốn là Mage của bộ KayKit Adventurers
-## (CC0). Cả hai dùng động tác KayKit (ma tu dùng bản đã chuyển sang khung xương
-## của nó), đặt thẳng lên khung xương (_pose_bones). Thợ săn có ma khí tím
+## Hình: thợ săn là ma tu, người trốn là kiếm tu (đệ tử) của dự án. Cả hai dùng
+## động tác KayKit (CC0) đã chuyển sang khung xương của mình, đặt thẳng lên khung
+## xương (_pose_bones); người trốn gục thì bò. Thợ săn có ma khí tím
 ## đỏ dưới chân để nhận ra từ xa.
 ## Tư thế chọn trên mọi máy theo trạng thái + tốc độ, không gửi qua mạng.
 ## Hình (model, tên, vòng đỏ) nằm trong một node riêng, mỗi frame vẽ được nội
@@ -40,18 +40,18 @@ const BEAM_HEIGHT := 1.1 # ngang nòng súng (GameState.SHOT_HEIGHT), để rayc
 # Thợ săn: ma tu của dự án (gắn xương AccuRig), mỗi mức đồ họa một tệp
 # (ProjectSettings "game/graphics_quality": 0 Thấp ~6k tam giác, 1 Vừa ~20k, 2 Cao ~60k).
 # Động tác KayKit đã chuyển sẵn sang khung xương của nó, 18 xương chính mang tên
-# KayKit (Player/tools/retarget/). Người trốn: Mage của KayKit Adventurers 1.0
-# (Kay Lousberg, CC0, ~6k tam giác, khung xương và 76 động tác). Gốc ở chân, nhìn về +Z.
+# KayKit (Player/tools/retarget/). Người trốn: kiếm tu (đệ tử) của dự án, làm y như vậy,
+# động tác lấy từ Mage của KayKit cộng thêm gục bò. Gốc ở chân, nhìn về +Z.
 const MODELS := {
 	true: ["res://Player/models/ma_tu/ma_tu_thap.glb", "res://Player/models/ma_tu/ma_tu_vua.glb", "res://Player/models/ma_tu/ma_tu_cao.glb"],
-	false: ["res://Player/models/kaykit/Mage.glb"],
+	false: ["res://Player/models/de_tu/de_tu_thap.glb", "res://Player/models/de_tu/de_tu_vua.glb", "res://Player/models/de_tu/de_tu_cao.glb"],
 }
 const QUALITY_SETTING := "game/graphics_quality"
-const MODEL_HEIGHT := {true: 1.85, false: 2.2} # đơn vị mô hình, từ chân tới đỉnh đầu (không tính mũ, búi tóc)
+const MODEL_HEIGHT := {true: 1.85, false: 1.85} # đơn vị mô hình, từ chân tới đỉnh đầu (không tính mũ, búi tóc)
 const WEAPONS := {true: "1H_Axe", false: ""} # vũ khí cầm tay giữ lại, các món khác trong tệp bỏ đi
 const HUNTER_TALL := 2.05 # mét
 const ESCAPEE_TALL := 1.9
-const LABEL_HEIGHT := 2.7 # mét, tên trên đầu (cao hơn mũ phù thủy)
+const LABEL_HEIGHT := 2.7 # mét, tên trên đầu
 const RUN_SPEED_MIN := 0.6 # m/s, chậm hơn thì đứng yên
 const POSE_SPEED := 10.0 # mô hình không xương: cả người đổi tư thế mượt theo tốc độ này
 # Tên động tác trong game -> tên động tác trong tệp. Chỉ Stand và Run bắt buộc; tệp
@@ -61,12 +61,12 @@ const CLIPS := {
 	"Stand": "Idle", "Walk": "Walking_A", "Run": "Running_A",
 	"Attack": "Spellcast_Shoot", "Grab": "1H_Melee_Attack_Chop", "Drag": "Drag",
 	"Throw": "Throw", "Hit": "Hit_A",
-	"Lie": "Lie_Idle", "Sit": "Sit_Floor_Idle", "Jump": "Jump_Idle", "PickUp": "PickUp",
+	"Lie": "Lie_Idle", "Crawl": "Crawl", "Sit": "Sit_Floor_Idle", "Jump": "Jump_Idle", "PickUp": "PickUp",
 }
 # Tốc độ đi / chạy của động tác gốc (đơn vị mô hình mỗi giây, đo theo bàn chân chạm
 # đất) và lúc chân trái ra trước nhất (phần chu kỳ), để đi và chạy cùng pha.
-# Ma tu cao hơn KayKit nên động tác đã chuyển bước dài hơn theo tỉ lệ chiều cao hông (x2,65).
-const CLIP_SPEED := {true: {"Walk": 1.67, "Run": 5.82}, false: {"Walk": 0.63, "Run": 2.2}}
+# Ma tu, đệ tử cao hơn KayKit nên động tác đã chuyển bước dài hơn theo tỉ lệ chiều cao hông (x2,65).
+const CLIP_SPEED := {true: {"Walk": 1.67, "Run": 5.82}, false: {"Walk": 1.67, "Run": 5.82}}
 const CLIP_PHASE := {"Walk": 0.84, "Run": 0.0}
 const MAX_RATE := 1.8 # phát nhanh nhất chừng này lần tốc độ gốc; nhanh hơn thì chân trượt chút
 const BONES: Array[String] = ["hips", "spine", "chest", "head",
@@ -77,6 +77,7 @@ enum Bone { HIPS, SPINE, CHEST, HEAD, UPPER_ARM_L, FOREARM_L, HAND_L,
 	THIGH_R, SHIN_R, FOOT_R, TOES_R }
 const WALK_TO_RUN := Vector2(2.0, 3.4) # m/s: chậm hơn x thì đi bộ hẳn, nhanh hơn y thì chạy hẳn
 const FADE_TIME := 0.2 # giây trộn khi đổi động tác nền (đứng dậy, ngã, nhảy...)
+const CRAWL_STRIDE := 0.35 # mét bò được mỗi chu kỳ động tác Crawl (đứng yên thì dừng động tác)
 const PICKUP_HOLD := 0.5 # giây trong động tác cúi nhặt lúc ngồi thấp nhất (giữ khi cạy rương)
 const ONESHOT_RATE := {"Attack": 1.6, "Grab": 1.6, "Throw": 2.0, "Hit": 1.3}
 const DRAG_FADE := 6.0 # tay phải đưa ra sau / thu về khi bắt đầu / thôi kéo người (lần mỗi giây) # phát nhanh hơn gốc cho đòn gọn
@@ -105,10 +106,11 @@ var _walk_is_run := false # tệp không có Walk: đi chậm dùng Run
 var _dragging := false # thợ săn đang kéo người (đọc từ luật, mọi máy)
 var _drag_w := 0.0 # độ chồng tư thế kéo lên tay phải (0..1)
 var _move_phase := 0.0 # pha bước đi / chạy (0..1), cộng dồn theo quãng đường
+var _crawl_phase := 0.0 # pha bò lúc gục (0..1), cộng dồn theo quãng đường
 var _safes: Array[Node] = [] # rương trên bản đồ (lấy một lần)
 var _chest: Node3D # rương đang cạy (đứng yên trong vùng rương chưa mở xong), null = không
 var _chest_check_left := 0.0
-var _anim_name := "" # động tác nền: Move (đứng / đi / chạy), Lie, Sit, Jump, PickUp
+var _anim_name := "" # động tác nền: Move (đứng / đi / chạy), Lie, Crawl, Sit, Jump, PickUp
 var _oneshot_name := "" # tư thế một lần đang phát (Attack, Throw, Hit), "" = không
 var _oneshot_time := 0.0
 var _oneshot_length := 0.0
@@ -337,7 +339,9 @@ func _update_anim(delta: float) -> void:
 			_oneshot_name = ""
 	var base := "Move"
 	match state:
-		GameTypes.PlayerState.DOWNED, GameTypes.PlayerState.CARRIED:
+		GameTypes.PlayerState.DOWNED:
+			base = "Crawl" if _clips.has("Crawl") else "Lie"
+		GameTypes.PlayerState.CARRIED:
 			base = "Lie"
 		GameTypes.PlayerState.IMPRISONED:
 			base = "Sit"
@@ -377,7 +381,7 @@ func _pose_whole_body(delta: float) -> void:
 	var pitch := 0.0
 	var squash := 1.0
 	match _anim_name:
-		"Lie":
+		"Lie", "Crawl":
 			pitch = PI / 2.0
 		"Sit":
 			squash = 0.62
@@ -399,6 +403,10 @@ func _pose_bones(delta: float) -> void:
 	match _anim_name:
 		"Move":
 			_pose_move(delta)
+		"Crawl": # gục bò: tay chân chỉ chuyển khi đang bò đi
+			var crawl := _clips["Crawl"] as Animation
+			_crawl_phase = fmod(_crawl_phase + delta * _speed / CRAWL_STRIDE, 1.0)
+			_hips_out = _sample("Crawl", _crawl_phase * crawl.length, _pose_out)
 		"PickUp": # ngồi xổm cạy rương: dừng ở lúc cúi thấp nhất
 			_hips_out = _sample("PickUp", minf(t, PICKUP_HOLD), _pose_out)
 		_:
