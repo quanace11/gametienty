@@ -15,9 +15,11 @@ const DIR_CHILD := { # xương -> xương con để đo hướng (cùng tên Kay
 	"upperleg.l": "lowerleg.l", "lowerleg.l": "foot.l", "foot.l": "toes.l",
 	"upperleg.r": "lowerleg.r", "lowerleg.r": "foot.r", "foot.r": "toes.r",
 }
-const CLIPS := ["Walking_A", "Walking_B", "Running_A", "Running_B", "1H_Melee_Attack_Chop",
-	"2H_Melee_Attack_Chop", "Spellcast_Shoot", "Throw", "Hit_A", "Lie_Idle", "Sit_Floor_Idle",
-	"Jump_Idle", "PickUp", "Cheer", "Death_A"]
+# Chỉ giữ động tác thợ săn dùng (quan chốt 20/10): chạy, chém (túm người), phóng phi kiếm.
+const CLIPS := ["Running_A", "1H_Melee_Attack_Chop", "Spellcast_Shoot"]
+# Tư thế kéo người (Drag): tay phải duỗi ra sau, chếch xuống, hướng trong không gian mô hình
+# (+X bên trái, +Z phía trước). Game chồng lên tay phải khi đang kéo.
+const DRAG_DIRS := {"upperarm.r": Vector3(-0.25, -0.8, -0.55), "lowerarm.r": Vector3(-0.1, -0.65, -0.75)}
 const FPS := 30.0
 const ARM_IN := deg_to_rad(18.0) # khép tay
 
@@ -94,6 +96,26 @@ func _new_anim(length: float, loop: bool) -> Array:
 	return [anim, tracks]
 
 
+## Tư thế kéo người: mọi xương ở dáng đứng gốc, tay phải xoay theo DRAG_DIRS (bàn tay theo cẳng tay).
+func _drag_pose(tg: Array[Transform3D]) -> Animation:
+	var made := _new_anim(1.0, true)
+	var world := {}
+	var swing := Basis.IDENTITY
+	for k: String in MAP:
+		var tb := T.find_bone(MAP[k])
+		var w := tg[tb].basis.orthonormalized()
+		if DRAG_DIRS.has(k):
+			var child := T.find_bone(MAP[DIR_CHILD[k]])
+			var d := (tg[child].origin - tg[tb].origin).normalized()
+			swing = Basis(Quaternion(d, (DRAG_DIRS[k] as Vector3).normalized()))
+			w = swing * w
+		elif k == "hand.r":
+			w = swing * w
+		world[k] = w
+	_write_frame(made[0], made[1], 0.0, world, tg[T.find_bone("pelvis")].origin)
+	return made[0]
+
+
 func _init() -> void:
 	var args := OS.get_cmdline_user_args() # nguồn KayKit, mô hình AccuRig, tệp ra
 	var src: Node3D = (load(args[0]) as PackedScene).instantiate()
@@ -164,6 +186,7 @@ func _init() -> void:
 		_write_frame(made[0], made[1], minf(t, relax.length), world, g[T.find_bone("pelvis")].origin)
 		t += 1.0 / FPS
 	lib.add_animation("Idle", made[0])
+	lib.add_animation("Drag", _drag_pose(tg))
 
 	# Cảnh xuất: khung xương (đổi tên 18 xương chính) + lưới + động tác.
 	for k: String in MAP:
