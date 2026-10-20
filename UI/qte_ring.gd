@@ -29,6 +29,8 @@ func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	EventBus.qte_resolved.connect(_on_resolved)
+	RenderWarmup.register_text(get_theme_default_font(), 28, 8) # chữ vẽ tay: vẽ sẵn lúc vào trận
+	RenderWarmup.register_text(get_theme_default_font(), 24, 7)
 
 
 func _process(delta: float) -> void:

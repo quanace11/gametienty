@@ -75,6 +75,8 @@ func _ready() -> void:
 	_touch = DisplayServer.is_touchscreen_available()
 	_update_inset()
 	get_viewport().size_changed.connect(_update_inset)
+	for size: int in [15, 16, 17, 18, 20, 22, 30]: # các cỡ chữ vẽ tay ở dưới: vẽ sẵn lúc vào trận
+		RenderWarmup.register_text(get_theme_default_font(), size)
 
 
 func _update_inset() -> void:

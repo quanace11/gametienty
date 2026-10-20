@@ -40,6 +40,11 @@ func _ready() -> void:
 	EventBus.item_used.connect(_on_item_used)
 	EventBus.teleport_started.connect(_on_teleport_started)
 	_build_meshes()
+	# Hình chỉ hiện khi có người dùng thẻ: khai báo trước để dịch sẵn shader lúc vào trận.
+	for mesh: Mesh in [_grenade_mesh, _blast_mesh, _heal_mesh, _pillar_mesh, _rune_mesh, MedkitMesh.get_mesh(), MedkitMesh.get_flag_mesh(0)]:
+		RenderWarmup.register(mesh)
+	for script: Script in PLACED_SCRIPTS.values():
+		RenderWarmup.register(script.call(&"shared_mesh"))
 
 
 func _on_placed(obj_id: int, type: GameTypes.ItemType, pos: Vector3, yaw: float, _owner_id: int) -> void:

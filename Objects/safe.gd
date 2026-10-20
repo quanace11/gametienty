@@ -33,6 +33,7 @@ var _opened := false
 
 # Dùng chung cho mọi trận linh: hình và màu (chưa giải / đã giải) đổi bằng material_override.
 static var _base_mesh: CylinderMesh # bệ đá lục giác
+static var _decor_mesh: ArrayMesh # bệ + trụ phù văn + đầu trụ gộp sẵn (phần đứng yên)
 static var _lid_mesh: SphereMesh # linh tinh (cầu 4 múi = hình thoi)
 static var _band_mesh: BoxMesh # trụ phù văn
 static var _cap_mesh: SphereMesh # đầu trụ phát sáng
@@ -79,23 +80,9 @@ func _ready() -> void:
 ## Trận linh: bệ đá, 4 trụ phù văn, vòng trận, linh tinh lơ lửng; cột sáng đỏ ẩn sẵn.
 func _build_visuals() -> void:
 	_build_shared()
-	var base := MeshInstance3D.new()
-	base.mesh = _base_mesh
-	base.position.y = _base_mesh.height / 2
-	add_child(base)
-	for k in 4:
-		var a := TAU * (k + 0.5) / 4
-		var pos := Vector3(cos(a), 0, sin(a)) * SIZE.x * 0.62
-		var pillar := MeshInstance3D.new()
-		pillar.mesh = _band_mesh
-		pillar.position = pos + Vector3(0, _band_mesh.size.y / 2, 0)
-		pillar.rotation.y = -a
-		add_child(pillar)
-		var cap := MeshInstance3D.new()
-		cap.mesh = _cap_mesh
-		cap.position = pos + Vector3(0, _band_mesh.size.y + 0.06, 0)
-		cap.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(cap)
+	var decor := MeshInstance3D.new() # bệ + 4 trụ + 4 đầu trụ: một mesh, 3 lần vẽ
+	decor.mesh = _decor_mesh
+	add_child(decor)
 	_ring = MeshInstance3D.new()
 	_ring.mesh = _ring_mesh
 	_ring.position.y = 0.04
@@ -168,6 +155,21 @@ static func _build_shared() -> void:
 	alert_mat.emission_enabled = true
 	alert_mat.emission = Color(0.9, 0.1, 0.1)
 	_pillar_mesh.material = alert_mat
+	_decor_mesh = ArrayMesh.new()
+	var parts := {_base_mesh: [Transform3D(Basis(), Vector3(0, _base_mesh.height / 2, 0))], _band_mesh: [], _cap_mesh: []}
+	for k in 4:
+		var a := TAU * (k + 0.5) / 4
+		var pos := Vector3(cos(a), 0, sin(a)) * SIZE.x * 0.62
+		parts[_band_mesh].append(Transform3D(Basis(Vector3.UP, -a), pos + Vector3(0, _band_mesh.size.y / 2, 0)))
+		parts[_cap_mesh].append(Transform3D(Basis(), pos + Vector3(0, _band_mesh.size.y + 0.06, 0)))
+	for mesh: PrimitiveMesh in parts:
+		var st := SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for xf: Transform3D in parts[mesh]:
+			st.append_from(mesh, 0, xf)
+		st.set_material(mesh.material)
+		st.commit(_decor_mesh)
+	RenderWarmup.register(_open_mat) # đổi màu khi giải xong
 
 
 static func _glow_mat(c: Color) -> StandardMaterial3D:

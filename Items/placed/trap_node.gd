@@ -21,6 +21,17 @@ func _ready() -> void:
 	add_child(shape)
 	if DisplayServer.get_name() == "headless":
 		return # server riêng: chỉ cần va chạm, không dựng hình
+	var mi := MeshInstance3D.new()
+	mi.mesh = shared_mesh()
+	mi.position.y = 0.04
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	if GameState.my_role() == GameTypes.Role.HUNTER:
+		mi.transparency = 0.8 # thợ săn khó thấy
+	add_child(mi)
+
+
+## Hình dùng chung mọi bẫy (ItemVisuals lấy trước để dịch sẵn shader).
+static func shared_mesh() -> Mesh:
 	if _mesh == null:
 		var mat := StandardMaterial3D.new()
 		mat.albedo_color = Color(0.35, 0.35, 0.38, 0.9)
@@ -32,13 +43,7 @@ func _ready() -> void:
 		_mesh.height = 0.08
 		_mesh.radial_segments = 12
 		_mesh.material = mat
-	var mi := MeshInstance3D.new()
-	mi.mesh = _mesh
-	mi.position.y = 0.04
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	if GameState.my_role() == GameTypes.Role.HUNTER:
-		mi.transparency = 0.8 # thợ săn khó thấy
-	add_child(mi)
+	return _mesh
 
 
 func can_interact(entity: EntityBase) -> bool:

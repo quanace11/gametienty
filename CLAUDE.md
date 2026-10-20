@@ -68,6 +68,7 @@ Cả 3 chạy **cùng một đường code**. Quy tắc:
 | `InputSource` | `Core/interfaces/input_source.gd` | Nguồn điều khiển (bàn phím, mạng, bot) |
 | `Interactable` | `Core/interfaces/interactable.gd` | Lớp cha của két, cổng, nhà tù... |
 | `ItemEffect` | `Core/interfaces/item_effect.gd` | Hiệu ứng một loại thẻ đạo cụ (Items cài đặt, khai báo trong `Items/item_catalog.gd`) |
+| `RenderWarmup` | `Core/match/render_warmup.gd` | Màn "Đang vào trận" dịch sẵn shader + vẽ sẵn chữ. Material/mesh chỉ hiện về sau (đổi màu, hiệu ứng) thì `RenderWarmup.register(res)`; phủ lên mô hình có xương thì `register_overlay(mat)`; chữ vẽ bằng `draw_string` thì `register_text(font, cỡ, viền)` |
 | `MapBase` | `Core/interfaces/map_base.gd` | Lớp cha của bản đồ: điểm xuất phát, tiền, `get_bounds()`, `get_walls()` (minimap), `get_bushes()` (bụi cây để nấp) |
 
 Group để tìm nhau (hằng trong `GameTypes`): `entities`, `safes` (rương), `exit_gates`, `prisons`, `coins`, `jump_pads`, `map`.
@@ -90,6 +91,8 @@ Game chạy trên **điện thoại yếu** và sau này **online nhiều phòng
 - Chỉ `gl_compatibility`. Không SSAO, SSR, glow, SDFGI, volumetric fog, bóng mềm. Bóng chỉ từ 1 `DirectionalLight3D`; vật nhỏ (tiền, hạt) tắt `cast_shadow`.
 - Model nhân vật dưới 5k tam giác, cả màn hình dưới 60k. Texture nén (ETC2/ASTC), tối đa 1024 px. Âm thanh `.ogg`.
 - Vật giống nhau dùng chung `Mesh`/`Material` (`static var`), không tạo material mới cho từng cái.
+- Hình tĩnh nhiều mảnh (tường, cây, bụi, bệ) gộp thành một mesh (`SurfaceTool.append_from`) cho ít lần vẽ.
+- Material mới chỉ xuất hiện giữa trận (đổi màu, hiệu ứng, vật đặt xuống) phải khai báo với `RenderWarmup` lúc dựng, không thì lần đầu hiện ra sẽ khựng vì dịch shader. Node hiệu ứng dựng sẵn lúc vào trận, không dựng lúc cần.
 - Không tạo và xóa node liên tục: đạn, khói, tiền, hiệu ứng lặp lại thì dùng pool.
 - Không làm việc nặng trong `_process`/`_physics_process` khi không cần: tắt bằng `set_process(false)`, chỉ cập nhật chữ (`Label`) khi nội dung đổi, việc theo giây thì chạy thưa (ví dụ 10 frame một lần).
 
@@ -131,6 +134,8 @@ GODOT=/duong/dan/godot tools/smoke_test.sh
 godot --headless --path . -s tests/test_match_rules.gd
 # Một trận offline do bot chơi hết, in kết quả rồi thoát
 godot --headless --path . -- --offline=escapee --bot --time=60 --quit-after-match
+# Đo giật khung hình 12 giây đầu trận (cần màn hình; trên điện thoại xem adb logcat)
+godot --path . -- --offline=hunter --bot --perf-log
 # Online: 1 server + 2 client bot + bot lấp chỗ
 godot --headless --path . -- --server --auto-start=2 --fill-bots --quit-after-match &
 godot --headless --path . -- --join=127.0.0.1 --bot --quit-after-match &

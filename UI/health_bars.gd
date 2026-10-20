@@ -33,6 +33,7 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	process_physics_priority = 100 # ghi vị trí sau khi trận đã di chuyển nhân vật
 	EventBus.player_hit.connect(func(id: int, _a: int, _hp: int) -> void: _hit_left[id] = POP_TIME)
+	RenderWarmup.register_text(get_theme_default_font(), 22, 4) # số "-1" bay lên, vẽ sẵn lúc vào trận
 
 
 func _process(delta: float) -> void:

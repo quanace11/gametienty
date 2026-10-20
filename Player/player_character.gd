@@ -126,6 +126,7 @@ var _flying := false
 var _carrier: EntityBase # chỉ server: người đang kéo mình (nhớ lại, khỏi tìm mỗi frame)
 var _prison: Node3D # chỉ server: nhà tù đang bị nhốt
 var _prison_id := -1
+var _entities: Array[Node] = [] # mọi nhân vật trong trận (không đổi giữa trận), lấy một lần
 
 ## Chỉ máy người chơi: nguồn input của nhân vật này (LocalInputSource tự gán), để vẽ luồng ngắm.
 var aim_input: InputSource
@@ -165,6 +166,9 @@ func _ready() -> void:
 	set_process(_visual != null) # hình nội suy, animation, luồng ngắm; server riêng không cần
 	set_physics_process(_visual != null)
 	_snap_visual()
+	if _visual and not is_instance_valid(_shot_fx): # dựng sẵn lúc vào trận, khỏi khựng ở phát bắn đầu tiên
+		_shot_fx = ShotFx.new()
+		get_parent().add_child.call_deferred(_shot_fx)
 
 
 ## Đặt hình đúng chỗ nhân vật, bỏ nội suy (vừa vào trận, dịch chuyển).
@@ -234,6 +238,15 @@ func _build_model() -> void:
 	_pose_node.add_child(model)
 	for node in model.find_children("*", "MeshInstance3D", true, false):
 		_body_meshes.append(node as MeshInstance3D)
+	if _hit_flash_mat == null:
+		_hit_flash_mat = StandardMaterial3D.new()
+		_hit_flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_hit_flash_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		_hit_flash_mat.albedo_color = Color(1.0, 0.15, 0.1, 0.55)
+		RenderWarmup.register_overlay(_hit_flash_mat) # chỉ phủ lên thân lúc bị trúng
+	if is_local and is_hunter():
+		_build_beam() # luồng ngắm ẩn sẵn: lần kéo cần ngắm đầu tiên không khựng
+		_beam.visible = false
 	if is_hunter(): # ma khí tím đỏ dưới chân để nhận ra ma tu từ xa
 		if _hunter_ring == null:
 			_hunter_ring = TorusMesh.new()
@@ -553,7 +566,7 @@ func _hunter_shoot(aim_dir: Vector2) -> void:
 	var forward := facing()
 	var aim := global_position + forward * BLIND_SHOT_DIST
 	var best_d := cfg.rifle_range
-	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
+	for node in _all_entities():
 		var e := node as EntityBase
 		if e == self or not rules.is_hittable(e.peer_id) or not GameState.can_see(peer_id, e.peer_id):
 			continue
@@ -659,7 +672,7 @@ func _follow_carrier(me: PlayerRecord) -> void:
 	velocity = Vector3.ZERO
 	if not is_instance_valid(_carrier) or _carrier.peer_id != me.carrier_id:
 		_carrier = null
-		for node in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
+		for node in _all_entities():
 			if (node as EntityBase).peer_id == me.carrier_id:
 				_carrier = node as EntityBase
 				break
@@ -681,10 +694,17 @@ func _stay_in_prison(prison_id: int) -> void:
 		global_position = _prison.global_position
 
 
+## Mọi nhân vật trong trận. Không gọi get_nodes_in_group mỗi frame (tạo mảng mới mỗi lần).
+func _all_entities() -> Array[Node]:
+	if _entities.is_empty() or not is_instance_valid(_entities[0]):
+		_entities = get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES)
+	return _entities
+
+
 func _nearest_entity(max_dist: float, filter: Callable) -> EntityBase:
 	var best: EntityBase = null
 	var best_d := max_dist
-	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
+	for node in _all_entities():
 		var e := node as EntityBase
 		if e == self or not filter.call(e):
 			continue
@@ -739,11 +759,6 @@ func _on_hit(id: int, _attacker_id: int, _hp_left: int) -> void:
 		_shot_fx = ShotFx.new()
 		get_parent().add_child(_shot_fx)
 	_shot_fx.hit_burst(GameTypes.ShotKind.BULLET if is_hunter() else GameTypes.ShotKind.RIFLE, _visual.global_position)
-	if _hit_flash_mat == null:
-		_hit_flash_mat = StandardMaterial3D.new()
-		_hit_flash_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_hit_flash_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		_hit_flash_mat.albedo_color = Color(1.0, 0.15, 0.1, 0.55)
 	_set_flash(_hit_flash_mat)
 	_flash_left = HIT_FLASH_TIME
 
