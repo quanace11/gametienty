@@ -1,11 +1,20 @@
-// Giảm lưới GLB cho một mức đồ họa: node slim.mjs vao.glb ra.glb so_tam_giac (README.md).
+// Giảm lưới GLB cho một mức đồ họa: node slim.mjs vao.glb ra.glb so_tam_giac [anh_mau.png] [normal.png] (README.md).
+// Giảm lưới: gộp đỉnh, giản lược còn ~N tam giác, giữ 4 trọng số xương lớn nhất.
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { weld, simplify, prune, dedup } from '@gltf-transform/functions';
 import { MeshoptSimplifier } from 'meshoptimizer';
-const [inp, out, target] = process.argv.slice(2);
+const [inp, out, target, albedo, normal] = process.argv.slice(2); // albedo, normal: ảnh PNG (tùy chọn)
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 const doc = await io.read(inp);
+// Gắn trước khi giản lược: prune bỏ UV nếu vật liệu chưa có ảnh.
+if (albedo) { // màu lấy từ mô hình gốc (cùng UV): bỏ kim loại, chỉ giữ ảnh màu (+ normal map nếu có)
+  const fs = await import('fs');
+  const mat = doc.createMaterial('ma_tu').setMetallicFactor(0).setRoughnessFactor(0.8)
+    .setBaseColorTexture(doc.createTexture('mau').setMimeType('image/png').setImage(fs.readFileSync(albedo)));
+  if (normal) mat.setNormalTexture(doc.createTexture('normal').setMimeType('image/png').setImage(fs.readFileSync(normal)));
+  for (const m of doc.getRoot().listMeshes()) for (const p of m.listPrimitives()) p.setMaterial(mat);
+}
 for (const m of doc.getRoot().listMeshes()) for (const p of m.listPrimitives()) {
   for (const t of p.listTargets()) p.removeTarget(t);
   m.setWeights([]);

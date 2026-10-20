@@ -6,7 +6,7 @@
 - `shot_fx.gd`: hình phi kiếm và kiếm khí (pool): ma tu hóa ra thanh kiếm tím trên vai rồi phóng đi có vệt sáng (phù kiếm là thanh nhỏ màu ngọc), chạm người / tường / hết tầm thì nổ kiếm khí (chớp sáng, vòng khí, mảnh sáng); trúng người thật (`player_hit`) thì thêm vụ nổ lửa vàng cam to ở ngực người đó và thân người đó chớp đỏ; chỉ để nhìn, server tính trúng
 - `follow_camera.gd`: camera nhìn chéo bám nhân vật của máy này; đã thoát hoặc bị loại thì xem người còn chơi (Tab / nút xanh để đổi người)
 - `local_input_source.gd`: bàn phím và nút cảm ứng (WASD / mũi tên, E / Space tương tác, chuột phải ngắm, 1-5 dùng thẻ, Tab đổi người xem); hướng kéo thẻ gửi trong `aim`
-- `models/ma_tu/`: ma tu (thợ săn) của dự án, gắn xương bằng AccuRig, động tác KayKit chuyển sẵn sang khung xương của nó (`tools/retarget/`). Mỗi mức đồ họa một tệp: `ma_tu_thap.glb` (~6k tam giác), `ma_tu_vua.glb` (~20k), `ma_tu_cao.glb` (~60k); `player_character.gd` chọn theo ProjectSettings `game/graphics_quality` (UI ghi). Chưa có màu (tệp AccuRig không kèm texture). Người trốn vẫn là Mage của KayKit (`models/kaykit/`)
+- `models/ma_tu/`: ma tu (thợ săn) của dự án, gắn xương bằng AccuRig, động tác KayKit chuyển sẵn sang khung xương của nó (`tools/retarget/`). Mỗi mức đồ họa một tệp: `ma_tu_thap.glb` (~6k tam giác), `ma_tu_vua.glb` (~20k), `ma_tu_cao.glb` (~60k); `player_character.gd` chọn theo ProjectSettings `game/graphics_quality` (UI ghi). Màu lấy từ mô hình gốc tạo bằng Rodin (cùng UV): Thấp ảnh màu 512, Vừa 1024, Cao 2048 + normal map 1024. Người trốn vẫn là Mage của KayKit (`models/kaykit/`)
 
 Tiếp theo: dash (phím Shift đã gán, chưa có luật), nhảy / vượt tường thấp.
 Đổi trạng thái nhân vật luôn qua các lệnh `GameState.server_*()`.

@@ -16,9 +16,11 @@ cần có khung xương mang các tên đó và kèm động tác cùng tên v�
 3. Giảm lưới thành 3 mức đồ họa (bỏ morph mặt, giữ 4 trọng số xương lớn nhất):
    ```bash
    npm install @gltf-transform/core@4.2.1 @gltf-transform/functions@4.2.1 @gltf-transform/extensions@4.2.1 meshoptimizer
-   node slim.mjs ma_tu_full.glb ma_tu_thap.glb 6000
-   node slim.mjs ma_tu_full.glb ma_tu_vua.glb 20000
-   node slim.mjs ma_tu_full.glb ma_tu_cao.glb 60000
+   node slim.mjs ma_tu_full.glb ma_tu_thap.glb 6000 mau_512.png
+   node slim.mjs ma_tu_full.glb ma_tu_vua.glb 20000 mau_1024.png
+   node slim.mjs ma_tu_full.glb ma_tu_cao.glb 60000 mau_2048.png normal_1024.png
    ```
+   FBX của AccuRig không kèm màu, nhưng giữ nguyên UV của mô hình gốc (tệp GLB tạo bằng
+   AI), nên lấy ảnh màu / normal trong tệp gốc, thu nhỏ theo từng mức rồi truyền vào.
 4. Đổi nhân vật khác chiều cao thì sửa `MODEL_HEIGHT` và `CLIP_SPEED` trong
    `player_character.gd` (tốc độ bước KayKit nhân tỉ lệ hông script in ra).
