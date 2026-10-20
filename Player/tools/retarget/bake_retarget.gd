@@ -15,8 +15,15 @@ const DIR_CHILD := { # xương -> xương con để đo hướng (cùng tên Kay
 	"upperleg.l": "lowerleg.l", "lowerleg.l": "foot.l", "foot.l": "toes.l",
 	"upperleg.r": "lowerleg.r", "lowerleg.r": "foot.r", "foot.r": "toes.r",
 }
-# Chỉ giữ động tác thợ săn dùng (quan chốt 20/10): chạy, chém (túm người), phóng phi kiếm.
-const CLIPS := ["Running_A", "1H_Melee_Attack_Chop", "Spellcast_Shoot"]
+# Động tác lấy từ KayKit cho từng vai (quan chốt 20/10). Ma tu: chạy, chém (túm người),
+# phóng phi kiếm, thêm kéo người (Drag). Đệ tử: đi, chạy, ném thẻ, trúng đòn, bị kéo
+# (nằm), ngồi tù, bay, cúi cạy rương, thêm gục bò (Crawl).
+const CLIPS := {
+	"ma_tu": ["Running_A", "1H_Melee_Attack_Chop", "Spellcast_Shoot"],
+	"de_tu": ["Walking_A", "Running_A", "Throw", "Hit_A", "Lie_Idle", "Sit_Floor_Idle", "Jump_Idle", "PickUp"],
+}
+const CRAWL_LENGTH := 1.2 # giây mỗi chu kỳ bò (hai tay một lượt)
+const CRAWL_HIPS := Vector3(0.0, 0.24, -0.45) # vị trí hông lúc nằm sấp (mét, mô hình cao ~1,9)
 # Tư thế kéo người (Drag): tay phải duỗi ra sau, chếch xuống, hướng trong không gian mô hình
 # (+X bên trái, +Z phía trước). Game chồng lên tay phải khi đang kéo.
 const DRAG_DIRS := {"upperarm.r": Vector3(-0.25, -0.8, -0.55), "lowerarm.r": Vector3(-0.1, -0.65, -0.75)}
@@ -116,8 +123,45 @@ func _drag_pose(tg: Array[Transform3D]) -> Animation:
 	return made[0]
 
 
+## Gục bò: nằm sấp, hai tay thay nhau với về trước, chân bên kia co lên đẩy.
+func _crawl(tg: Array[Transform3D]) -> Animation:
+	var made := _new_anim(CRAWL_LENGTH, true)
+	var body := Basis(Vector3.RIGHT, deg_to_rad(80.0)) # thân đổ sấp về trước, mặt úp xuống
+	var t := 0.0
+	while t <= CRAWL_LENGTH + 0.0001:
+		var w_l := 0.5 + 0.5 * cos(TAU * t / CRAWL_LENGTH) # 1 = tay trái với ra trước nhất
+		var world := {}
+		for k: String in MAP:
+			world[k] = body * tg[T.find_bone(MAP[k])].basis.orthonormalized()
+		world["head"] = Basis(Vector3.RIGHT, deg_to_rad(35.0)) * tg[T.find_bone("head")].basis.orthonormalized() # ngẩng nhìn trước
+		for side: String in ["l", "r"]:
+			var sx := 1.0 if side == "l" else -1.0 # +X là bên trái
+			var arm := w_l if side == "l" else 1.0 - w_l
+			var leg := 1.0 - arm # chân bên kia co lên
+			var dirs := {
+				"upperarm." + side: Vector3(sx * 0.35, -0.9, 0.15).lerp(Vector3(sx * 0.3, -0.45, 0.85), arm),
+				"lowerarm." + side: Vector3(sx * 0.05, -0.95, 0.3).lerp(Vector3(sx * 0.1, -0.7, 0.7), arm),
+				"upperleg." + side: Vector3(sx * 0.15, -0.3, -0.95).lerp(Vector3(sx * 0.6, -0.35, -0.5), leg),
+				"lowerleg." + side: Vector3(sx * 0.1, -0.2, -0.97).lerp(Vector3(sx * 0.15, -0.3, -0.94), leg),
+				"foot." + side: Vector3(0.0, -0.75, -0.65),
+			}
+			var swing := Basis.IDENTITY
+			for k: String in ["upperarm." + side, "lowerarm." + side, "hand." + side, "upperleg." + side, "lowerleg." + side, "foot." + side, "toes." + side]:
+				var tb := T.find_bone(MAP[k])
+				if dirs.has(k):
+					var child := T.find_bone(MAP[DIR_CHILD[k]])
+					var d := (tg[child].origin - tg[tb].origin).normalized()
+					swing = Basis(Quaternion(d, (dirs[k] as Vector3).normalized()))
+				world[k] = swing * tg[tb].basis.orthonormalized() # bàn tay / ngón chân theo xương trước
+		var hips := CRAWL_HIPS + Vector3(0.0, 0.02 * sin(TAU * 2.0 * t / CRAWL_LENGTH), 0.0)
+		_write_frame(made[0], made[1], minf(t, CRAWL_LENGTH), world, hips)
+		t += 1.0 / FPS
+	return made[0]
+
+
 func _init() -> void:
-	var args := OS.get_cmdline_user_args() # nguồn KayKit, mô hình AccuRig, tệp ra
+	var args := OS.get_cmdline_user_args() # nguồn KayKit, mô hình AccuRig, tệp ra, vai (ma_tu / de_tu)
+	var role: String = args[3] if args.size() > 3 else "ma_tu"
 	var src: Node3D = (load(args[0]) as PackedScene).instantiate()
 	var dst: Node3D = (load(args[1]) as PackedScene).instantiate()
 	S = src.find_children("*", "Skeleton3D", true, false)[0]
@@ -153,7 +197,7 @@ func _init() -> void:
 	print("tỉ lệ hông ", k_scale)
 
 	var lib := AnimationLibrary.new()
-	for clip in CLIPS:
+	for clip: String in CLIPS[role]:
 		var src_anim := src_player.get_animation(clip)
 		var made := _new_anim(src_anim.length, src_anim.loop_mode != Animation.LOOP_NONE)
 		var anim: Animation = made[0]
@@ -186,7 +230,10 @@ func _init() -> void:
 		_write_frame(made[0], made[1], minf(t, relax.length), world, g[T.find_bone("pelvis")].origin)
 		t += 1.0 / FPS
 	lib.add_animation("Idle", made[0])
-	lib.add_animation("Drag", _drag_pose(tg))
+	if role == "ma_tu":
+		lib.add_animation("Drag", _drag_pose(tg))
+	else:
+		lib.add_animation("Crawl", _crawl(tg))
 
 	# Cảnh xuất: khung xương (đổi tên 18 xương chính) + lưới + động tác.
 	for k: String in MAP:
