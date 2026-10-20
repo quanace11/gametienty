@@ -22,8 +22,10 @@ const CLIPS := {
 	"ma_tu": ["Running_A", "1H_Melee_Attack_Chop", "Spellcast_Shoot"],
 	"de_tu": ["Walking_A", "Running_A", "Throw", "Hit_A", "Lie_Idle", "Sit_Floor_Idle", "Jump_Idle", "PickUp"],
 }
-const CRAWL_LENGTH := 1.2 # giây mỗi chu kỳ bò (hai tay một lượt)
-const CRAWL_HIPS := Vector3(0.0, 0.24, -0.45) # vị trí hông lúc nằm sấp (mét, mô hình cao ~1,9)
+const CRAWL_LENGTH := 1.2 # giây mỗi chu kỳ bò (mỗi tay một bước)
+const CRAWL_SWING := deg_to_rad(16.0) # tay, đùi đưa trước / sau chừng này quanh phương thẳng đứng
+const CRAWL_GROUND := 0.06 # đầu gối, cổ tay cách mặt đất (độ dày khớp)
+const CRAWL_HIPS_Z := -0.3 # hông lùi sau gốc để cả người nằm giữa chỗ đứng
 # Tư thế kéo người (Drag): tay phải duỗi ra sau, chếch xuống, hướng trong không gian mô hình
 # (+X bên trái, +Z phía trước). Game chồng lên tay phải khi đang kéo.
 const DRAG_DIRS := {"upperarm.r": Vector3(-0.25, -0.8, -0.55), "lowerarm.r": Vector3(-0.1, -0.65, -0.75)}
@@ -123,27 +125,47 @@ func _drag_pose(tg: Array[Transform3D]) -> Animation:
 	return made[0]
 
 
-## Gục bò: nằm sấp, hai tay thay nhau với về trước, chân bên kia co lên đẩy.
+## Gục bò: chống hai tay và hai đầu gối, thân gần nằm ngang, tay và chân chéo nhau
+## (tay trái cùng chân phải) thay nhau bước lên. Độ cao hông, độ nghiêng thân tính
+## theo chiều dài xương để đầu gối và bàn tay chạm đất.
 func _crawl(tg: Array[Transform3D]) -> Animation:
 	var made := _new_anim(CRAWL_LENGTH, true)
-	var body := Basis(Vector3.RIGHT, deg_to_rad(80.0)) # thân đổ sấp về trước, mặt úp xuống
+	var at := func(k: String) -> Vector3: return tg[T.find_bone(MAP[k])].origin
+	var thigh: float = (at.call("lowerleg.l") - at.call("upperleg.l")).length()
+	var arm: float = (at.call("lowerarm.l") - at.call("upperarm.l")).length() + (at.call("hand.l") - at.call("lowerarm.l")).length()
+	var pelvis: Vector3 = at.call("hips")
+	var hip_drop: float = pelvis.y - at.call("upperleg.l").y # hông nằm trên khớp háng
+	var shoulder: Vector3 = (at.call("upperarm.l") + at.call("upperarm.r")) * 0.5
+	var torso := (shoulder - pelvis).length()
+	var hips_y := CRAWL_GROUND + thigh * cos(CRAWL_SWING) + hip_drop
+	var shoulder_y := CRAWL_GROUND + arm * cos(CRAWL_SWING) * 0.97 # khuỷu hơi chùng
+	var pitch := acos(clampf((shoulder_y - hips_y) / torso, -1.0, 1.0)) # thân đổ về trước
 	var t := 0.0
 	while t <= CRAWL_LENGTH + 0.0001:
-		var w_l := 0.5 + 0.5 * cos(TAU * t / CRAWL_LENGTH) # 1 = tay trái với ra trước nhất
+		var ph := TAU * t / CRAWL_LENGTH
+		var roll := Basis(Vector3.BACK, deg_to_rad(4.0) * sin(ph)) # lắc vai theo nhịp
+		var body := roll * Basis(Vector3.RIGHT, pitch)
 		var world := {}
 		for k: String in MAP:
 			world[k] = body * tg[T.find_bone(MAP[k])].basis.orthonormalized()
-		world["head"] = Basis(Vector3.RIGHT, deg_to_rad(35.0)) * tg[T.find_bone("head")].basis.orthonormalized() # ngẩng nhìn trước
+		world["head"] = Basis(Vector3.RIGHT, pitch * 0.35) * tg[T.find_bone("head")].basis.orthonormalized() # ngẩng nhìn trước
 		for side: String in ["l", "r"]:
 			var sx := 1.0 if side == "l" else -1.0 # +X là bên trái
-			var arm := w_l if side == "l" else 1.0 - w_l
-			var leg := 1.0 - arm # chân bên kia co lên
+			# Tay trái đi cùng chân phải. swing: 1 = ra trước nhất; lift: nhấc lên khi đang đưa lên trước.
+			var arm_ph := ph if side == "l" else ph + PI
+			var leg_ph := arm_ph + PI
+			var a_sw := cos(arm_ph)
+			var a_lift := maxf(0.0, -sin(arm_ph))
+			var l_sw := cos(leg_ph)
+			var l_lift := maxf(0.0, -sin(leg_ph))
+			var ta := tan(CRAWL_SWING) * a_sw
+			var tl := tan(CRAWL_SWING) * l_sw
 			var dirs := {
-				"upperarm." + side: Vector3(sx * 0.35, -0.9, 0.15).lerp(Vector3(sx * 0.3, -0.45, 0.85), arm),
-				"lowerarm." + side: Vector3(sx * 0.05, -0.95, 0.3).lerp(Vector3(sx * 0.1, -0.7, 0.7), arm),
-				"upperleg." + side: Vector3(sx * 0.15, -0.3, -0.95).lerp(Vector3(sx * 0.6, -0.35, -0.5), leg),
-				"lowerleg." + side: Vector3(sx * 0.1, -0.2, -0.97).lerp(Vector3(sx * 0.15, -0.3, -0.94), leg),
-				"foot." + side: Vector3(0.0, -0.75, -0.65),
+				"upperarm." + side: Vector3(sx * 0.12, -1.0, ta + 0.25 * a_lift),
+				"lowerarm." + side: Vector3(sx * 0.04, -1.0, ta + 0.55 * a_lift),
+				"upperleg." + side: Vector3(sx * 0.12, -1.0, tl + 0.3 * l_lift),
+				"lowerleg." + side: Vector3(sx * 0.04, -0.1 - 0.35 * l_lift, -1.0), # cẳng chân nằm dọc mặt đất
+				"foot." + side: Vector3(0.0, -0.05, -1.0), # mu bàn chân úp xuống, mũi chân ra sau
 			}
 			var swing := Basis.IDENTITY
 			for k: String in ["upperarm." + side, "lowerarm." + side, "hand." + side, "upperleg." + side, "lowerleg." + side, "foot." + side, "toes." + side]:
@@ -152,8 +174,12 @@ func _crawl(tg: Array[Transform3D]) -> Animation:
 					var child := T.find_bone(MAP[DIR_CHILD[k]])
 					var d := (tg[child].origin - tg[tb].origin).normalized()
 					swing = Basis(Quaternion(d, (dirs[k] as Vector3).normalized()))
-				world[k] = swing * tg[tb].basis.orthonormalized() # bàn tay / ngón chân theo xương trước
-		var hips := CRAWL_HIPS + Vector3(0.0, 0.02 * sin(TAU * 2.0 * t / CRAWL_LENGTH), 0.0)
+				elif k.begins_with("hand.") and T.find_bone("middle_01_" + side) >= 0: # bàn tay úp xuống đất, ngón chỉ về trước
+					var f := T.find_bone("middle_01_" + side)
+					var d := (tg[f].origin - tg[tb].origin).normalized()
+					swing = Basis(Quaternion(d, Vector3(sx * 0.15, -0.2, 1.0).normalized()))
+				world[k] = swing * tg[tb].basis.orthonormalized() # ngón chân theo xương trước
+		var hips := Vector3(0.0, hips_y + 0.015 * cos(2.0 * ph), CRAWL_HIPS_Z)
 		_write_frame(made[0], made[1], minf(t, CRAWL_LENGTH), world, hips)
 		t += 1.0 / FPS
 	return made[0]
