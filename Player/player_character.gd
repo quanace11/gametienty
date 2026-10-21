@@ -77,7 +77,7 @@ enum Bone { HIPS, SPINE, CHEST, HEAD, UPPER_ARM_L, FOREARM_L, HAND_L,
 	THIGH_R, SHIN_R, FOOT_R, TOES_R }
 const WALK_TO_RUN := Vector2(2.0, 3.4) # m/s: chậm hơn x thì đi bộ hẳn, nhanh hơn y thì chạy hẳn
 const FADE_TIME := 0.2 # giây trộn khi đổi động tác nền (đứng dậy, ngã, nhảy...)
-const CRAWL_STRIDE := 0.35 # mét bò được mỗi chu kỳ động tác Crawl (đứng yên thì dừng động tác)
+const CRAWL_STRIDE := 0.3 # mét bò được mỗi chu kỳ động tác Crawl (đứng yên thì dừng động tác)
 const PICKUP_HOLD := 0.5 # giây trong động tác cúi nhặt lúc ngồi thấp nhất (giữ khi cạy rương)
 const ONESHOT_RATE := {"Attack": 1.6, "Grab": 1.6, "Throw": 2.0, "Hit": 1.3}
 const DRAG_FADE := 6.0 # tay phải đưa ra sau / thu về khi bắt đầu / thôi kéo người (lần mỗi giây) # phát nhanh hơn gốc cho đòn gọn

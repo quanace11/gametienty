@@ -12,7 +12,7 @@ cần có khung xương mang các tên đó và kèm động tác cùng tên v�
    godot --headless --path <project> -s bake_retarget.gd -- res://Mage.glb res://de_tu.fbx res://de_tu_full.glb de_tu
    ```
    Tham số cuối là vai, chọn bộ động tác (`CLIPS` trong script). Ma tu thêm tư thế kéo
-   người (Drag), kiếm tu thêm gục bò (Crawl), cả hai dựng bằng hướng xương chứ không
+   người (Drag), kiếm tu thêm gục bò bằng tay và đầu gối (Crawl), cả hai dựng bằng hướng xương chứ không
    lấy từ KayKit.
    Script đo hướng xương lúc đứng của cả hai (KayKit chữ T, AccuRig chữ A) để bù,
    chuyển góc theo không gian thế giới, hông dời theo tỉ lệ chiều cao hông, tay khép
