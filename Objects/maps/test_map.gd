@@ -6,9 +6,11 @@ extends MapBase
 ## tường đá bên phải với 2 cửa phong ấn cam (2 lối ra), linh đài và 4 cột đá bên
 ## trong, cửa hang mật đạo, đá tảng, cây cổ thụ, lối đất và bụi cỏ cao để nấp.
 ## Sau này có thể thay bằng scene dựng trong editor, giữ nguyên các hàm của MapBase.
-## Tường, đá, cây, nhà dùng mô hình KayKit (CC0, Kay Lousberg: bộ Dungeon Remastered
-## và Medieval Hexagon), tỉ lệ so với nhân vật theo kiểu Liên Quân: tường cao hơn
-## người, cây gấp 2,5 lần người, bụi cỏ thành đám rộng 3 - 5 m.
+## Cây, đá, cỏ, hoa, sỏi kiểu tranh vẽ dùng Quaternius Stylized Nature MegaKit (CC0);
+## tường, cột, nhà mái đỏ dùng KayKit (CC0, Kay Lousberg: Dungeon Remastered và
+## Medieval Hexagon). Nền cỏ và lối đất loang màu bằng nhiễu (shaders/nen.gdshader).
+## Tỉ lệ so với nhân vật theo kiểu Liên Quân: tường cao hơn người, cây gấp 3 lần
+## người, bụi cỏ thành đám rộng 3 - 5 m.
 ## Phần chỉ để nhìn gộp thành một mesh cho mỗi material trong mỗi ô 15 x 12 m: ít
 ## lần vẽ (draw call) mà ô nằm ngoài màn hình vẫn bị bỏ qua không vẽ.
 
@@ -112,15 +114,39 @@ const PrisonScript = preload("res://Objects/prison.gd")
 const CoinScript = preload("res://Objects/coin.gd")
 const BushScript = preload("res://Objects/bush.gd")
 const DUNGEON := "res://Objects/models/kaykit_dungeon/" # tường, cột, đá vụn (khuôn tường 4 x 4 x 1 m)
-const HEX := "res://Objects/models/kaykit_hex/" # cây, đá, nhà (khuôn ô lục giác ~1 m)
-const ROCK_MODELS: Array[String] = ["rock_single_E.obj", "rock_single_C.obj"]
-const ROCK_TINT := Color(0.62, 0.63, 0.6) # đá KayKit gốc trắng quá, nhuộm xám cho hợp sân cỏ
-const BORDER_TREES: Array[String] = ["trees_A_large.obj", "trees_B_large.obj", "trees_A_medium.obj"]
+const HEX := "res://Objects/models/kaykit_hex/" # nhà mái đỏ (khuôn ô lục giác ~1 m)
+const NATURE := "res://Objects/models/quaternius_nature/" # cây, đá, cỏ, hoa, sỏi (đơn vị mét)
+const TREE_LEAVES := [["vo", "vo_cay.png", false], ["la", "la_cay.png", true]]
+const SMALL_PLANT := [["la_hoa", "la_nho.png", true]]
+const FLOWER := [["la_hoa", "la_nho.png", true], ["hoa", "hoa.png", true]]
+const STONE_PART := [["da", "da.png", false]]
+const PEBBLE := [["soi", "soi.png", false]]
+## Mô hình Quaternius: tên -> các phần [đuôi file, ảnh, lá cắt viền theo kênh alpha].
+const NATURE_PARTS := {
+	"CommonTree_3": TREE_LEAVES, "CommonTree_5": TREE_LEAVES,
+	"Pine_5": [["vo", "vo_cay.png", false], ["la", "la_thong.png", true]],
+	"Bush_Large": [["la", "la_bui.png", true]], "Bush_Common": [["la", "la_bui_do.png", true]],
+	"Rock_Medium_1": STONE_PART, "Rock_Medium_2": STONE_PART, "Rock_Medium_3": STONE_PART, "Rock_Medium_4": STONE_PART,
+	"Rock_Big_1": STONE_PART, "Rock_Big_2": STONE_PART,
+	"Flower_3_Single": FLOWER, "Flower_4_Single": FLOWER, "Flower_7_Single": FLOWER,
+	"Clover_1": SMALL_PLANT, "Plant_2": SMALL_PLANT,
+	"Pebble_Round_1": PEBBLE, "Pebble_Round_3": PEBBLE, "Pebble_Square_2": PEBBLE, "Pebble_Square_5": PEBBLE,
+}
+## Đá vừa: tên -> chiều rộng khuôn (m), để co theo bán kính tảng đá.
+const ROCK_WIDTHS := {"Rock_Medium_1": 3.2, "Rock_Medium_2": 3.0, "Rock_Medium_3": 3.4, "Rock_Medium_4": 3.8}
+const FLOWERS: Array[String] = ["Flower_3_Single", "Flower_4_Single", "Flower_7_Single"]
+## Nhuộm ảnh gốc: sỏi, đá, tường sáng quá dưới nắng, ngả xám rêu cho hợp sân cỏ.
+const TEXTURE_TINTS := {"soi.png": Color(0.62, 0.6, 0.55), "da.png": Color(0.82, 0.82, 0.78), "dungeon_texture.png": Color(0.8, 0.83, 0.76)}
+const PEBBLES: Array[String] = ["Pebble_Round_1", "Pebble_Round_3", "Pebble_Square_2", "Pebble_Square_5"]
+## Số khóm cỏ thấp rải trên sân theo mức đồ họa 0 Thấp, 1 Vừa, 2 Cao (mỗi khóm ~155 tam giác).
+const TUFT_CLUSTERS := [14, 45, 75]
+## Khoảng cách giữa các cây rừng ngoài viền theo mức đồ họa (m): máy yếu ít cây hơn.
+const BORDER_SPACING := [9.0, 6.0, 4.8]
 
-const GRASS := Color(0.33, 0.5, 0.24)
-const GRASS_SPOTS: Array[Color] = [Color(0.29, 0.45, 0.22), Color(0.37, 0.54, 0.26)]
-const OUTSIDE := Color(0.2, 0.3, 0.24) # sườn núi ngoài tường
-const DIRT := Color(0.56, 0.43, 0.3)
+const GRASS_DARK := Color(0.19, 0.34, 0.12)
+const GRASS_LIGHT := Color(0.36, 0.5, 0.17)
+const DIRT_DARK := Color(0.5, 0.38, 0.24)
+const DIRT_LIGHT := Color(0.66, 0.53, 0.35)
 const PAVING := Color(0.45, 0.47, 0.5) # sàn đá lát
 const PAVING_LINE := Color(0.36, 0.37, 0.4)
 const MARBLE := Color(0.88, 0.88, 0.86)
@@ -135,7 +161,8 @@ var _materials := {} # màu -> material dùng chung
 var _glows := {} # màu -> material tự sáng (trận pháp), không đổ bóng
 var _shapes := {} # tên -> mesh khuôn dùng chung (vòng, đĩa, khối)
 var _models := {} # đường dẫn -> mô hình KayKit đã nạp
-var _atlases := {} # đường dẫn ảnh -> ảnh có mipmap; đường dẫn + màu nhuộm -> material dùng chung
+var _textured := {} # đường dẫn ảnh (+ cắt viền) -> material dùng chung cho mọi mô hình dùng ảnh đó
+var _quality := clampi(int(ProjectSettings.get_setting("game/graphics_quality", 0)), 0, 2)
 var _batches := {} # Vector3i(ô x, ô z, id material) -> SurfaceTool gom hình tĩnh, dựng thành một mesh lúc xong
 var _batch_mats := {} # id material -> material
 var _no_shadow := {} # material -> true: mesh gộp của nó không đổ bóng (hình sát sàn, trận pháp)
@@ -194,16 +221,14 @@ func _ready() -> void:
 
 ## Mọi thứ chỉ để nhìn: sàn, lối đất, trận pháp, nhà, cây, đá, động phủ.
 func _add_scenery() -> void:
-	_add_mesh(Vector3(SIZE.x / 2, -0.1, SIZE.y / 2), Vector3(SIZE.x, 0.2, SIZE.y), GRASS)
-	_add_mesh(Vector3(SIZE.x / 2, -0.15, SIZE.y / 2), Vector3(SIZE.x + 60, 0.2, SIZE.y + 50), OUTSIDE)
-	for i in 46: # vệt cỏ đậm nhạt cho sân đỡ phẳng
-		var p := Vector3(_rng.randf_range(1, SIZE.x - 1), 0.004, _rng.randf_range(1, SIZE.y - 1))
-		_add_disc(p, _rng.randf_range(0.8, 2.2), GRASS_SPOTS[i % 2], false)
+	_add_ground()
+	var dirt := _painted(DIRT_DARK, DIRT_LIGHT, 0.09)
+	var disc := _cylinder(&"disc", 1.0, 1.0, 0.01, 16)
 	for path: Array in PATHS:
 		for k in path.size() - 1:
-			_add_strip(path[k], path[k + 1], PATH_WIDTH, 0.012, _flat(DIRT))
+			_add_strip(path[k], path[k + 1], PATH_WIDTH, 0.012, dirt)
 		for p: Vector2 in path:
-			_add_disc(Vector3(p.x, 0.013, p.y), PATH_WIDTH / 2, DIRT, false)
+			_batch(disc, Transform3D(Basis.from_scale(Vector3(PATH_WIDTH / 2, 1, PATH_WIDTH / 2)), Vector3(p.x, 0.013, p.y)), dirt)
 	_add_spawn_room()
 	_add_cave_mansion()
 	for s: Vector3 in SAFES:
@@ -225,6 +250,104 @@ func _add_scenery() -> void:
 	_add_rubble()
 	_add_cave()
 	_add_border_cliffs()
+	_add_ground_cover()
+
+
+## Nền cỏ loang màu (một tấm phẳng phủ cả sân lẫn sườn núi ngoài tường).
+func _add_ground() -> void:
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(SIZE.x + 60, SIZE.y + 50)
+	var mi := MeshInstance3D.new()
+	mi.mesh = plane
+	mi.material_override = _painted(GRASS_DARK, GRASS_LIGHT, 0.035)
+	mi.position = Vector3(SIZE.x / 2, 0, SIZE.y / 2)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
+
+
+## Material nền tranh vẽ: 2 màu loang theo nhiễu, không đổ bóng.
+func _painted(dark: Color, light: Color, scale: float) -> ShaderMaterial:
+	var m := ShaderMaterial.new()
+	m.shader = load("res://Objects/shaders/nen.gdshader")
+	m.set_shader_parameter(&"noise", BushScript.mip_texture(NATURE + "nhieu.png"))
+	m.set_shader_parameter(&"dark", dark)
+	m.set_shader_parameter(&"light", light)
+	m.set_shader_parameter(&"scale", scale)
+	_no_shadow[m] = true
+	return m
+
+
+## Cỏ thấp, hoa, cỏ ba lá rải thành cụm trên sân; sỏi dọc lối đất; cây bụi nhỏ chân tường.
+## Chỉ để nhìn, không đổ bóng; số lượng theo mức đồ họa.
+func _add_ground_cover() -> void:
+	var tuft := BushScript.grass_material(0.5, Color(0.16, 0.32, 0.11), Color(0.45, 0.66, 0.24), 1.0)
+	_no_shadow[tuft] = true
+	var short: Mesh = load(NATURE + "Grass_Common_Short_co.obj")
+	var wide: Mesh = load(NATURE + "Grass_Wide_Short_co.obj")
+	for c in TUFT_CLUSTERS[_quality]:
+		var center := _free_spot()
+		if center.x < 0:
+			continue
+		for k in _rng.randi_range(2, 4):
+			var p := center + Vector3(_rng.randf_range(-0.7, 0.7), 0, _rng.randf_range(-0.7, 0.7))
+			var mesh := wide if _quality == 2 and k == 0 else short
+			var sc := _rng.randf_range(0.3, 0.42)
+			_batch(mesh, Transform3D(Basis(Vector3.UP, _rng.randf() * TAU) * Basis.from_scale(Vector3(sc, sc, sc)), p), tuft)
+		if c % 3 == 0: # hoa mọc cạnh cỏ
+			var f: String = FLOWERS[_rng.randi() % FLOWERS.size()]
+			for k in 1 + _quality:
+				_add_nature(f, center + Vector3(_rng.randf_range(-0.9, 0.9), 0, _rng.randf_range(-0.9, 0.9)), _rng.randf() * TAU, 0.7, false)
+		elif c % 5 == 1 and _quality > 0:
+			_add_nature("Clover_1", center, _rng.randf() * TAU, 0.6, false)
+	for path: Array in PATHS: # sỏi lác đác hai bên lối đất
+		for k in path.size() - 1:
+			var a: Vector2 = path[k]
+			var b: Vector2 = path[k + 1]
+			var side := (b - a).orthogonal().normalized()
+			var t := _rng.randf_range(0.5, 2.0)
+			while t < a.distance_to(b):
+				var q := a.lerp(b, t / a.distance_to(b)) + side * _rng.randf_range(-0.95, 0.95)
+				_add_nature(PEBBLES[_rng.randi() % PEBBLES.size()], Vector3(q.x, 0, q.y), _rng.randf() * TAU, _rng.randf_range(0.8, 1.3), false)
+				t += _rng.randf_range(2.0, 3.5) / (1 + _quality * 0.5)
+	for r: Rect2 in WALLS + RUINS: # cây bụi nhỏ chân tường (máy yếu bỏ)
+		if _quality == 0 or r.size.x > 50 or r.size.y > 30:
+			continue
+		var along_x := r.size.x >= r.size.y
+		var n := int(maxf(r.size.x, r.size.y) / (3.0 if _quality == 2 else 6.0))
+		for k in n:
+			var t := _rng.randf_range(0.3, 0.9) * maxf(r.size.x, r.size.y)
+			var side := 1.0 if _rng.randf() < 0.5 else -1.0
+			var pos := Vector3(r.position.x + t, 0, r.get_center().y + side * (r.size.y / 2 + 0.25)) if along_x \
+				else Vector3(r.get_center().x + side * (r.size.x / 2 + 0.25), 0, r.position.y + t)
+			_add_nature("Plant_2", pos, _rng.randf() * TAU, 0.45, false)
+
+
+## Chỗ trống trên sân cỏ để rải cỏ hoa (tránh sàn lát, lối đi, trận, tường); hết chỗ thì x < 0.
+func _free_spot() -> Vector3:
+	for attempt in 12:
+		var p := Vector2(_rng.randf_range(1.0, SIZE.x - 1.0), _rng.randf_range(1.0, SIZE.y - 1.0))
+		if Rect2(0.5, 14.5, 8.0, 11.0).grow(0.3).has_point(p) or COURTYARD.grow(0.6).has_point(p):
+			continue
+		if p.distance_to(Vector2(PRISONS[0].x, PRISONS[0].z)) < 4.2:
+			continue
+		var ok := true
+		for s: Vector3 in SAFES:
+			if p.distance_to(Vector2(s.x, s.z)) < 2.0:
+				ok = false
+		for r: Rect2 in WALLS + RUINS:
+			if r.grow(0.6).has_point(p):
+				ok = false
+		for path: Array in PATHS:
+			for k in path.size() - 1:
+				if _segment_distance(p, path[k], path[k + 1]) < PATH_WIDTH / 2 + 0.3:
+					ok = false
+		if ok:
+			return Vector3(p.x, 0, p.y)
+	return Vector3(-1, 0, -1)
+
+
+func _segment_distance(p: Vector2, a: Vector2, b: Vector2) -> float:
+	return p.distance_to(Geometry2D.get_closest_point_to_segment(p, a, b))
 
 
 ## Phòng truyền tống: sàn đá, nhà mái ngói đỏ, trận tròn xanh có 6 viên sáng.
@@ -266,8 +389,14 @@ func _add_cave_mansion() -> void:
 	_add_disc(ALTAR + Vector3(0, 0.485, 0), 0.5, BLUE_SOFT, true)
 	for p: Vector2 in [Vector2(x0 + 1.7, 2.8), Vector2(x1 - 2.3, 2.8), Vector2(x0 + 1.7, 10.6), Vector2(x1 - 2.3, 10.6)]:
 		_add_model(DUNGEON + "pillar_decorated.obj", Vector3(p.x, 0, p.y), 0.0, Vector3(0.4, 0.65, 0.4), DUNGEON + "dungeon_texture.png")
-	for b: Vector3 in DECOR_BUSHES:
-		_batch(BushScript.leaf_mesh(), Transform3D(Basis(Vector3.UP, _rng.randf() * TAU).scaled(Vector3(b.z, 1.0, b.z)), Vector3(b.x, 0, b.y)), BushScript.leaf_material())
+	for i in DECOR_BUSHES.size(): # bụi lá xanh xen bụi lá đỏ (máy yếu một nửa)
+		if _quality == 0 and i % 2 == 1:
+			continue
+		var b := DECOR_BUSHES[i]
+		if i % 3 == 1:
+			_add_nature("Bush_Common", Vector3(b.x, 0, b.y), _rng.randf() * TAU, b.z * 0.75, true)
+		else:
+			_add_nature("Bush_Large", Vector3(b.x, 0, b.y), _rng.randf() * TAU, b.z * 0.45, true)
 
 
 ## Trận linh ngũ tinh vàng dưới bệ trận linh.
@@ -296,9 +425,9 @@ func _add_rubble() -> void:
 ## Cửa hang mật đạo: ụ đá to có lỗ tối, cây mọc trên.
 func _add_cave() -> void:
 	var c := CAVE.get_center()
-	_add_rock(Vector3(c.x + 0.5, 0, c.y), 1.6)
-	_add_rock(Vector3(c.x + 0.6, 0, c.y - 1.5), 0.9)
-	_add_rock(Vector3(c.x + 0.5, 0, c.y + 1.5), 0.8)
+	_add_nature("Rock_Big_1", Vector3(c.x + 0.9, 0, c.y), PI / 2, 0.62, true)
+	_add_nature("Rock_Big_2", Vector3(c.x + 0.7, 0, c.y - 1.8), 1.0, 0.4, true)
+	_add_rock(Vector3(c.x + 0.4, 0, c.y + 1.7), 0.7)
 	var hole := _shape(&"hole") as SphereMesh
 	if hole == null:
 		hole = SphereMesh.new()
@@ -308,7 +437,7 @@ func _add_cave() -> void:
 		hole.rings = 5
 		_shapes[&"hole"] = hole
 	_batch(hole, Transform3D(Basis.from_scale(Vector3(0.5, 1.6, 1.6)), Vector3(c.x - 0.9, 0.5, c.y)), _material(CAVE_DARK))
-	_add_model(HEX + "trees_A_medium.obj", Vector3(c.x + 1.2, 0.6, c.y), 0.0, Vector3(1.8, 2.0, 1.8), HEX + "hexagons_medieval.png")
+	_add_nature("Bush_Large", Vector3(c.x + 1.3, 1.6, c.y + 0.4), 0.5, 0.5, true)
 
 
 ## Rừng cây ngoài tường viền (bắc, tây, đông) như rìa bản đồ Liên Quân.
@@ -316,23 +445,31 @@ func _add_border_cliffs() -> void:
 	var x := -2.0
 	while x < SIZE.x + 3:
 		_add_border_trees(Vector3(x, 0, -2.6 + _rng.randf_range(-0.5, 0.3)))
-		x += _rng.randf_range(4.8, 6.0)
+		x += BORDER_SPACING[_quality] * _rng.randf_range(0.9, 1.1)
 	var z := 2.0
 	while z < SIZE.y + 2:
 		_add_border_trees(Vector3(-2.6 + _rng.randf_range(-0.3, 0.5), 0, z))
 		_add_border_trees(Vector3(SIZE.x + 2.6 + _rng.randf_range(-0.5, 0.3), 0, z))
-		z += _rng.randf_range(4.8, 6.0)
+		z += BORDER_SPACING[_quality] * _rng.randf_range(0.9, 1.1)
 	x = 1.0
-	while x < SIZE.x: # phía nam gần camera: chỉ đá thấp, không che màn hình
-		_add_rock(Vector3(x, 0.0, SIZE.y + 0.9), _rng.randf_range(0.5, 0.8))
+	while x < SIZE.x: # phía nam gần camera: chỉ đá thấp và bụi lá, không che màn hình
+		if _rng.randf() < 0.5:
+			_add_rock(Vector3(x, 0.0, SIZE.y + 0.9), _rng.randf_range(0.5, 0.8))
+		else:
+			_add_nature("Bush_Large", Vector3(x, 0, SIZE.y + 1.0), _rng.randf() * TAU, _rng.randf_range(0.3, 0.4), false)
 		x += _rng.randf_range(2.5, 4.0)
 
 
-## Một khóm rừng KayKit (cỡ ô ~2 m) phóng to thành ~6 m.
+## Một cây rừng (thông hoặc cây tán tròn cao ~6 m), mức Cao thêm bụi lá dưới gốc.
+## Rừng ngoài viền không đổ bóng (bóng chỉ rơi ra ngoài sân, tốn mà không ai nhìn).
 func _add_border_trees(pos: Vector3) -> void:
-	var model: String = BORDER_TREES[_rng.randi() % BORDER_TREES.size()]
-	var s := _rng.randf_range(2.9, 3.4)
-	_add_model(HEX + model, pos, _rng.randi_range(0, 5) * PI / 3, Vector3(s, s * 1.15, s), HEX + "hexagons_medieval.png")
+	var yaw := _rng.randf() * TAU
+	if _rng.randf() < 0.5:
+		_add_nature("Pine_5", pos, yaw, _rng.randf_range(0.85, 1.0), false)
+	else:
+		_add_nature("CommonTree_5", pos, yaw, _rng.randf_range(1.25, 1.45), false)
+	if _quality == 2:
+		_add_nature("Bush_Large", pos + Vector3(_rng.randf_range(-1.8, 1.8), 0, _rng.randf_range(-1.8, 1.8)), yaw, _rng.randf_range(0.55, 0.75), false)
 
 
 ## Tường đá: khuôn tường KayKit 4 x 4 x 1 m kéo theo đoạn tường; phế tích xen tường vỡ.
@@ -353,18 +490,19 @@ func _add_wall(r: Rect2, height: float, ruin: bool) -> void:
 		_add_model(DUNGEON + model, pos, 0.0 if along_x else PI / 2, scale, DUNGEON + "dungeon_texture.png")
 
 
-## Đá tảng KayKit, lệch tỉ lệ và góc xoay; cao lên cho thành tảng chắn đường.
+## Đá tảng tranh vẽ, rộng ~2,2 lần bán kính, xoay ngẫu nhiên.
 func _add_rock(pos: Vector3, radius: float) -> void:
-	var model: String = ROCK_MODELS[_rng.randi() % ROCK_MODELS.size()]
-	var s := radius * 4.2 # khuôn rộng ~0,45 m
-	var scale := Vector3(s * _rng.randf_range(0.9, 1.1), s * _rng.randf_range(1.5, 2.0), s * _rng.randf_range(0.9, 1.1))
-	_add_model(HEX + model, pos, _rng.randf() * TAU, scale, HEX + "hexagons_medieval.png", ROCK_TINT)
+	var model: String = ROCK_WIDTHS.keys()[_rng.randi() % ROCK_WIDTHS.size()]
+	var s := radius * 2.2 / float(ROCK_WIDTHS[model]) * _rng.randf_range(0.95, 1.1)
+	_add_nature(model, pos, _rng.randf() * TAU, s, true)
 
 
-## Cây cổ thụ KayKit cao ~4,5 m (gấp 2,5 lần người), thân chắn đường.
+## Cây cổ thụ tán tròn cao ~5,5 m (gấp 3 lần người), thân chắn đường.
 func _add_tree(pos: Vector3, size: float) -> void:
-	var s := 4.0 * size
-	_add_model(HEX + "tree_single_B.obj", pos, _rng.randf() * TAU, Vector3(s, s * 1.05, s), HEX + "hexagons_medieval.png")
+	if _rng.randf() < 0.5:
+		_add_nature("CommonTree_3", pos, _rng.randf() * TAU, 0.85 * size, true) # khuôn cao 6,6 m
+	else:
+		_add_nature("CommonTree_5", pos, _rng.randf() * TAU, 1.25 * size, true) # khuôn cao 4,4 m
 
 
 ## Vành tròn phẳng sát đất (trận pháp), tự sáng.
@@ -453,30 +591,40 @@ func _commit_batches() -> void:
 
 
 ## Mô hình KayKit chỉ để nhìn, gốc đặt ở `pos`, xoay `yaw` quanh trục đứng.
-func _add_model(path: String, pos: Vector3, yaw: float, scale: Vector3, atlas: String, tint := Color.WHITE) -> void:
+func _add_model(path: String, pos: Vector3, yaw: float, scale: Vector3, texture: String) -> void:
+	_batch(_load_model(path), Transform3D(Basis(Vector3.UP, yaw) * Basis.from_scale(scale), pos), _textured_material(texture, false, true))
+
+
+## Mô hình Quaternius (mọi phần: thân, lá, hoa) phóng đều `scale` lần.
+func _add_nature(model: String, pos: Vector3, yaw: float, scale: float, shadow: bool) -> void:
+	var xf := Transform3D(Basis(Vector3.UP, yaw) * Basis.from_scale(Vector3.ONE * scale), pos)
+	for part: Array in NATURE_PARTS[model]:
+		_batch(_load_model(NATURE + model + "_" + part[0] + ".obj"), xf, _textured_material(NATURE + part[1], part[2], shadow))
+
+
+func _load_model(path: String) -> Mesh:
 	if not _models.has(path):
 		_models[path] = load(path)
-	_batch(_models[path], Transform3D(Basis(Vector3.UP, yaw) * Basis.from_scale(scale), pos), _atlas(atlas, tint))
+	return _models[path]
 
 
-## Material dùng chung cho cả bộ KayKit (một ảnh bảng màu cho mọi mô hình), nhuộm `tint`.
-func _atlas(path: String, tint: Color) -> StandardMaterial3D:
-	var key := path + tint.to_html()
-	if not _atlases.has(key):
-		if not _atlases.has(path):
-			# Cần mipmap kẻo nhìn xa bị nhiễu (file .import không vào git nên tạo ở đây).
-			var img := (load(path) as Texture2D).get_image()
-			if img.is_compressed():
-				img.decompress()
-			if not img.has_mipmaps():
-				img.generate_mipmaps()
-			_atlases[path] = ImageTexture.create_from_image(img)
+## Material dùng chung cho mọi mô hình cùng một ảnh. Lá thì cắt viền theo alpha, thấy cả 2 mặt.
+func _textured_material(path: String, cutout: bool, shadow: bool) -> StandardMaterial3D:
+	var key := "%s|%s|%s" % [path, cutout, shadow]
+	if not _textured.has(key):
 		var m := StandardMaterial3D.new()
-		m.albedo_texture = _atlases[path]
-		m.albedo_color = tint
-		m.roughness = 0.9
-		_atlases[key] = m
-	return _atlases[key]
+		m.albedo_texture = BushScript.mip_texture(path)
+		m.albedo_color = TEXTURE_TINTS.get(path.get_file(), Color.WHITE)
+		m.roughness = 1.0
+		m.metallic_specular = 0.2
+		if cutout:
+			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+			m.alpha_scissor_threshold = 0.3
+			m.cull_mode = BaseMaterial3D.CULL_DISABLED
+		if not shadow:
+			_no_shadow[m] = true
+		_textured[key] = m
+	return _textured[key]
 
 
 func _material(color: Color) -> StandardMaterial3D:
@@ -522,14 +670,15 @@ func _add_lighting() -> void:
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-55, 30, 0)
 	sun.shadow_enabled = int(ProjectSettings.get_setting("game/graphics_quality", 0)) > 0 # đồ họa Thấp: không bóng
-	sun.light_energy = 0.6
+	sun.light_energy = 0.8
+	sun.light_color = Color(1.0, 0.95, 0.84) # nắng ấm
 	add_child(sun)
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.62, 0.7, 0.72) # mây mù trên núi
+	env.background_color = Color(0.56, 0.74, 0.88) # trời xanh
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.8, 0.84, 0.9)
-	env.ambient_light_energy = 0.3
+	env.ambient_light_color = Color(0.72, 0.82, 0.95) # bóng râm ngả xanh trời như tranh vẽ
+	env.ambient_light_energy = 0.42
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC # màu đỡ cháy dưới nắng
 	var world_env := WorldEnvironment.new()
 	world_env.environment = env
