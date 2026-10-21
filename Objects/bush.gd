@@ -1,22 +1,22 @@
 extends Node3D
-## Bụi cỏ cao để nấp: một đám nhiều khóm cỏ (mô hình bui_co, giảm từ grass.glb 30k
-## tam giác) rộng 3 - 5 m như bụi Liên Quân, không chặn đường. Ai đứng trong bụi thì phe
+## Bụi cỏ cao để nấp: một đám nhiều khóm cỏ cao (mô hình Quaternius Stylized Nature
+## MegaKit, CC0) rộng 3 - 5 m như bụi Liên Quân, không chặn đường. Ai đứng trong bụi thì phe
 ## kia không thấy (luật ở GameState.can_see, server không gửi vị trí). Máy nào
 ## có nhân vật của mình đứng trong bụi thì bụi đó trong mờ để còn thấy mình.
+## Màu kiểu tranh vẽ: gốc xanh đậm, ngọn xanh non (shaders/co.gdshader).
 ## Mức chi tiết theo cài đặt đồ họa (ProjectSettings "game/graphics_quality"):
-## Thấp 4 khóm x 250, Vừa 7 x 250, Cao 7 x 400 tam giác mỗi bụi. Cả bụi là
+## Thấp 4 x 326, Vừa 6 x 326, Cao 9 khóm (xen 326 và 622) tam giác mỗi bụi. Cả bụi là
 ## một mesh dùng chung (bụi bán kính 1 m, cao ~2,1 m), mỗi bụi một lần vẽ.
 
 const CHECK_INTERVAL := 0.1
-const MODELS := [ # theo mức đồ họa 0 Thấp, 1 Vừa, 2 Cao
-	"res://Objects/models/bui_co/bui_co_thap.obj",
-	"res://Objects/models/bui_co/bui_co_thap.obj",
-	"res://Objects/models/bui_co/bui_co_vua.obj",
-]
-const CLUMPS := [4, 7, 7] # số khóm mỗi bụi theo mức đồ họa
-const LEAF_TEXTURE := "res://Objects/models/bui_co/la_co.jpg"
+const MODEL_DIR := "res://Objects/models/quaternius_nature/"
+const CLUMP_MODELS: Array[String] = ["Grass_Common_Tall_co.obj", "Grass_Wispy_Tall_co.obj"]
+const CLUMPS := [4, 6, 9] # số khóm mỗi bụi theo mức đồ họa 0 Thấp, 1 Vừa, 2 Cao
+const GRASS_SHADER := "res://Objects/shaders/co.gdshader"
+const GRASS_TEXTURE := "res://Objects/models/quaternius_nature/co.png"
 const HEIGHT := 2.1 # mét, cao hơn đầu nhân vật (1,7 m): đứng trong là khuất hẳn
-const TINT := Color(0.7, 0.95, 0.66) # nhuộm lá ngọc của ảnh gốc cho hợp sân cỏ
+const ROOT_COLOR := Color(0.08, 0.24, 0.1)
+const TIP_COLOR := Color(0.42, 0.7, 0.26)
 
 var index := 0 ## chỉ số trong MapBase.get_bushes()
 var radius := 1.4
@@ -27,8 +27,9 @@ var _check_left := 0.0
 var _me: Node3D
 
 static var _leaf_mesh: ArrayMesh # bụi bán kính 1 m
-static var _solid: StandardMaterial3D
-static var _faded: StandardMaterial3D
+static var _solid: ShaderMaterial
+static var _faded: ShaderMaterial
+static var _textures := {} # đường dẫn -> ảnh có mipmap dùng chung
 
 
 func _ready() -> void:
@@ -49,7 +50,7 @@ static func leaf_mesh() -> ArrayMesh:
 	return _leaf_mesh
 
 
-static func leaf_material() -> StandardMaterial3D:
+static func leaf_material() -> ShaderMaterial:
 	_build_shared()
 	return _solid
 
@@ -57,46 +58,56 @@ static func leaf_material() -> StandardMaterial3D:
 static func _build_shared() -> void:
 	if _leaf_mesh:
 		return
-	var quality := clampi(int(ProjectSettings.get_setting("game/graphics_quality", 0)), 0, MODELS.size() - 1)
-	var clump: Mesh = load(MODELS[quality])
-	# Khóm cỏ gốc dài ~1,6 m: thu về dài 0,9 (bụi bán kính 1), một khóm giữa và các khóm
-	# vòng quanh cách tâm 0,58; bụi bán kính 2 m thì mỗi khóm dài ~1,8 m như cỏ thật.
-	var aabb := clump.get_aabb()
-	var s := 0.9 / maxf(aabb.size.x, 0.01)
-	var h := HEIGHT / maxf(aabb.size.y, 0.01)
-	var lift := -aabb.position.y * h
+	var quality := clampi(int(ProjectSettings.get_setting("game/graphics_quality", 0)), 0, CLUMPS.size() - 1)
 	var count: int = CLUMPS[quality]
+	# Một khóm giữa, các khóm còn lại vòng quanh cách tâm 0,5 (bụi bán kính 1 m), cao
+	# đúng HEIGHT; mức Cao xen khóm cỏ rủ (622 tam giác) cho dày hơn.
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	for i in count:
+		var clump: Mesh = load(MODEL_DIR + CLUMP_MODELS[i % 2 if quality == 2 else 0])
+		var aabb := clump.get_aabb()
+		var k := 1.0 if i == 0 else 0.86 + 0.08 * (i % 3)
+		var s := 1.05 / maxf(aabb.size.x, aabb.size.z) * k
+		var h := HEIGHT / maxf(aabb.end.y, 0.01) * k
 		var spot := Vector3.ZERO
 		if i > 0:
 			var a := TAU * (i - 1) / (count - 1)
-			spot = Vector3(cos(a), 0, sin(a)) * 0.58
-		var k := 1.0 if i == 0 else 0.85 + 0.1 * (i % 2)
-		var basis := Basis(Vector3.UP, 1.1 * i) * Basis.from_scale(Vector3(s * k, h * k, s * k))
-		st.append_from(clump, 0, Transform3D(basis, spot + Vector3(0, lift * k, 0)))
+			spot = Vector3(cos(a), 0, sin(a)) * 0.5
+		st.append_from(clump, 0, Transform3D(Basis(Vector3.UP, 1.1 * i) * Basis.from_scale(Vector3(s, h, s)), spot))
 	_leaf_mesh = st.commit()
-	# Ảnh lá lấm tấm: cần mipmap kẻo nhìn xa bị nhiễu hạt (file .import không vào git nên tạo ở đây).
-	var img := (load(LEAF_TEXTURE) as Texture2D).get_image()
-	if img.is_compressed():
-		img.decompress()
-	if not img.has_mipmaps():
-		img.generate_mipmaps()
-	var tex := ImageTexture.create_from_image(img)
-	_solid = _leaf_mat(tex, 1.0)
-	_faded = _leaf_mat(tex, 0.35)
+	_solid = grass_material(HEIGHT, ROOT_COLOR, TIP_COLOR, 1.0)
+	_faded = grass_material(HEIGHT, ROOT_COLOR, TIP_COLOR, 0.35)
 	RenderWarmup.register(_faded) # chỉ hiện khi mình bước vào bụi
 
 
-static func _leaf_mat(tex: Texture2D, alpha: float) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_texture = tex
-	m.albedo_color = Color(TINT, alpha)
-	m.cull_mode = BaseMaterial3D.CULL_DISABLED # lá cỏ một mặt
-	if alpha < 1.0:
-		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+## Material cỏ tranh vẽ (gốc đậm, ngọn sáng); `fade` < 1 thì trong mờ. Bản đồ dùng cho cỏ trang trí.
+static func grass_material(height: float, root: Color, tip: Color, fade: float) -> ShaderMaterial:
+	var shader := load(GRASS_SHADER) as Shader
+	if fade < 1.0:
+		var see_through := Shader.new()
+		see_through.code = shader.code.replace("; //MO_RENDER", ", depth_draw_always;").replace("//MO_ALPHA", "ALPHA = fade;")
+		shader = see_through
+	var m := ShaderMaterial.new()
+	m.shader = shader
+	m.set_shader_parameter(&"tex", mip_texture(GRASS_TEXTURE))
+	m.set_shader_parameter(&"root_color", root)
+	m.set_shader_parameter(&"tip_color", tip)
+	m.set_shader_parameter(&"height", height)
+	m.set_shader_parameter(&"fade", fade)
 	return m
+
+
+## Ảnh có mipmap (file .import không vào git nên tạo ở đây), kẻo nhìn xa bị nhiễu hạt.
+static func mip_texture(path: String) -> Texture2D:
+	if not _textures.has(path):
+		var img := (load(path) as Texture2D).get_image()
+		if img.is_compressed():
+			img.decompress()
+		if not img.has_mipmaps():
+			img.generate_mipmaps()
+		_textures[path] = ImageTexture.create_from_image(img)
+	return _textures[path]
 
 
 func _process(delta: float) -> void:
