@@ -7,7 +7,8 @@ extends MapBase
 ## tròn của bản Meshy, viền đền đài (vách đá, lan can, cổng vòng đá ở 2 góc bắc); ngoài tường không dựng gì.
 ## Cây, đá, cỏ, hoa, sỏi kiểu tranh vẽ dùng Quaternius Stylized Nature MegaKit (CC0);
 ## tường, cột, nhà mái đỏ dùng KayKit (CC0, Kay Lousberg: Dungeon Remastered và
-## Medieval Hexagon). Nền cỏ và lối đất loang màu bằng nhiễu (shaders/nen.gdshader).
+## Medieval Hexagon). Nền cỏ, lối đất, lối đá dùng ảnh vẽ tay màu nước (CC0, Jonas Voland) trộn theo nhiễu
+## (shaders/nen_tranh.gdshader).
 ## Tỉ lệ so với nhân vật theo kiểu Liên Quân: tường cao hơn người, cây gấp 3 lần
 ## người, bụi cỏ thành đám rộng 3 - 4 m.
 ## Phần chỉ để nhìn gộp thành một mesh cho mỗi material trong mỗi ô 15 x 12 m: ít
@@ -121,6 +122,7 @@ const BushScript = preload("res://Objects/bush.gd")
 const DUNGEON := "res://Objects/models/kaykit_dungeon/" # tường, cột, đá vụn (khuôn tường 4 x 4 x 1 m)
 const HEX := "res://Objects/models/kaykit_hex/" # nhà mái đỏ (khuôn ô lục giác ~1 m)
 const NATURE := "res://Objects/models/quaternius_nature/" # cây, đá, cỏ, hoa, sỏi (đơn vị mét)
+const GROUND := "res://Objects/models/nen_ve_tay/" # ảnh nền vẽ tay màu nước CC0 (Jonas Voland)
 const TREE_LEAVES := [["vo", "vo_cay.png", false], ["la", "la_cay.png", true]]
 const SMALL_PLANT := [["la_hoa", "la_nho.png", true]]
 const FLOWER := [["la_hoa", "la_nho.png", true], ["hoa", "hoa.png", true]]
@@ -156,15 +158,16 @@ const CLIFF_SPACING := [3.4, 2.8, 2.5]
 const RIM_COLUMN_SPACING := [10.0, 7.5, 7.5]
 const RIM_STONE := Color(0.5, 0.53, 0.57) # đá trắng xám của lan can, vòng cổng
 
-const GRASS_DARK := Color(0.13, 0.21, 0.12)
-const GRASS_LIGHT := Color(0.27, 0.37, 0.19) # loang 2 sắc rõ như bản Meshy
-const DIRT_DARK := Color(0.36, 0.31, 0.24)
-const DIRT_LIGHT := Color(0.48, 0.42, 0.32)
-const PAVING := Color(0.45, 0.47, 0.5) # sàn đá lát
-const PAVING_LINE := Color(0.36, 0.37, 0.4)
+# Sắc nhân lên ảnh nền vẽ tay (1 = giữ nguyên màu ảnh): vệt tối và vệt sáng loang như bản Meshy.
+const GRASS_DARK := Color(0.5, 0.65, 0.6)
+const GRASS_LIGHT := Color(0.9, 1.0, 0.86)
+const DIRT_DARK := Color(0.72, 0.74, 0.72)
+const DIRT_LIGHT := Color(0.95, 0.95, 0.9)
+const PAVING_DARK := Color(0.82, 0.84, 0.88) # sắc nhân lên ảnh sàn đá lát
+const PAVING_LIGHT := Color(0.95, 0.96, 1.0)
 const MARBLE := Color(0.88, 0.88, 0.86)
-const STONE_DARK := Color(0.3, 0.31, 0.3) # nền lối đá phiến
-const STONE_LIGHT := Color(0.4, 0.4, 0.37)
+const STONE_DARK := Color(0.7, 0.7, 0.68) # nền lối đá phiến
+const STONE_LIGHT := Color(0.9, 0.9, 0.85)
 const BLOOD_STONE := Color(0.36, 0.12, 0.11)
 const BLOOD_GLOW := Color(1.0, 0.18, 0.15)
 const BLUE_GLOW := Color(0.4, 0.75, 1.0)
@@ -178,6 +181,7 @@ var _textured := {} # đường dẫn ảnh (+ cắt viền) -> material dùng c
 var _quality := clampi(int(ProjectSettings.get_setting("game/graphics_quality", 0)), 0, 2)
 var _batches := {} # Vector3i(ô x, ô z, id material) -> SurfaceTool gom hình tĩnh, dựng thành một mesh lúc xong
 var _batch_mats := {} # id material -> material
+var _ground_materials := {} # bộ tham số -> material nền vẽ tay dùng chung
 var _no_shadow := {} # material -> true: mesh gộp của nó không đổ bóng (hình sát sàn, trận pháp)
 var _rng := RandomNumberGenerator.new() # hình trang trí lệch ngẫu nhiên nhưng cố định mỗi lần dựng
 var _headless := DisplayServer.get_name() == "headless" # server riêng: chỉ dựng va chạm, không dựng hình
@@ -242,14 +246,14 @@ func _ready() -> void:
 ## Mọi thứ chỉ để nhìn: sàn, lối đất, trận pháp, nhà, cây, đá, động phủ.
 func _add_scenery() -> void:
 	_add_ground()
-	var dirt := _painted(DIRT_DARK, DIRT_LIGHT, 0.09)
+	var dirt := _hand_painted("dat.png", "dat.png", DIRT_DARK, DIRT_LIGHT, 0.09, 0.4)
 	var disc := _cylinder(&"disc", 1.0, 1.0, 0.01, 16)
 	for path: Array in PATHS:
 		for k in path.size() - 1:
 			_add_strip(path[k], path[k + 1], PATH_WIDTH, 0.012, dirt)
 		for p: Vector2 in path:
 			_batch(disc, Transform3D(Basis.from_scale(Vector3(PATH_WIDTH / 2, 1, PATH_WIDTH / 2)), Vector3(p.x, 0.013, p.y)), dirt)
-	var stone := _painted(STONE_DARK, STONE_LIGHT, 0.12)
+	var stone := _hand_painted("da.png", "da.png", STONE_DARK, STONE_LIGHT, 0.12, 0.2)
 	for path: Array in STONE_PATHS:
 		for k in path.size() - 1:
 			_add_strip(path[k], path[k + 1], PATH_WIDTH, 0.014, stone)
@@ -283,21 +287,28 @@ func _add_ground() -> void:
 	plane.size = Vector2(SIZE.x + 7, SIZE.y + 7) # chỉ phủ tới chân vách viền, ngoài là nền trời
 	var mi := MeshInstance3D.new()
 	mi.mesh = plane
-	mi.material_override = _painted(GRASS_DARK, GRASS_LIGHT, 0.035)
+	mi.material_override = _hand_painted("co_1.png", "co_2.png", GRASS_DARK, GRASS_LIGHT, 0.035, 0.12)
 	mi.position = Vector3(SIZE.x / 2, 0, SIZE.y / 2)
 	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(mi)
 
 
-## Material nền tranh vẽ: 2 màu loang theo nhiễu, không đổ bóng.
-func _painted(dark: Color, light: Color, scale: float) -> ShaderMaterial:
+## Material nền vẽ tay: 2 ảnh màu nước trộn theo nhiễu, nhân sắc loang dark -> light. Dùng chung theo bộ tham số.
+func _hand_painted(a: String, b: String, dark: Color, light: Color, scale: float, tile: float) -> ShaderMaterial:
+	var key := "%s|%s|%s|%s" % [a, b, dark.to_html(), tile]
+	if _ground_materials.has(key):
+		return _ground_materials[key]
 	var m := ShaderMaterial.new()
-	m.shader = load("res://Objects/shaders/nen.gdshader")
+	m.shader = load("res://Objects/shaders/nen_tranh.gdshader")
+	m.set_shader_parameter(&"albedo_a", load(GROUND + a))
+	m.set_shader_parameter(&"albedo_b", load(GROUND + b))
 	m.set_shader_parameter(&"noise", BushScript.mip_texture(NATURE + "nhieu.png"))
 	m.set_shader_parameter(&"dark", dark)
 	m.set_shader_parameter(&"light", light)
 	m.set_shader_parameter(&"scale", scale)
+	m.set_shader_parameter(&"tile", tile)
 	_no_shadow[m] = true
+	_ground_materials[key] = m
 	return m
 
 
@@ -375,7 +386,7 @@ func _segment_distance(p: Vector2, a: Vector2, b: Vector2) -> float:
 ## Phòng truyền tống: sàn đá, nhà mái ngói đỏ, trận tròn xanh có 6 viên sáng.
 func _add_spawn_room() -> void:
 	var room := SPAWN_ROOM.get_center()
-	_add_mesh(Vector3(room.x, 0.01, room.y), Vector3(SPAWN_ROOM.size.x, 0.02, SPAWN_ROOM.size.y), PAVING)
+	_add_floor(SPAWN_ROOM)
 	var c := PAVILION.get_center()
 	# Nhà KayKit 0,8 x 0,93 x 0,85: phóng to cỡ nhà thật (cao ~3,2 m), cửa quay về phía đông.
 	_add_model(HEX + "building_home_A_red.obj", Vector3(c.x, 0, c.y), PI / 2, Vector3.ONE * 3.4, HEX + "hexagons_medieval.png")
@@ -388,21 +399,21 @@ func _add_spawn_room() -> void:
 		_add_disc(TELEPORT + Vector3(cos(a) * 1.3, 0.04, sin(a) * 1.3), 0.17, Color.WHITE, true)
 
 
-## Động phủ: sàn đá lát kẻ ô, linh đài cẩm thạch với trận xanh, 4 cột đá, bụi cỏ quanh tường.
+## Sàn đá lát phiến lớn (ảnh Poly Haven CC0) phủ một khu chữ nhật.
+func _add_floor(r: Rect2) -> void:
+	var c := r.get_center()
+	var box := _shape(&"floor") as BoxMesh
+	if box == null:
+		box = BoxMesh.new()
+		box.size = Vector3(1, 0.02, 1)
+		_shapes[&"floor"] = box
+	_batch(box, Transform3D(Basis.from_scale(Vector3(r.size.x, 1, r.size.y)), Vector3(c.x, 0.01, c.y)),
+		_hand_painted("san_da.png", "san_da.png", PAVING_DARK, PAVING_LIGHT, 0.08, 0.28))
+
+
+## Động phủ: sàn đá lát phiến lớn, linh đài cẩm thạch với trận xanh, 4 cột đá, bụi cỏ quanh tường.
 func _add_cave_mansion() -> void:
-	var x0 := COURTYARD.position.x
-	var z0 := COURTYARD.position.y
-	var x1 := COURTYARD.end.x
-	var z1 := COURTYARD.end.y
-	_add_mesh(Vector3((x0 + x1) / 2, 0.01, (z0 + z1) / 2), Vector3(x1 - x0, 0.02, z1 - z0), PAVING)
-	var x := x0 + 1.2
-	while x < x1:
-		_add_mesh(Vector3(x, 0.022, (z0 + z1) / 2), Vector3(0.05, 0.01, z1 - z0), PAVING_LINE)
-		x += 1.2
-	var z := z0 + 1.2
-	while z < z1:
-		_add_mesh(Vector3((x0 + x1) / 2, 0.022, z), Vector3(x1 - x0, 0.01, 0.05), PAVING_LINE)
-		z += 1.2
+	_add_floor(COURTYARD)
 	var dais := _cylinder(&"dais", 1.0, 1.1, 1.0, 16)
 	_batch(dais, Transform3D(Basis.from_scale(Vector3(1.7, 0.3, 1.7)), ALTAR + Vector3(0, 0.15, 0)), _material(MARBLE))
 	_batch(dais, Transform3D(Basis.from_scale(Vector3(1.35, 0.2, 1.35)), ALTAR + Vector3(0, 0.38, 0)), _material(MARBLE))
@@ -422,7 +433,7 @@ func _add_cave_mansion() -> void:
 func _add_rubble() -> void:
 	var c := RUIN_FLOOR.get_center()
 	var half := Vector2(RUIN_FLOOR.size.x * 0.32, RUIN_FLOOR.size.y * 0.36)
-	_add_strip(c - half, c + half, 3.2, 0.013, _painted(STONE_DARK, STONE_LIGHT, 0.12)) # nền đá cũ chéo
+	_add_strip(c - half, c + half, 3.2, 0.013, _hand_painted("da.png", "da.png", STONE_DARK, STONE_LIGHT, 0.12, 0.2)) # nền đá cũ chéo
 	for i in 8 + _quality * 6:
 		var p := Vector3(_rng.randf_range(RUIN_FLOOR.position.x, RUIN_FLOOR.end.x), 0.0,
 			_rng.randf_range(RUIN_FLOOR.position.y, RUIN_FLOOR.end.y))

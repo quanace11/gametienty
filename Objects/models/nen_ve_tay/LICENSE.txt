@@ -1,0 +1,12 @@
+Tất cả ảnh trong thư mục này là CC0 1.0 Universal (public domain), dùng tự do kể cả thương mại, không bắt buộc ghi công.
+https://creativecommons.org/publicdomain/zero/1.0/
+
+co_1.png, co_2.png, da.png
+  Hand-Painted Watercolor Terrain Texture Pack, tác giả Jonas Voland, phát hành bởi Voxel Core Lab GmbH
+  https://voxelcorelab.itch.io/watercolor-terrain-textures (Grass_02, Grass_03, Stone_01, thu về 512 px)
+
+dat.png
+  Forest Ground 04, Poly Haven (Rob Tuytel) https://polyhaven.com/a/forest_ground_04 (diffuse 1k, thu về 512 px)
+
+san_da.png
+  Large Grey Tiles, Poly Haven (Rob Tuytel) https://polyhaven.com/a/large_grey_tiles (diffuse 1k, thu về 512 px)
