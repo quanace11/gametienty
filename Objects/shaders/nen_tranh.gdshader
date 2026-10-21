@@ -10,6 +10,7 @@ uniform vec3 dark : source_color = vec3(0.8);
 uniform vec3 light : source_color = vec3(1.0);
 uniform float tile = 0.12; // số lần lặp ảnh trên 1 m (0.12: một ô ảnh rộng 8 m)
 uniform float scale = 0.035; // cỡ vệt loang
+uniform float saturation = 1.0; // < 1: bớt rực cho nhân vật và hiệu ứng nổi trên nền
 
 varying vec2 wp;
 
@@ -22,6 +23,7 @@ void fragment() {
 	vec3 a = texture(albedo_a, wp * tile).rgb;
 	vec3 b = texture(albedo_b, vec2(wp.y, -wp.x) * tile * 0.77).rgb; // xoay và lệch cỡ để 2 lớp không trùng ô
 	vec3 base = mix(a, b, smoothstep(0.38, 0.62, n));
+	base = mix(vec3(dot(base, vec3(0.3, 0.59, 0.11))), base, saturation);
 	ALBEDO = base * mix(dark, light, smoothstep(0.41, 0.57, n));
 	ROUGHNESS = 1.0;
 }

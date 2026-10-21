@@ -1,12 +1,26 @@
-Tất cả ảnh trong thư mục này là CC0 1.0 Universal (public domain), dùng tự do kể cả thương mại, không bắt buộc ghi công.
+Ảnh vẽ tay trong thư mục này là CC0 1.0 Universal (public domain), dùng tự do kể cả thương mại, không bắt buộc ghi công.
 https://creativecommons.org/publicdomain/zero/1.0/
 
-co_1.png, co_2.png, da.png
-  Hand-Painted Watercolor Terrain Texture Pack, tác giả Jonas Voland, phát hành bởi Voxel Core Lab GmbH
-  https://voxelcorelab.itch.io/watercolor-terrain-textures (Grass_02, Grass_03, Stone_01, thu về 512 px)
+co_1.png, co_2.png (cỏ nền, rêu trên đá)
+  Handpainted Grass Texture Pack, rubberduck, OpenGameArt (grass_03b, grass_01b)
+  https://opengameart.org/content/handpainted-grass-texture-pack
 
-dat.png
-  Forest Ground 04, Poly Haven (Rob Tuytel) https://polyhaven.com/a/forest_ground_04 (diffuse 1k, thu về 512 px)
+da.png (lối đá cuội), san_da.png (sàn đá nứt, phiến lối đi)
+  Handpainted Rock Textures, rubberduck, OpenGameArt (rock_03, rock_02)
+  https://opengameart.org/content/handpainted-rock-textures
 
-san_da.png
-  Large Grey Tiles, Poly Haven (Rob Tuytel) https://polyhaven.com/a/large_grey_tiles (diffuse 1k, thu về 512 px)
+da_tang.png (tảng đá, vách viền)
+  Handpainted Rock Texture, rubberduck, OpenGameArt (rock_05)
+  https://opengameart.org/content/handpainted-rock-texture
+
+tuong.png (tường gạch)
+  Handpainted Brick Texture Pack, rubberduck, OpenGameArt (ruin_wall_01)
+  https://opengameart.org/content/handpainted-brick-texture-pack
+
+dat.png (lối đất)
+  Hand-Painted Watercolor Terrain Texture Pack, Jonas Voland / Voxel Core Lab (Dirt_03)
+  https://voxelcorelab.itch.io/watercolor-terrain-textures
+
+phu_van.png (vòng phù văn): vẽ bằng code cho dự án này.
+
+Mọi ảnh đã thu về 512 px.
