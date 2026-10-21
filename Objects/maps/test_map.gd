@@ -92,6 +92,10 @@ const PATHS := [
 	[Vector2(8.6, 20.2), Vector2(12.0, 20.6)],
 ]
 const PATH_WIDTH := 1.5
+## Lối chính (chéo từ phòng truyền tống sang động phủ) lát đá phiến như bản Meshy; bước giữa 2 hàng đá (m),
+## máy yếu không lát (0).
+const STONE_PATH := 1
+const SLAB_STEP := [0.0, 1.0, 0.8]
 const TELEPORT := Vector3(5.4, 0, 21.2) # truyền tống trận trong phòng trái
 const ALTAR := Vector3(54.0, 0, 6.7) # linh đài trong động phủ
 const COURTYARD := Rect2(49.1, 0.5, 10.4, 12.1) # sàn động phủ trong tường
@@ -242,6 +246,7 @@ func _add_scenery() -> void:
 			_add_strip(path[k], path[k + 1], PATH_WIDTH, 0.012, dirt)
 		for p: Vector2 in path:
 			_batch(disc, Transform3D(Basis.from_scale(Vector3(PATH_WIDTH / 2, 1, PATH_WIDTH / 2)), Vector3(p.x, 0.013, p.y)), dirt)
+	_add_stone_path(PATHS[STONE_PATH])
 	_add_spawn_room()
 	_add_cave_mansion()
 	for s: Vector3 in SAFES:
@@ -399,7 +404,7 @@ func _add_cave_mansion() -> void:
 	_add_ring(ALTAR + Vector3(0, 0.49, 0), 1.05, BLUE_GLOW)
 	_add_disc(ALTAR + Vector3(0, 0.485, 0), 0.5, BLUE_SOFT, true)
 	for p: Vector2 in [Vector2(x0 + 1.7, 2.8), Vector2(x1 - 2.3, 2.8), Vector2(x0 + 1.7, 10.6), Vector2(x1 - 2.3, 10.6)]:
-		_add_model(DUNGEON + "pillar_decorated.obj", Vector3(p.x, 0, p.y), 0.0, Vector3(0.4, 0.65, 0.4), DUNGEON + "dungeon_texture.png")
+		_add_model(DUNGEON + "pillar_decorated.obj", Vector3(p.x, 0, p.y), 0.0, Vector3(0.4, 0.95, 0.4), DUNGEON + "dungeon_texture.png")
 	for i in DECOR_BUSHES.size(): # bụi lá xanh (máy yếu một nửa)
 		if _quality == 0 and i % 2 == 1:
 			continue
@@ -421,9 +426,41 @@ func _add_pentagram(center: Vector3, radius: float) -> void:
 		_add_strip(pts[k], pts[(k + 2) % 5], 0.08, c.y + 0.004, _glow(GOLD_GLOW))
 
 
-## Cột gãy đổ cạnh tường vỡ phía dưới phải (chỉ để nhìn, thấp dưới gối).
+## Phế tích phía dưới phải: nền đá lát vỡ quanh tường đổ, cột gãy nằm cạnh (chỉ để nhìn, phẳng sát đất).
 func _add_rubble() -> void:
 	_add_model(DUNGEON + "pillar_decorated.obj", Vector3(38.8, 0, 30.0), 0.4, Vector3(0.5, 0.35, 0.5), DUNGEON + "dungeon_texture.png")
+	for i in 6 + _quality * 5:
+		var p := Vector3(_rng.randf_range(34.5, 41.5), 0.0, _rng.randf_range(26.5, 32.0))
+		if p.distance_to(SAFES[5]) < 2.4: # chừa trận linh
+			continue
+		_add_slab(p, _rng.randf() * TAU, _rng.randf_range(2.2, 3.2))
+
+
+## Lát đá phiến dọc một lối: 2 hàng so le, mỗi phiến lệch xoay một chút cho tự nhiên.
+func _add_stone_path(path: Array) -> void:
+	var step: float = SLAB_STEP[_quality]
+	if step <= 0.0:
+		return
+	for k in path.size() - 1:
+		var a: Vector2 = path[k]
+		var b: Vector2 = path[k + 1]
+		var dir := (b - a).normalized()
+		var side := Vector2(-dir.y, dir.x)
+		var yaw := atan2(dir.x, dir.y)
+		var t := 0.3
+		var row := 0
+		while t < a.distance_to(b):
+			var q := a + dir * t + side * (0.32 if row % 2 == 0 else -0.32) + side * _rng.randf_range(-0.08, 0.08)
+			_add_slab(Vector3(q.x, 0.0, q.y), yaw + _rng.randf_range(-0.25, 0.25), _rng.randf_range(1.6, 1.9))
+			t += step * 0.5
+			row += 1
+
+
+## Một phiến đá dẹt (khuôn sỏi vuông ép mỏng), không đổ bóng.
+func _add_slab(pos: Vector3, yaw: float, size: float) -> void:
+	var model: String = PEBBLES[2 + _rng.randi() % 2]
+	var xf := Transform3D(Basis(Vector3.UP, yaw) * Basis.from_scale(Vector3(size, 0.22, size)), pos)
+	_batch(_load_model(NATURE + model + "_soi.obj"), xf, _textured_material(NATURE + "soi.png", false, false))
 
 
 ## Cửa hang mật đạo: ụ đá to có lỗ tối, cây mọc trên.
@@ -759,6 +796,8 @@ func _add_lighting() -> void:
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-55, 30, 0)
 	sun.shadow_enabled = int(ProjectSettings.get_setting("game/graphics_quality", 0)) > 0 # đồ họa Thấp: không bóng
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL # camera nhìn từ trên: 1 lượt vẽ bóng thay vì 4
+	sun.directional_shadow_max_distance = 32.0 # đủ phủ khung nhìn trong trận
 	sun.light_energy = 0.75
 	sun.light_color = Color(1.0, 0.96, 0.9) # nắng nhẹ, không gắt
 	add_child(sun)
