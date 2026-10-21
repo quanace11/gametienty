@@ -300,8 +300,8 @@ func _hand_painted(a: String, b: String, dark: Color, light: Color, scale: float
 		return _ground_materials[key]
 	var m := ShaderMaterial.new()
 	m.shader = load("res://Objects/shaders/nen_tranh.gdshader")
-	m.set_shader_parameter(&"albedo_a", load(GROUND + a))
-	m.set_shader_parameter(&"albedo_b", load(GROUND + b))
+	m.set_shader_parameter(&"albedo_a", BushScript.mip_texture(GROUND + a))
+	m.set_shader_parameter(&"albedo_b", BushScript.mip_texture(GROUND + b))
 	m.set_shader_parameter(&"noise", BushScript.mip_texture(NATURE + "nhieu.png"))
 	m.set_shader_parameter(&"dark", dark)
 	m.set_shader_parameter(&"light", light)
