@@ -1,21 +1,22 @@
 extends Node3D
-## Bụi cỏ cao để nấp: 3 khóm cỏ (mô hình bui_co, giảm từ grass.glb 30k tam giác)
-## xoay lệch nhau thành một bụi tròn, không chặn đường. Ai đứng trong bụi thì phe
+## Bụi cỏ cao để nấp: một đám nhiều khóm cỏ (mô hình bui_co, giảm từ grass.glb 30k
+## tam giác) rộng 3 - 5 m như bụi Liên Quân, không chặn đường. Ai đứng trong bụi thì phe
 ## kia không thấy (luật ở GameState.can_see, server không gửi vị trí). Máy nào
 ## có nhân vật của mình đứng trong bụi thì bụi đó trong mờ để còn thấy mình.
 ## Mức chi tiết theo cài đặt đồ họa (ProjectSettings "game/graphics_quality"):
-## mỗi khóm Thấp ~250, Vừa ~400, Cao ~800 tam giác (mỗi bụi 3 khóm). Cả bụi là
+## Thấp 4 khóm x 250, Vừa 7 x 250, Cao 7 x 400 tam giác mỗi bụi. Cả bụi là
 ## một mesh dùng chung (bụi bán kính 1 m, cao ~2,1 m), mỗi bụi một lần vẽ.
 
 const CHECK_INTERVAL := 0.1
 const MODELS := [ # theo mức đồ họa 0 Thấp, 1 Vừa, 2 Cao
 	"res://Objects/models/bui_co/bui_co_thap.obj",
+	"res://Objects/models/bui_co/bui_co_thap.obj",
 	"res://Objects/models/bui_co/bui_co_vua.obj",
-	"res://Objects/models/bui_co/bui_co_cao.obj",
 ]
+const CLUMPS := [4, 7, 7] # số khóm mỗi bụi theo mức đồ họa
 const LEAF_TEXTURE := "res://Objects/models/bui_co/la_co.jpg"
 const HEIGHT := 2.1 # mét, cao hơn đầu nhân vật (1,7 m): đứng trong là khuất hẳn
-const TINT := Color(0.62, 0.9, 0.62) # nhuộm lá ngọc của ảnh gốc cho hợp sân cỏ
+const TINT := Color(0.7, 0.95, 0.66) # nhuộm lá ngọc của ảnh gốc cho hợp sân cỏ
 
 var index := 0 ## chỉ số trong MapBase.get_bushes()
 var radius := 1.4
@@ -58,16 +59,23 @@ static func _build_shared() -> void:
 		return
 	var quality := clampi(int(ProjectSettings.get_setting("game/graphics_quality", 0)), 0, MODELS.size() - 1)
 	var clump: Mesh = load(MODELS[quality])
-	# Khóm cỏ gốc dài ~1,6 m, rộng ~0,6 m: 3 khóm xoay 60° thành bụi tròn đường kính ~2 m.
+	# Khóm cỏ gốc dài ~1,6 m: thu về dài 0,9 (bụi bán kính 1), một khóm giữa và các khóm
+	# vòng quanh cách tâm 0,58; bụi bán kính 2 m thì mỗi khóm dài ~1,8 m như cỏ thật.
 	var aabb := clump.get_aabb()
-	var s := 2.0 / maxf(aabb.size.x, 0.01)
+	var s := 0.9 / maxf(aabb.size.x, 0.01)
 	var h := HEIGHT / maxf(aabb.size.y, 0.01)
 	var lift := -aabb.position.y * h
+	var count: int = CLUMPS[quality]
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for i in 3:
-		var basis := Basis(Vector3.UP, PI / 3 * i).scaled(Vector3(s * (1.0 - 0.12 * i), h * (1.0 - 0.1 * (i % 2)), s * (1.0 - 0.12 * i)))
-		st.append_from(clump, 0, Transform3D(basis, Vector3(0, lift, 0)))
+	for i in count:
+		var spot := Vector3.ZERO
+		if i > 0:
+			var a := TAU * (i - 1) / (count - 1)
+			spot = Vector3(cos(a), 0, sin(a)) * 0.58
+		var k := 1.0 if i == 0 else 0.85 + 0.1 * (i % 2)
+		var basis := Basis(Vector3.UP, 1.1 * i) * Basis.from_scale(Vector3(s * k, h * k, s * k))
+		st.append_from(clump, 0, Transform3D(basis, spot + Vector3(0, lift * k, 0)))
 	_leaf_mesh = st.commit()
 	# Ảnh lá lấm tấm: cần mipmap kẻo nhìn xa bị nhiễu hạt (file .import không vào git nên tạo ở đây).
 	var img := (load(LEAF_TEXTURE) as Texture2D).get_image()
