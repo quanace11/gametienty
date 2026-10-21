@@ -9,7 +9,8 @@ extends Node3D
 ## Trúng người thật (EventBus.player_hit) thì thêm một vụ nổ lửa vàng đỏ to hơn
 ## ngay chỗ người đó (hit_burst), để trúng nhìn khác hẳn trượt.
 ## Kiếm và vụ nổ lấy từ pool, không tạo/xóa node mỗi phát; _process chỉ chạy
-## khi có thứ đang bay hoặc đang nổ.
+## khi có thứ đang bay hoặc đang nổ. Lúc vào trận dựng sẵn mỗi loại một cái (ẩn)
+## và khai báo material với RenderWarmup để phát bắn đầu tiên không khựng.
 
 const SWORD_SCALE := 2.3
 const SMALL_SWORD_SCALE := 1.1
@@ -78,6 +79,15 @@ static var _shard_dirs: Array[Vector3] = []
 func _ready() -> void:
 	top_level = true
 	set_process(false)
+	_build_shared()
+	for kind: GameTypes.ShotKind in [GameTypes.ShotKind.RIFLE, GameTypes.ShotKind.BULLET]:
+		var shot := _take_shot(kind)
+		shot.kind = kind
+		_release_shot(shot)
+		for hit: bool in [false, true]:
+			var b := _new_blast(kind, hit)
+			b.node.visible = false
+			_blast_pool(kind, hit).append(b)
 
 
 ## Bắt đầu vẽ một thanh kiếm bay từ `from` tới `to` trong `flight` giây.
@@ -276,6 +286,9 @@ static func _build_shared() -> void:
 	for k in SHARDS:
 		var a := TAU * k / SHARDS
 		_shard_dirs.append(Vector3(cos(a), 0.35 * ((k % 3) - 1), sin(a)).normalized())
+	for s: SwordSet in [_demon, _jade, _fire]:
+		for mesh: Mesh in [s.blade, s.guard, s.pommel, s.trail, s.ring]:
+			RenderWarmup.register(mesh)
 
 
 static func _sword_set(blade_color: Color, glow_color: Color, hilt_color: Color, trail_color: Color) -> SwordSet:

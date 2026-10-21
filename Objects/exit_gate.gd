@@ -76,6 +76,8 @@ static func _build_shared() -> void:
 	_locked_mat = _seal_mat(LOCKED_COLOR)
 	_flash_mat = _seal_mat(FLASH_COLOR)
 	_open_mat = _seal_mat(OPEN_COLOR)
+	RenderWarmup.register(_flash_mat) # đổi màu khi cổng mở
+	RenderWarmup.register(_open_mat)
 	# Sơn môn: 2 cột đỏ son, xà ngang, mái ngói đen hai tầng.
 	var red := StandardMaterial3D.new()
 	red.albedo_color = Color(0.65, 0.12, 0.1)

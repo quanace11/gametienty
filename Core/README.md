@@ -6,6 +6,7 @@ Xương sống của game. **Không sửa khi chưa có Lead duyệt.**
 - `event_bus.gd`: tín hiệu chung (autoload `EventBus`)
 - `game_state.gd`: trạng thái trận, API `server_*` (autoload `GameState`)
 - `match/match_rules.gd`: luật thắng thua thuần logic; `match/match.gd`: dựng trận, đồng bộ input/vị trí
+- `match/render_warmup.gd`: màn "Đang vào trận", dịch sẵn shader và vẽ sẵn chữ để trận không khựng lúc đầu
 - `network/`: phòng, offline, input qua mạng (autoload `Net`)
 - `interfaces/`: `EntityBase`, `InputSource`, `Interactable`, `ItemEffect`, `MapBase`
 - `module_registry.gd`: chọn bản cài đặt của từng module

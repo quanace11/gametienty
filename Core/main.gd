@@ -11,6 +11,7 @@ extends Node
 ##   --fill-bots               thêm bot cho đủ 5 người khi bắt đầu
 ##   --bot                     bot tự điều khiển nhân vật của máy này (test)
 ##   --quit-after-match        thoát sau một trận (test)
+##   --perf-log                in các khung hình bị giật lúc đầu trận (tools/frame_probe.gd)
 
 const MatchScript = preload("res://Core/match/match.gd")
 const RESULT_SCREEN_TIME := 4.0
@@ -24,6 +25,8 @@ var menu: CanvasLayer
 func _ready() -> void:
 	_parse_args()
 	Net.bot = args.has("bot")
+	if args.has("perf-log"):
+		add_child(load("res://tools/frame_probe.gd").new())
 	match_time = str(args.get("time", "180")).to_float()
 	if args.has("name"):
 		Net.my_name = str(args["name"])

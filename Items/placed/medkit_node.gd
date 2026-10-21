@@ -27,19 +27,8 @@ func _ready() -> void:
 	if DisplayServer.get_name() == "headless":
 		set_process(false)
 		return
-	if _ring_mesh == null:
-		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(1.0, 0.85, 0.35, 0.8)
-		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		_ring_mesh = TorusMesh.new()
-		_ring_mesh.inner_radius = RADIUS - 0.08
-		_ring_mesh.outer_radius = RADIUS
-		_ring_mesh.rings = 24
-		_ring_mesh.ring_segments = 4
-		_ring_mesh.material = m
 	var ring := MeshInstance3D.new()
-	ring.mesh = _ring_mesh
+	ring.mesh = shared_mesh()
 	ring.scale = Vector3(1, 0.2, 1)
 	ring.position.y = 0.04
 	ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -57,6 +46,22 @@ func _ready() -> void:
 	_kit.mesh = MedkitMesh.get_mesh()
 	_kit.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_kit)
+
+
+## Vòng sáng dùng chung (ItemVisuals lấy trước để dịch sẵn shader; đĩa và cờ ở MedkitMesh).
+static func shared_mesh() -> Mesh:
+	if _ring_mesh == null:
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(1.0, 0.85, 0.35, 0.8)
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_ring_mesh = TorusMesh.new()
+		_ring_mesh.inner_radius = RADIUS - 0.08
+		_ring_mesh.outer_radius = RADIUS
+		_ring_mesh.rings = 24
+		_ring_mesh.ring_segments = 4
+		_ring_mesh.material = m
+	return _ring_mesh
 
 
 ## Trận bàn nhún nhẹ và xoay chậm cho dễ thấy.

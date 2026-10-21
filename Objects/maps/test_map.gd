@@ -4,6 +4,8 @@ extends MapBase
 ## đầu, hàng rào trúc ở viền, huyết trận ở chính giữa, bụi cây để nấp, cây tùng
 ## ngoài viền. Sau này có thể thay
 ## bằng scene dựng trong editor, giữ nguyên các hàm của MapBase.
+## Phần chỉ để nhìn (cỏ, tường, mái, cây, đèn lồng) gộp thành một mesh cho mỗi
+## material: cả bản đồ tĩnh chỉ vài lần vẽ (draw call) thay vì hơn trăm.
 
 const SIZE := Vector2(48, 30) # x, z
 const WALL_HEIGHT := 1.5 # tường thấp kiểu chibi, camera nhìn qua được (vẫn cao hơn đường đạn 1.1 m)
@@ -62,6 +64,8 @@ const LANTERN := Color(0.95, 0.2, 0.15)
 
 var _materials := {} # màu -> material dùng chung
 var _lantern_mesh: SphereMesh
+var _batches := {} # material -> SurfaceTool gom hình tĩnh, dựng thành một mesh lúc xong
+var _no_shadow := {} # material -> true: mesh gộp của nó không đổ bóng (đèn lồng)
 var _headless := DisplayServer.get_name() == "headless" # server riêng: chỉ dựng va chạm, không dựng hình
 
 func _ready() -> void:
@@ -112,6 +116,7 @@ func _ready() -> void:
 		add_child(prison)
 	if not _headless:
 		_add_lighting()
+		_commit_batches()
 
 
 ## Đèn lồng đỏ trên đầu tường (chỉ để nhìn, tự sáng, không đổ bóng).
@@ -126,11 +131,8 @@ func _add_lantern(pos: Vector3) -> void:
 		_lantern_mesh.radial_segments = 8
 		_lantern_mesh.rings = 4
 		_lantern_mesh.material = glow
-	var mi := MeshInstance3D.new()
-	mi.mesh = _lantern_mesh
-	mi.position = pos + Vector3(0, 0.3, 0)
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(mi)
+	_no_shadow[_lantern_mesh.material] = true
+	_batch(_lantern_mesh, Transform3D(Basis(), pos + Vector3(0, 0.3, 0)))
 
 
 ## Cây tùng ngoài viền: thân + hai tầng tán hình nón (không va chạm, không ảnh hưởng luật).
@@ -168,14 +170,8 @@ func _add_trees() -> void:
 
 
 func _add_tree(pos: Vector3, trunk: Mesh, crown: Mesh) -> void:
-	var t := MeshInstance3D.new()
-	t.mesh = trunk
-	t.position = pos + Vector3(0, 0.6, 0)
-	add_child(t)
-	var c := MeshInstance3D.new()
-	c.mesh = crown
-	c.position = pos + Vector3(0, 1.9, 0)
-	add_child(c)
+	_batch(trunk, Transform3D(Basis(), pos + Vector3(0, 0.6, 0)))
+	_batch(crown, Transform3D(Basis(), pos + Vector3(0, 1.9, 0)))
 
 
 ## Khối chỉ để nhìn (không va chạm).
@@ -183,10 +179,32 @@ func _add_mesh(center: Vector3, size: Vector3, color: Color) -> void:
 	var mesh := BoxMesh.new()
 	mesh.size = size
 	mesh.material = _material(color)
-	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
-	mi.position = center
-	add_child(mi)
+	_batch(mesh, Transform3D(Basis(), center))
+
+
+## Gom mặt đầu của `mesh` (đặt ở `xf`) vào mesh gộp theo material của nó.
+func _batch(mesh: Mesh, xf: Transform3D) -> void:
+	var mat := mesh.surface_get_material(0)
+	if mat == null and mesh is PrimitiveMesh:
+		mat = (mesh as PrimitiveMesh).material
+	var st: SurfaceTool = _batches.get(mat)
+	if st == null:
+		st = SurfaceTool.new()
+		st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		st.set_material(mat)
+		_batches[mat] = st
+	st.append_from(mesh, 0, xf)
+
+
+## Dựng mỗi material một MeshInstance3D từ các hình đã gom.
+func _commit_batches() -> void:
+	for mat: Material in _batches:
+		var mi := MeshInstance3D.new()
+		mi.mesh = (_batches[mat] as SurfaceTool).commit()
+		if _no_shadow.has(mat):
+			mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(mi)
+	_batches.clear()
 
 
 func _material(color: Color) -> StandardMaterial3D:
@@ -206,14 +224,8 @@ func _add_box(center: Vector3, size: Vector3, color: Color) -> void:
 	shape.shape = box
 	body.add_child(shape)
 	add_child(body)
-	if _headless:
-		return
-	var mesh := BoxMesh.new()
-	mesh.size = size
-	mesh.material = _material(color)
-	var mi := MeshInstance3D.new()
-	mi.mesh = mesh
-	body.add_child(mi)
+	if not _headless:
+		_add_mesh(center, size, color)
 
 
 func _add_lighting() -> void:

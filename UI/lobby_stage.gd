@@ -3,6 +3,8 @@ extends SubViewportContainer
 ## đá có vòng trận pháp, nền trời 2D của menu lộ ra phía sau (nền trong suốt).
 ## Rẻ: không bóng đổ thật (vệt tối dưới chân), một đèn, mô hình theo mức đồ họa.
 ## Menu ẩn (đang trong trận) thì ngừng vẽ và ngừng chạy động tác.
+## Mô hình cả hai phe (theo mức đồ họa) được nạp sẵn bằng luồng phụ và giữ trong
+## bộ nhớ, nên lúc vào trận PlayerCharacter lấy ngay, khỏi đọc lại tệp.
 
 const CharacterRoster = preload("res://UI/character_roster.gd")
 const TALL := 2.0 # mét, chiều cao nhân vật trên đài
@@ -14,6 +16,9 @@ var _holder: Node3D # chứa mô hình, xoay bằng tay
 var _model_path := ""
 var _yaw := 0.0
 var _dragging := false
+var _pending: Array[String] = [] # tệp mô hình đang nạp bằng luồng phụ
+
+static var _keep := {} # đường dẫn -> PackedScene đã nạp, giữ để trận dùng lại
 
 
 func _ready() -> void:
@@ -58,7 +63,8 @@ func show_character(c: Dictionary) -> void:
 	_model_path = path
 	for child in _holder.get_children():
 		child.queue_free()
-	var model: Node3D = (load(path) as PackedScene).instantiate()
+	_preload_models(path)
+	var model: Node3D = (_keep[path] as PackedScene).instantiate()
 	var hunter: bool = c["role"] == GameTypes.Role.HUNTER
 	model.scale = Vector3.ONE * TALL / float(PlayerCharacter.MODEL_HEIGHT[hunter])
 	for slot in model.find_children("handslot*", "BoneAttachment3D", true, false):
@@ -75,6 +81,38 @@ func show_character(c: Dictionary) -> void:
 			player.get_animation("Idle").loop_mode = Animation.LOOP_LINEAR
 			player.play("Idle")
 	_yaw = 0.0
+
+
+## Giữ mô hình đang xem, nạp nền mô hình của phe còn lại; bỏ mô hình của mức đồ họa cũ.
+func _preload_models(current: String) -> void:
+	var wanted: Array[String] = []
+	for c: Dictionary in CharacterRoster.ALL:
+		var p := CharacterRoster.model_path(c)
+		if not wanted.has(p):
+			wanted.append(p)
+	for p: String in _keep.keys():
+		if not wanted.has(p):
+			_keep.erase(p)
+	if not _keep.has(current):
+		_keep[current] = load(current) # đang nạp nền thì load() chờ cùng luồng đó
+	for p in wanted:
+		if not _keep.has(p) and not _pending.has(p) and ResourceLoader.load_threaded_request(p) == OK:
+			_pending.append(p)
+	if not _pending.is_empty() and not get_tree().process_frame.is_connected(_poll_loads):
+		get_tree().process_frame.connect(_poll_loads)
+
+
+func _poll_loads() -> void:
+	for i in range(_pending.size() - 1, -1, -1):
+		var p := _pending[i]
+		var status := ResourceLoader.load_threaded_get_status(p)
+		if status == ResourceLoader.THREAD_LOAD_IN_PROGRESS:
+			continue
+		if status == ResourceLoader.THREAD_LOAD_LOADED:
+			_keep[p] = ResourceLoader.load_threaded_get(p)
+		_pending.remove_at(i)
+	if _pending.is_empty():
+		get_tree().process_frame.disconnect(_poll_loads)
 
 
 ## Dời khung nhìn để nhân vật đứng lệch trái (khi bảng bên phải che giữa màn hình).

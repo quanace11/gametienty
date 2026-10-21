@@ -57,6 +57,8 @@ func setup(info: Dictionary) -> void:
 
 	add_child(load(ModuleRegistry.ITEM_VISUALS).new())
 	add_child(load(ModuleRegistry.HUD).new())
+	if DisplayServer.get_name() != "headless": # dịch sẵn shader dưới màn che, khỏi khựng mấy giây đầu trận
+		add_child(RenderWarmup.new(self))
 	print("[%d] Trận bắt đầu: %s" % [_my_id, info["names"]])
 
 
