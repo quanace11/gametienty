@@ -4,7 +4,7 @@ extends MapBase
 ## đông bắc với linh đài, 5 cột cao và 2 cửa phong ấn cam (2 lối ra), huyết trận ở giữa, 6 trận
 ## linh quanh sân, tảng đá to có cây mọc ở phía bắc, cột đá đổ, nền đá vỡ ở phế tích đông nam,
 ## lối đá phiến chéo từ tây nam lên động phủ, lối đất uốn lượn, bụi cỏ cao để nấp đúng chỗ các bụi
-## tròn của bản Meshy, viền đền đài (vách đá, lan can, cổng vòng đá ở 2 góc bắc) và rừng quanh.
+## tròn của bản Meshy, viền đền đài (vách đá, lan can, cổng vòng đá ở 2 góc bắc); ngoài tường không dựng gì.
 ## Cây, đá, cỏ, hoa, sỏi kiểu tranh vẽ dùng Quaternius Stylized Nature MegaKit (CC0);
 ## tường, cột, nhà mái đỏ dùng KayKit (CC0, Kay Lousberg: Dungeon Remastered và
 ## Medieval Hexagon). Nền cỏ và lối đất loang màu bằng nhiễu (shaders/nen.gdshader).
@@ -155,8 +155,6 @@ const CLIFF_SPACING := [3.4, 2.8, 2.5]
 ## Khoảng cách giữa các cột đá trên vành viền theo mức đồ họa (m).
 const RIM_COLUMN_SPACING := [10.0, 7.5, 7.5]
 const RIM_STONE := Color(0.5, 0.53, 0.57) # đá trắng xám của lan can, vòng cổng
-## Khoảng cách giữa các cây rừng ngoài viền theo mức đồ họa (m): máy yếu ít cây hơn.
-const BORDER_SPACING := [9.0, 6.0, 4.8]
 
 const GRASS_DARK := Color(0.13, 0.21, 0.12)
 const GRASS_LIGHT := Color(0.27, 0.37, 0.19) # loang 2 sắc rõ như bản Meshy
@@ -279,10 +277,10 @@ func _add_scenery() -> void:
 	_add_ground_cover()
 
 
-## Nền cỏ loang màu (một tấm phẳng phủ cả sân lẫn sườn núi ngoài tường).
+## Nền cỏ loang màu (một tấm phẳng phủ sân tới chân vách viền).
 func _add_ground() -> void:
 	var plane := PlaneMesh.new()
-	plane.size = Vector2(SIZE.x + 60, SIZE.y + 50)
+	plane.size = Vector2(SIZE.x + 7, SIZE.y + 7) # chỉ phủ tới chân vách viền, ngoài là nền trời
 	var mi := MeshInstance3D.new()
 	mi.mesh = plane
 	mi.material_override = _painted(GRASS_DARK, GRASS_LIGHT, 0.035)
@@ -468,7 +466,7 @@ func _add_slab(pos: Vector3, yaw: float, size: float) -> void:
 
 ## Rừng cây ngoài tường viền (bắc, tây, đông) như rìa bản đồ Liên Quân.
 func _add_border_cliffs() -> void:
-	# Vách đá to xếp liền nhau thay tường gạch (bắc, tây, đông), rừng cây đằng sau.
+	# Vách đá to xếp liền nhau thay tường gạch (bắc, tây, đông); ngoài vách không dựng gì cho nhẹ.
 	var x := -1.0
 	while x < SIZE.x + 2:
 		_add_cliff(Vector3(x, 0, -1.2), 1.0)
@@ -480,15 +478,6 @@ func _add_border_cliffs() -> void:
 		z += CLIFF_SPACING[_quality] * _rng.randf_range(0.85, 1.1)
 	for corner: Vector3 in [Vector3(-1.4, 0, -1.4), Vector3(SIZE.x + 1.4, 0, -1.4)]: # góc bắc to hơn
 		_add_cliff(corner, 1.3)
-	x = -2.0
-	while x < SIZE.x + 3:
-		_add_border_trees(Vector3(x, 0, -3.6 + _rng.randf_range(-0.5, 0.3)))
-		x += BORDER_SPACING[_quality] * _rng.randf_range(0.9, 1.1)
-	z = 2.0
-	while z < SIZE.y + 2:
-		_add_border_trees(Vector3(-3.6 + _rng.randf_range(-0.3, 0.5), 0, z))
-		_add_border_trees(Vector3(SIZE.x + 3.6 + _rng.randf_range(-0.5, 0.3), 0, z))
-		z += BORDER_SPACING[_quality] * _rng.randf_range(0.9, 1.1)
 	_add_rim()
 	x = 0.5
 	while x < SIZE.x: # phía nam gần camera: vách đá thấp (~1,4 m) xen bụi lá, không che màn hình
@@ -569,18 +558,6 @@ func _add_cliff(pos: Vector3, size: float) -> void:
 	if _quality > 0 and _rng.randf() < 0.35:
 		var inward := Vector3(clampf(SIZE.x / 2 - pos.x, -1, 1), 0, clampf(SIZE.y / 2 - pos.z, -1, 1)).normalized()
 		_add_nature("Bush_Large", pos + inward * 1.9 + Vector3(_rng.randf_range(-0.8, 0.8), 0, 0), _rng.randf() * TAU, _rng.randf_range(0.22, 0.3), true)
-
-
-## Một cây rừng (thông hoặc cây tán tròn cao ~6 m), mức Cao thêm bụi lá dưới gốc.
-## Rừng ngoài viền không đổ bóng (bóng chỉ rơi ra ngoài sân, tốn mà không ai nhìn).
-func _add_border_trees(pos: Vector3) -> void:
-	var yaw := _rng.randf() * TAU
-	if _rng.randf() < 0.5:
-		_add_nature("Pine_5", pos, yaw, _rng.randf_range(0.85, 1.0), false)
-	else:
-		_add_nature("CommonTree_5", pos, yaw, _rng.randf_range(1.25, 1.45), false)
-	if _quality == 2:
-		_add_nature("Bush_Large", pos + Vector3(_rng.randf_range(-1.8, 1.8), 0, _rng.randf_range(-1.8, 1.8)), yaw, _rng.randf_range(0.55, 0.75), false)
 
 
 ## Tường đá: khuôn tường KayKit 4 x 4 x 1 m kéo theo đoạn tường; phế tích xen tường vỡ.
