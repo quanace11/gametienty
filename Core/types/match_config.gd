@@ -5,7 +5,7 @@ extends Resource
 @export_group("Trận")
 @export var duration := 180.0 # giây
 @export var countdown := 3.0
-@export var safes_required := 3 # số rương (chìa khóa) phải mở để cổng mở
+@export var safes_required := 0 # số trận linh phải giải để lối ra mở; 0 = phải giải hết trận linh trên bản đồ
 @export var gate_open_delay := 3.0 # đủ chìa thì cổng rung 3 giây rồi mới mở
 
 @export_group("Rương và vòng căn")

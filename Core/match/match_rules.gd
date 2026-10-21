@@ -645,7 +645,10 @@ func safes_unlocked() -> int:
 	return n
 
 
+## Số trận linh phải giải để lối ra mở: MatchConfig.safes_required, 0 (mặc định) = hết trận linh.
 func safes_required() -> int:
+	if config.safes_required <= 0:
+		return total_safes()
 	return mini(config.safes_required, total_safes())
 
 

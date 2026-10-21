@@ -7,7 +7,7 @@ Phần còn lại của trận ngoài chu trình bắt người ([CHU_TRINH_BAT.
 Trong code Core rương vẫn tên là `safe` (`safe_progress`, `GROUP_SAFES`, `safe_unlocked`).
 
 - Người trốn đứng sát rương là cạy (dừng lại thì nhân vật ngồi xuống mò ổ khóa) (`GameState.server_channel_chest(id, safe_id, delta)` mỗi physics frame). Một người mất `chest_open_time` giây, nhiều người cùng cạy thì cộng dồn.
-- Mở xong rương thì nhả 1 chìa khóa và văng `chest_coins` cọc tiền ra sàn. Đủ `safes_required` chìa thì cổng bắt đầu mở.
+- Mở xong rương thì nhả 1 chìa khóa và văng `chest_coins` cọc tiền ra sàn. Giải đủ `safes_required` trận linh thì cổng bắt đầu mở; mặc định `safes_required = 0` nghĩa là phải giải **hết** trận linh trên bản đồ.
 
 ## 2. Vòng căn
 

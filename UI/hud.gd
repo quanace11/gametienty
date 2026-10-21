@@ -64,7 +64,7 @@ func _ready() -> void:
 	EventBus.qte_resolved.connect(func(_id: int, safe_id: int, result: GameTypes.QteResult) -> void:
 		if result == GameTypes.QteResult.FAIL:
 			_show_toast("Trận linh %d vừa bùng!" % (safe_id + 1), UiTheme.RED))
-	EventBus.gate_opening.connect(func(_s: float) -> void: _show_toast("Đã giải đủ trận linh! 2 lối ra đang mở...", UiTheme.GREEN))
+	EventBus.gate_opening.connect(func(_s: float) -> void: _show_toast("Đã giải hết trận linh! 2 lối ra đang mở...", UiTheme.GREEN))
 	EventBus.gate_opened.connect(func() -> void: _show_toast("LỐI RA ĐÃ MỞ! Chạy ra lối ra!", UiTheme.GREEN))
 	_show_toast(_hint_text(), UiTheme.BLUE, HINT_TIME)
 
@@ -127,7 +127,7 @@ func _set_gate(text: String, color: Color) -> void:
 func _hint_text() -> String:
 	if GameState.my_role() == GameTypes.Role.HUNTER:
 		return "Kéo nút PHI KIẾM để ngắm, thả tay là phóng kiếm. Đánh gục đệ tử, bấm TRÓI rồi kéo vào huyết trận!"
-	return "Đứng ở trận linh để giải, kim tới vùng sáng thì chạm màn hình (hoặc E). Giải đủ thì chạy ra lối ra!"
+	return "Đứng ở trận linh để giải, kim tới vùng sáng thì chạm màn hình (hoặc E). Giải hết trận linh thì lối ra mới mở!"
 
 
 ## Dòng trạng thái của mình; chuỗi rỗng là không có gì đặc biệt (ẩn dải).

@@ -18,6 +18,10 @@ extends Control
 ## quanh nhân vật và vòng chỗ sẽ rơi (đúng bán kính vùng tác dụng); thả tay mới
 ## dùng. Kéo tới nút "Hủy" rồi thả thì thôi; chạm nhanh (không kéo) thì dùng ngay
 ## dưới chân. Thẻ khác chạm là dùng.
+## Máy tính (không có màn hình cảm ứng): WASD / mũi tên để đi, hoặc giữ chuột
+## trái ở chỗ trống thì nhân vật đi tới con trỏ (bấm đúng cần trái thì vẫn kéo cần
+## như cảm ứng). Phím 1..5 (card_N): thẻ ném được thì giữ phím, vòng chỗ rơi bám
+## theo con trỏ chuột, thả phím là ném; chuột phải hoặc Esc thì thôi. Thẻ khác bấm là dùng.
 ## Chỉ bấm các action trong InputMap (move_*, aim_*, interact, skill_N) mà
 ## LocalInputSource đọc, không gọi thẳng vào nhân vật hay luật.
 
@@ -40,6 +44,10 @@ const RING_STEPS := 40
 const BIND_R := 46.0
 const BIND_OFFSET := Vector2(-20, -178) # nút Trói so với tâm cần ngắm
 const BIND_RANGE := 1.5 # mét, khớp tầm túm người gục của nhân vật (PICKUP_RANGE)
+const WALK_STOP := 0.3 # mét: đi bằng chuột, tới gần con trỏ chừng này thì đứng lại
+const CARD_KEYS: Array[StringName] = [&"card_1", &"card_2", &"card_3", &"card_4", &"card_5"] # phím ô thẻ (LocalInputSource)
+const ARC_STEPS := 14
+const THROW_START := 1.2 # mét: độ cao vật ném rời tay, khớp Items/item_visuals.gd
 
 const MOUSE_FINGER := -1
 const INK := Color(0.12, 0.1, 0.16)
@@ -64,6 +72,9 @@ var _item_names := {}
 var _touch := false
 var _pie_points := PackedVector2Array()
 var _bind_ready := false # có đệ tử đang gục trong tầm trói (tính 10 lần/giây)
+var _card_key := false # thẻ đang ngắm bằng phím 1..5 theo con trỏ chuột (không phải kéo thẻ)
+var _walking := false # đang giữ chuột trái ở chỗ trống: đi tới con trỏ
+var _arc_points := PackedVector2Array()
 
 static var _card_ready: StyleBoxFlat
 static var _card_idle: StyleBoxFlat
@@ -90,7 +101,11 @@ func _notification(what: int) -> void:
 
 func _process(delta: float) -> void:
 	_redraw_left -= delta
-	if _redraw_left <= 0.0 or _card_slot >= 0: # đang kéo thẻ: vòng dưới đất bám theo nhân vật từng frame
+	if _walking:
+		_update_walk()
+	if _card_key and _card_slot >= 0:
+		_card_aim = _mouse_card_aim(_card_slot)
+	if _redraw_left <= 0.0 or _card_slot >= 0 or _walking: # đang kéo thẻ: vòng dưới đất bám theo nhân vật từng frame
 		_redraw_left = REDRAW_INTERVAL
 		_bind_ready = _hunter() and _downed_in_reach()
 		queue_redraw()
@@ -100,7 +115,12 @@ func _input(event: InputEvent) -> void:
 	if GameState.rules == null or GameState.my_role() < 0: # server riêng không chơi, hoặc hết trận
 		_release_all()
 		return
-	if event is InputEventScreenTouch:
+	if event is InputEventKey:
+		_on_key(event as InputEventKey)
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT and event.pressed and _card_key:
+		_end_key_card() # chuột phải lúc đang giữ phím thẻ: thôi không ném
+		get_viewport().set_input_as_handled()
+	elif event is InputEventScreenTouch:
 		_on_touch(event.index, event.position, event.pressed)
 	elif event is InputEventScreenDrag:
 		_on_drag(event.index, event.position)
@@ -121,6 +141,80 @@ func _release_all() -> void:
 	_card_cancel = true # đang kéo thẻ thì bỏ, không ném
 	for finger: int in _fingers.keys():
 		_release(finger)
+	if _card_key:
+		_end_key_card()
+
+
+## Phím thẻ 1..5: thẻ ném được thì giữ để ngắm theo chuột, thả là ném; thẻ khác bấm là dùng.
+func _on_key(ev: InputEventKey) -> void:
+	if ev.echo:
+		return
+	if _card_key and InputMap.has_action(&"card_cancel") and ev.is_action_pressed(&"card_cancel"):
+		_end_key_card()
+		return
+	for slot in CARD_KEYS.size():
+		if not InputMap.has_action(CARD_KEYS[slot]) or not ev.is_action(CARD_KEYS[slot]):
+			continue
+		if ev.pressed:
+			_key_card_down(slot)
+		elif _card_key and _card_slot == slot:
+			if not _card_cancel and GameState.rules != null:
+				_use_card(slot, _mouse_card_aim(slot))
+			_end_key_card()
+		return
+
+
+func _key_card_down(slot: int) -> void:
+	if _spectating() or _card_slot >= 0: # đang kéo một thẻ khác thì thôi
+		return
+	if not _aimable(slot):
+		_pulse(InputSource.SKILL_ACTIONS[slot])
+		return
+	_card_slot = slot
+	_card_key = true
+	_card_cancel = false
+	_card_aim = _mouse_card_aim(slot)
+	queue_redraw()
+
+
+func _end_key_card() -> void:
+	_card_key = false
+	_card_slot = -1
+	queue_redraw()
+
+
+## Chỗ con trỏ chuột trên thẻ ô `slot`: hướng + độ xa 0..1 so với tầm ném (trục x, z thế giới).
+func _mouse_card_aim(slot: int) -> Vector2:
+	var me := _me()
+	var body := _my_entity()
+	if me == null or body == null or slot >= me.deck.size():
+		return Vector2.ZERO
+	var range_m := float(GameState.rules.catalog.get(me.deck[slot], {}).get("aim_range", 0.0))
+	var ground: Variant = _mouse_ground(body)
+	if ground == null or range_m <= 0.0:
+		return Vector2.ZERO
+	var d: Vector3 = (ground as Vector3) - body.global_position
+	return (Vector2(d.x, d.z) / range_m).limit_length(1.0)
+
+
+## Điểm trên mặt sàn (ngang chân nhân vật) dưới con trỏ chuột, null nếu không chiếu được.
+func _mouse_ground(body: Node3D) -> Variant:
+	var cam := get_viewport().get_camera_3d()
+	if cam == null:
+		return null
+	var m := get_viewport().get_mouse_position()
+	return Plane(Vector3.UP, body.global_position.y).intersects_ray(cam.project_ray_origin(m), cam.project_ray_normal(m))
+
+
+## Đi bằng chuột: bấm hướng từ nhân vật tới chỗ con trỏ (cập nhật từng frame vì nhân vật đi).
+func _update_walk() -> void:
+	var body := _my_entity()
+	var ground: Variant = _mouse_ground(body) if body else null
+	if ground == null:
+		return
+	var d: Vector3 = (ground as Vector3) - body.global_position
+	var v := Vector2(d.x, d.z)
+	_press_axis(&"move_left", &"move_right", &"move_up", &"move_down", v.normalized() if v.length() > WALK_STOP else Vector2.ZERO)
 
 
 func _on_touch(finger: int, pos: Vector2, pressed: bool) -> void:
@@ -156,6 +250,9 @@ func _on_touch(finger: int, pos: Vector2, pressed: bool) -> void:
 			_card_center = _card_rect(slot).get_center()
 			_card_aim = Vector2.ZERO
 			_card_cancel = false
+		elif finger == MOUSE_FINGER and not _touch and not _spectating() and not _in_qte() \
+				and pos.distance_to(_move_center()) > STICK_R * 1.3 and get_viewport().gui_get_hovered_control() == null:
+			kind = "walk" # máy tính: giữ chuột trái chỗ trống thì đi tới con trỏ
 		elif not _spectating() and _in_move_zone(pos) and not _fingers.values().has("move"):
 			kind = "move"
 			_move_origin = _clamp_stick(pos)
@@ -177,6 +274,9 @@ func _on_touch(finger: int, pos: Vector2, pressed: bool) -> void:
 			_set_aim(pos)
 		"button":
 			Input.action_press(&"interact")
+		"walk":
+			_walking = true
+			_update_walk()
 	get_viewport().set_input_as_handled()
 	queue_redraw()
 
@@ -200,9 +300,10 @@ func _release(finger: int) -> void:
 	var kind: String = _fingers[finger]
 	_fingers.erase(finger)
 	match kind:
-		"move":
+		"move", "walk":
 			_move = Vector2.ZERO
 			_move_origin = Vector2.ZERO
+			_walking = false
 			for a: StringName in [&"move_left", &"move_right", &"move_up", &"move_down"]:
 				Input.action_release(a)
 		"aim":
@@ -289,6 +390,10 @@ func _draw() -> void:
 	draw_circle(mc, STICK_R, Color(0.2, 0.3, 0.45, 0.35))
 	draw_arc(mc, STICK_R, 0, TAU, 48, Color(1, 1, 1, 0.5), 3.0)
 	_knob(mc + _move * STICK_R, Color(0.4, 0.75, 1.0))
+	if not _touch:
+		_text(font, mc + Vector2(0, STICK_R + 22), "WASD / giữ chuột trái", 16, Color(1, 1, 1, 0.8))
+	if _walking:
+		_draw_walk_target()
 	# Nút phải.
 	var ac := _aim_center()
 	if _hunter():
@@ -359,6 +464,15 @@ func _cancel_button(font: Font, over: bool) -> void:
 	_text(font, cc + Vector2(0, CANCEL_R + 16), "Hủy", 16, Color.WHITE)
 
 
+## Đi bằng chuột: vòng nhỏ trên mặt sàn chỗ con trỏ.
+func _draw_walk_target() -> void:
+	var body := _my_entity()
+	var cam := get_viewport().get_camera_3d()
+	var ground: Variant = _mouse_ground(body) if body else null
+	if cam and ground != null and _ground_ring(cam, ground as Vector3, 0.35):
+		draw_polyline(_ring_points, Color(0.6, 0.9, 1.0, 0.9), 3.0, true)
+
+
 ## Đang kéo thẻ: vòng tầm xa nhất quanh nhân vật và vòng chỗ rơi vẽ trên mặt
 ## sàn (chiếu từ camera), cần nhỏ ở thẻ, nút Hủy.
 func _draw_card_aim(me: PlayerRecord, font: Font) -> void:
@@ -376,17 +490,37 @@ func _draw_card_aim(me: PlayerRecord, font: Font) -> void:
 			draw_colored_polygon(_ring_points, Color(0.45, 0.8, 1.0, 0.1))
 			draw_polyline(_ring_points, Color(0.6, 0.9, 1.0, 0.85), 3.0, true)
 		var tint := Color(1.0, 0.3, 0.25) if _card_cancel else Color(1.0, 0.75, 0.25)
-		if aim != Vector2.ZERO:
-			draw_line(cam.unproject_position(feet), cam.unproject_position(spot), Color(tint, 0.7), 4.0, true)
+		if aim != Vector2.ZERO and _throw_arc(cam, feet, spot):
+			draw_polyline(_arc_points, Color(tint, 0.8), 4.0, true)
 		if _ground_ring(cam, spot, area):
 			draw_colored_polygon(_ring_points, Color(tint, 0.3))
 			draw_polyline(_ring_points, tint, 3.0, true)
+	if _card_key: # ngắm bằng phím: không có cần ở thẻ, chỉ ghi cách hủy
+		var tip := get_viewport().get_mouse_position() + Vector2(0, 34)
+		_text(font, tip, "Thả phím: ném\nChuột phải / Esc: hủy", 16, Color.WHITE)
+		return
 	# Cần nhỏ ở thẻ: đế tròn và núm theo ngón tay.
 	draw_circle(_card_center, CARD_DRAG_R, Color(INK, 0.25))
 	draw_arc(_card_center, CARD_DRAG_R, 0, TAU, 40, Color(1, 1, 1, 0.5), 3.0)
 	draw_circle(_card_center + _card_aim * CARD_DRAG_R, 22, INK)
 	draw_circle(_card_center + _card_aim * CARD_DRAG_R, 19, Color(1.0, 0.6, 0.2))
 	_cancel_button(font, _card_cancel)
+
+
+## Đường vòng vật ném sẽ bay (cùng công thức với hình bay ở Items/item_visuals.gd)
+## từ tay tới chỗ rơi, vào _arc_points (dùng lại một mảng). false nếu ra sau camera.
+func _throw_arc(cam: Camera3D, from: Vector3, to: Vector3) -> bool:
+	var start := from + Vector3(0, THROW_START, 0)
+	var end := to + Vector3(0, 0.25, 0)
+	var height := 1.2 + 0.2 * Vector2(to.x - from.x, to.z - from.z).length()
+	_arc_points.resize(ARC_STEPS + 1)
+	for k in ARC_STEPS + 1:
+		var t := float(k) / ARC_STEPS
+		var p := start.lerp(end, t) + Vector3(0, sin(t * PI) * height, 0)
+		if cam.is_position_behind(p):
+			return false
+		_arc_points[k] = cam.unproject_position(p)
+	return true
 
 
 ## Điểm màn hình của vòng tròn bán kính `radius` mét trên mặt sàn quanh `center`

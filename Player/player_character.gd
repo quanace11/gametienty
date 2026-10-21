@@ -83,6 +83,7 @@ const ONESHOT_RATE := {"Attack": 1.6, "Grab": 1.6, "Throw": 2.0, "Hit": 1.3}
 const DRAG_FADE := 6.0 # tay phải đưa ra sau / thu về khi bắt đầu / thôi kéo người (lần mỗi giây) # phát nhanh hơn gốc cho đòn gọn
 const CHEST_CHECK := 0.1 # giây giữa hai lần xem có đứng ở rương không
 const HIT_FLASH_TIME := 0.18 # giây người bị trúng chớp đỏ
+const THROW_FACE_TIME := 0.45 # giây hình quay mặt về chỗ ném (động tác Throw)
 
 var _target_pos := Vector3.ZERO
 var _target_yaw := 0.0
@@ -144,6 +145,8 @@ static var _hit_flash_mat: StandardMaterial3D # phủ đỏ lúc bị trúng, d�
 
 var _body_meshes: Array[MeshInstance3D] = [] # các mảnh thân đang hiện, để phủ chớp đỏ
 var _flash_left := 0.0
+var _face_target := Vector3.ZERO # chỗ vừa ném thẻ tới: hình quay mặt về đó một lúc
+var _face_left := 0.0
 
 
 
@@ -350,6 +353,7 @@ func _update_anim(delta: float) -> void:
 		_oneshot_time += delta
 		if _oneshot_time >= _oneshot_length:
 			_oneshot_name = ""
+	_face_left -= delta
 	var base := "Move"
 	match state:
 		GameTypes.PlayerState.DOWNED:
@@ -494,15 +498,18 @@ func _chest_here() -> Node3D:
 	return null
 
 
-## Đang cạy thì xoay hình quay mặt vào rương (chỉ hình, không đổi hướng thật).
+## Đang cạy thì xoay hình quay mặt vào rương, vừa ném thẻ thì quay về chỗ ném
+## (chỉ hình, không đổi hướng thật).
 func _face_chest(delta: float) -> void:
 	if _model == null:
 		return
 	var yaw := PI # model nhìn về +Z
-	if _chest:
-		var d := _chest.global_position - _visual.global_position
+	if _face_left > 0.0 or _chest != null:
+		var look := _face_target if _face_left > 0.0 else _chest.global_position
+		var d := look - _visual.global_position
 		yaw = PI + atan2(-d.x, -d.z) - _visual.global_rotation.y
-	_model.rotation.y = lerp_angle(_model.rotation.y, yaw, minf(1.0, delta * TURN_SPEED))
+	var turn := TURN_SPEED * (2.0 if _face_left > 0.0 else 1.0) # ném thì quay nhanh cho kịp vung tay
+	_model.rotation.y = lerp_angle(_model.rotation.y, yaw, minf(1.0, delta * turn))
 
 
 func server_move(input: InputSource, delta: float) -> void:
@@ -773,9 +780,14 @@ func _on_attacked(attacker_id: int) -> void:
 		_play_once("Attack")
 
 
-func _on_item_used(id: int, _type: GameTypes.ItemType, _target_id: int, _target_pos: Vector3) -> void:
-	if id == peer_id and state == GameTypes.PlayerState.IDLE:
-		_play_once("Throw")
+func _on_item_used(id: int, _type: GameTypes.ItemType, _target_id: int, target_pos: Vector3) -> void:
+	if id != peer_id or state != GameTypes.PlayerState.IDLE:
+		return
+	_play_once("Throw")
+	var d := target_pos - global_position
+	if _visual and Vector2(d.x, d.z).length() > 0.5: # ném ra xa: quay mặt về chỗ ném
+		_face_target = target_pos
+		_face_left = THROW_FACE_TIME
 
 
 ## Vẽ đạn của chính nhân vật này: súng thợ săn bắn tên lửa có lửa đuôi, chạm
