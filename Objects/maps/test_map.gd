@@ -19,7 +19,7 @@ const WALL_HEIGHT := 2.4 # cao hơn đầu người (1,7 m) như tường Liên 
 const RUIN_HEIGHT := 1.8 # tường phế tích đổ nát
 ## Tường trên mặt sàn: Rect2(x, z, rộng theo x, sâu theo z), đơn vị mét.
 const WALLS := [
-	# Viền đá
+	# Viền ngoài (4 rect đầu): hình là vách đá, không phải tường gạch
 	Rect2(0, 0, 60, 0.5), Rect2(0, 35.5, 60, 0.5),
 	Rect2(0, 0, 0.5, 36), Rect2(59.5, 0, 0.5, 36),
 	# Phòng truyền tống (trái): 3 cửa mở sẵn trên, dưới, phải
@@ -140,6 +140,12 @@ const TEXTURE_TINTS := {"soi.png": Color(0.62, 0.6, 0.55), "da.png": Color(0.82,
 const PEBBLES: Array[String] = ["Pebble_Round_1", "Pebble_Round_3", "Pebble_Square_2", "Pebble_Square_5"]
 ## Số khóm cỏ thấp rải trên sân theo mức đồ họa 0 Thấp, 1 Vừa, 2 Cao (mỗi khóm ~155 tam giác).
 const TUFT_CLUSTERS := [14, 45, 75]
+const BORDER_WALLS := 4 # số rect viền ngoài ở đầu WALLS
+## Khoảng cách giữa các tảng vách đá viền theo mức đồ họa (m).
+const CLIFF_SPACING := [3.4, 2.8, 2.5]
+## Khoảng cách giữa các cột đá trên vành viền theo mức đồ họa (m).
+const RIM_COLUMN_SPACING := [10.0, 7.5, 7.5]
+const RIM_STONE := Color(0.5, 0.53, 0.57) # đá trắng xám của lan can, vòng cổng
 ## Khoảng cách giữa các cây rừng ngoài viền theo mức đồ họa (m): máy yếu ít cây hơn.
 const BORDER_SPACING := [9.0, 6.0, 4.8]
 
@@ -173,8 +179,11 @@ var _headless := DisplayServer.get_name() == "headless" # server riêng: chỉ d
 func _ready() -> void:
 	_rng.seed = 20261020
 	_add_collider(Rect2(-8, -8, SIZE.x + 16, SIZE.y + 16), 0.2, -0.2) # sàn
-	for r: Rect2 in WALLS:
-		_add_wall(r, WALL_HEIGHT, false)
+	for i in WALLS.size():
+		if i < BORDER_WALLS:
+			_add_collider(WALLS[i], WALL_HEIGHT) # hình: vách đá trong _add_border_cliffs()
+		else:
+			_add_wall(WALLS[i], WALL_HEIGHT, false)
 	for r: Rect2 in RUINS:
 		_add_wall(r, RUIN_HEIGHT, true)
 	for r: Rect2 in GATE_BLOCKERS:
@@ -442,22 +451,107 @@ func _add_cave() -> void:
 
 ## Rừng cây ngoài tường viền (bắc, tây, đông) như rìa bản đồ Liên Quân.
 func _add_border_cliffs() -> void:
-	var x := -2.0
+	# Vách đá to xếp liền nhau thay tường gạch (bắc, tây, đông), rừng cây đằng sau.
+	var x := -1.0
+	while x < SIZE.x + 2:
+		_add_cliff(Vector3(x, 0, -1.2), 1.0)
+		x += CLIFF_SPACING[_quality] * _rng.randf_range(0.85, 1.1)
+	var z := 1.5
+	while z < SIZE.y:
+		_add_cliff(Vector3(-1.2, 0, z), 1.0)
+		_add_cliff(Vector3(SIZE.x + 1.2, 0, z), 1.0)
+		z += CLIFF_SPACING[_quality] * _rng.randf_range(0.85, 1.1)
+	for corner: Vector3 in [Vector3(-1.4, 0, -1.4), Vector3(SIZE.x + 1.4, 0, -1.4)]: # góc bắc to hơn
+		_add_cliff(corner, 1.3)
+	x = -2.0
 	while x < SIZE.x + 3:
-		_add_border_trees(Vector3(x, 0, -2.6 + _rng.randf_range(-0.5, 0.3)))
+		_add_border_trees(Vector3(x, 0, -3.6 + _rng.randf_range(-0.5, 0.3)))
 		x += BORDER_SPACING[_quality] * _rng.randf_range(0.9, 1.1)
-	var z := 2.0
+	z = 2.0
 	while z < SIZE.y + 2:
-		_add_border_trees(Vector3(-2.6 + _rng.randf_range(-0.3, 0.5), 0, z))
-		_add_border_trees(Vector3(SIZE.x + 2.6 + _rng.randf_range(-0.5, 0.3), 0, z))
+		_add_border_trees(Vector3(-3.6 + _rng.randf_range(-0.3, 0.5), 0, z))
+		_add_border_trees(Vector3(SIZE.x + 3.6 + _rng.randf_range(-0.5, 0.3), 0, z))
 		z += BORDER_SPACING[_quality] * _rng.randf_range(0.9, 1.1)
-	x = 1.0
-	while x < SIZE.x: # phía nam gần camera: chỉ đá thấp và bụi lá, không che màn hình
-		if _rng.randf() < 0.5:
-			_add_rock(Vector3(x, 0.0, SIZE.y + 0.9), _rng.randf_range(0.5, 0.8))
-		else:
-			_add_nature("Bush_Large", Vector3(x, 0, SIZE.y + 1.0), _rng.randf() * TAU, _rng.randf_range(0.3, 0.4), false)
-		x += _rng.randf_range(2.5, 4.0)
+	_add_rim()
+	x = 0.5
+	while x < SIZE.x: # phía nam gần camera: vách đá thấp (~1,4 m) xen bụi lá, không che màn hình
+		_add_nature("Rock_Big_2", Vector3(x, 0, SIZE.y + 0.9), _rng.randf() * TAU, _rng.randf_range(0.34, 0.4), true)
+		if _quality > 0 and _rng.randf() < 0.6:
+			_add_nature("Bush_Large", Vector3(x + 1.4, 0, SIZE.y + 1.3), _rng.randf() * TAU, _rng.randf_range(0.3, 0.38), false)
+		x += CLIFF_SPACING[_quality] * _rng.randf_range(0.9, 1.1)
+
+
+## Vành viền kiểu đền đài: cột đá chạm trổ dọc mép bắc, tây, đông nối nhau bằng lan can
+## tròn, 2 góc bắc có cổng đôi cột cao với vòng đá. Phía nam chỉ cột thấp để không che camera.
+func _add_rim() -> void:
+	var rail := _material(RIM_STONE)
+	var line: Array[Vector3] = [] # các cột theo thứ tự đi vòng: tây (nam lên bắc), bắc, đông (bắc xuống nam)
+	var step: float = RIM_COLUMN_SPACING[_quality]
+	var z := SIZE.y - 3.0
+	while z > 0.0:
+		line.append(Vector3(-0.7, 0, z))
+		z -= step
+	var x := 0.0
+	while x < SIZE.x:
+		line.append(Vector3(x, 0, -0.7))
+		x += step
+	z = 0.0
+	while z < SIZE.y - 2.0:
+		line.append(Vector3(SIZE.x + 0.7, 0, z))
+		z += step
+	for i in line.size():
+		_add_model(DUNGEON + "pillar_decorated.obj", line[i], 0.0, Vector3(0.55, 1.0, 0.55), DUNGEON + "dungeon_texture.png")
+		if i > 0 and line[i].distance_to(line[i - 1]) < step * 1.6: # lan can nối cột liền trước (hai tầng)
+			_add_beam(line[i - 1] + Vector3(0, 3.5, 0), line[i] + Vector3(0, 3.5, 0), 0.24, rail)
+			_add_beam(line[i - 1] + Vector3(0, 2.3, 0), line[i] + Vector3(0, 2.3, 0), 0.15, rail)
+	for corner: Vector3 in [Vector3(-1.6, 0, -1.6), Vector3(SIZE.x + 1.6, 0, -1.6)]:
+		_add_rim_gate(corner)
+	x = 4.0
+	while x < SIZE.x: # cột thấp phía nam
+		_add_model(DUNGEON + "pillar_decorated.obj", Vector3(x, 0, SIZE.y + 0.6), 0.0, Vector3(0.36, 0.32, 0.36), DUNGEON + "dungeon_texture.png")
+		x += step * 1.3
+
+
+## Cổng đôi ở góc: 2 cột cao ~9 m, vòng đá dựng đứng giữa hai cột, đá đỉnh vắt ngang.
+func _add_rim_gate(pos: Vector3) -> void:
+	var stone := _material(RIM_STONE)
+	var face := Basis(Vector3.UP, PI / 4 if pos.x < SIZE.x / 2 else -PI / 4) # hai cổng nhìn chéo vào sân
+	for side: float in [-1.0, 1.0]:
+		var p := pos + face * Vector3(side * 1.9, 0, 0)
+		_add_model(DUNGEON + "pillar_decorated.obj", p, face.get_euler().y, Vector3(0.65, 2.3, 0.65), DUNGEON + "dungeon_texture.png")
+	var ring := _shape(&"stone_ring") as TorusMesh
+	if ring == null:
+		ring = TorusMesh.new()
+		ring.inner_radius = 0.78
+		ring.outer_radius = 1.0
+		ring.rings = 20
+		ring.ring_segments = 6
+		_shapes[&"stone_ring"] = ring
+	var stand := face * Basis(Vector3.RIGHT, PI / 2) * Basis.from_scale(Vector3(1.8, 2.4, 1.8))
+	_batch(ring, Transform3D(stand, pos + Vector3(0, 6.2, 0)), stone)
+	_add_beam(pos + face * Vector3(-2.4, 9.0, 0), pos + face * Vector3(2.4, 9.0, 0), 0.3, stone)
+	_add_beam(pos + face * Vector3(-1.9, 3.6, 0), pos + face * Vector3(1.9, 3.6, 0), 0.2, stone)
+
+
+## Thanh trụ tròn nối 2 điểm (lan can, xà ngang).
+func _add_beam(a: Vector3, b: Vector3, radius: float, mat: Material) -> void:
+	var beam := _cylinder(&"beam", 1.0, 1.0, 1.0, 8)
+	var d := b - a
+	var up := d.normalized()
+	var side := up.cross(Vector3.UP if absf(up.y) < 0.9 else Vector3.RIGHT).normalized()
+	var basis := Basis(side, up, side.cross(up)) * Basis.from_scale(Vector3(radius, d.length(), radius))
+	_batch(beam, Transform3D(basis, (a + b) / 2), mat)
+
+
+## Một tảng vách đá cao ~2,5 - 3 m (ngoài mép sân, mặt trong sát đường viền va chạm),
+## mức Vừa / Cao thêm bụi lá dưới chân phía trong sân.
+func _add_cliff(pos: Vector3, size: float) -> void:
+	var model := "Rock_Big_1" if _rng.randf() < 0.55 else "Rock_Big_2"
+	var s := _rng.randf_range(0.55, 0.68) * size * (1.0 if model == "Rock_Big_1" else 1.1)
+	_add_nature(model, pos, _rng.randf() * TAU, s, true)
+	if _quality > 0 and _rng.randf() < 0.35:
+		var inward := Vector3(clampf(SIZE.x / 2 - pos.x, -1, 1), 0, clampf(SIZE.y / 2 - pos.z, -1, 1)).normalized()
+		_add_nature("Bush_Large", pos + inward * 1.9 + Vector3(_rng.randf_range(-0.8, 0.8), 0, 0), _rng.randf() * TAU, _rng.randf_range(0.22, 0.3), true)
 
 
 ## Một cây rừng (thông hoặc cây tán tròn cao ~6 m), mức Cao thêm bụi lá dưới gốc.
