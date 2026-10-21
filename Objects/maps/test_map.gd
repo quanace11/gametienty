@@ -125,18 +125,22 @@ const PEBBLE := [["soi", "soi.png", false]]
 const NATURE_PARTS := {
 	"CommonTree_3": TREE_LEAVES, "CommonTree_5": TREE_LEAVES,
 	"Pine_5": [["vo", "vo_cay.png", false], ["la", "la_thong.png", true]],
-	"Bush_Large": [["la", "la_bui.png", true]], "Bush_Common": [["la", "la_bui_do.png", true]],
+	"Bush_Large": [["la", "la_bui.png", true]],
 	"Rock_Medium_1": STONE_PART, "Rock_Medium_2": STONE_PART, "Rock_Medium_3": STONE_PART, "Rock_Medium_4": STONE_PART,
 	"Rock_Big_1": STONE_PART, "Rock_Big_2": STONE_PART,
 	"Flower_3_Single": FLOWER, "Flower_4_Single": FLOWER, "Flower_7_Single": FLOWER,
-	"Clover_1": SMALL_PLANT, "Plant_2": SMALL_PLANT,
+	"Plant_2": SMALL_PLANT,
 	"Pebble_Round_1": PEBBLE, "Pebble_Round_3": PEBBLE, "Pebble_Square_2": PEBBLE, "Pebble_Square_5": PEBBLE,
 }
 ## Đá vừa: tên -> chiều rộng khuôn (m), để co theo bán kính tảng đá.
 const ROCK_WIDTHS := {"Rock_Medium_1": 3.2, "Rock_Medium_2": 3.0, "Rock_Medium_3": 3.4, "Rock_Medium_4": 3.8}
 const FLOWERS: Array[String] = ["Flower_3_Single", "Flower_4_Single", "Flower_7_Single"]
-## Nhuộm ảnh gốc: sỏi, đá, tường sáng quá dưới nắng, ngả xám rêu cho hợp sân cỏ.
-const TEXTURE_TINTS := {"soi.png": Color(0.62, 0.6, 0.55), "da.png": Color(0.82, 0.82, 0.78), "dungeon_texture.png": Color(0.8, 0.83, 0.76)}
+## Nhuộm ảnh gốc cho dịu như bản đồ MOBA: đá, tường ngả xám rêu; lá cây bớt vàng chanh, ngả xanh lục sẫm.
+const TEXTURE_TINTS := {
+	"soi.png": Color(0.55, 0.54, 0.5), "da.png": Color(0.7, 0.72, 0.7), "dungeon_texture.png": Color(0.72, 0.75, 0.72),
+	"la_cay.png": Color(0.56, 0.64, 0.6), "la_thong.png": Color(0.54, 0.62, 0.6), "la_bui.png": Color(0.56, 0.64, 0.6),
+	"la_nho.png": Color(0.6, 0.66, 0.62), "vo_cay.png": Color(0.8, 0.78, 0.76),
+}
 const PEBBLES: Array[String] = ["Pebble_Round_1", "Pebble_Round_3", "Pebble_Square_2", "Pebble_Square_5"]
 ## Số khóm cỏ thấp rải trên sân theo mức đồ họa 0 Thấp, 1 Vừa, 2 Cao (mỗi khóm ~155 tam giác).
 const TUFT_CLUSTERS := [14, 45, 75]
@@ -149,10 +153,10 @@ const RIM_STONE := Color(0.5, 0.53, 0.57) # đá trắng xám của lan can, vò
 ## Khoảng cách giữa các cây rừng ngoài viền theo mức đồ họa (m): máy yếu ít cây hơn.
 const BORDER_SPACING := [9.0, 6.0, 4.8]
 
-const GRASS_DARK := Color(0.19, 0.34, 0.12)
-const GRASS_LIGHT := Color(0.36, 0.5, 0.17)
-const DIRT_DARK := Color(0.5, 0.38, 0.24)
-const DIRT_LIGHT := Color(0.66, 0.53, 0.35)
+const GRASS_DARK := Color(0.14, 0.2, 0.14)
+const GRASS_LIGHT := Color(0.22, 0.29, 0.19)
+const DIRT_DARK := Color(0.36, 0.31, 0.24)
+const DIRT_LIGHT := Color(0.48, 0.42, 0.32)
 const PAVING := Color(0.45, 0.47, 0.5) # sàn đá lát
 const PAVING_LINE := Color(0.36, 0.37, 0.4)
 const MARBLE := Color(0.88, 0.88, 0.86)
@@ -289,7 +293,7 @@ func _painted(dark: Color, light: Color, scale: float) -> ShaderMaterial:
 ## Cỏ thấp, hoa, cỏ ba lá rải thành cụm trên sân; sỏi dọc lối đất; cây bụi nhỏ chân tường.
 ## Chỉ để nhìn, không đổ bóng; số lượng theo mức đồ họa.
 func _add_ground_cover() -> void:
-	var tuft := BushScript.grass_material(0.5, Color(0.16, 0.32, 0.11), Color(0.45, 0.66, 0.24), 1.0)
+	var tuft := BushScript.grass_material(0.5, Color(0.1, 0.17, 0.11), Color(0.24, 0.32, 0.2), 1.0)
 	_no_shadow[tuft] = true
 	var short: Mesh = load(NATURE + "Grass_Common_Short_co.obj")
 	var wide: Mesh = load(NATURE + "Grass_Wide_Short_co.obj")
@@ -302,12 +306,10 @@ func _add_ground_cover() -> void:
 			var mesh := wide if _quality == 2 and k == 0 else short
 			var sc := _rng.randf_range(0.3, 0.42)
 			_batch(mesh, Transform3D(Basis(Vector3.UP, _rng.randf() * TAU) * Basis.from_scale(Vector3(sc, sc, sc)), p), tuft)
-		if c % 3 == 0: # hoa mọc cạnh cỏ
+		if c % 7 == 0 and _quality > 0: # hoa lác đác, ít thôi cho khỏi rối mắt
 			var f: String = FLOWERS[_rng.randi() % FLOWERS.size()]
-			for k in 1 + _quality:
+			for k in _quality:
 				_add_nature(f, center + Vector3(_rng.randf_range(-0.9, 0.9), 0, _rng.randf_range(-0.9, 0.9)), _rng.randf() * TAU, 0.7, false)
-		elif c % 5 == 1 and _quality > 0:
-			_add_nature("Clover_1", center, _rng.randf() * TAU, 0.6, false)
 	for path: Array in PATHS: # sỏi lác đác hai bên lối đất
 		for k in path.size() - 1:
 			var a: Vector2 = path[k]
@@ -317,7 +319,7 @@ func _add_ground_cover() -> void:
 			while t < a.distance_to(b):
 				var q := a.lerp(b, t / a.distance_to(b)) + side * _rng.randf_range(-0.95, 0.95)
 				_add_nature(PEBBLES[_rng.randi() % PEBBLES.size()], Vector3(q.x, 0, q.y), _rng.randf() * TAU, _rng.randf_range(0.8, 1.3), false)
-				t += _rng.randf_range(2.0, 3.5) / (1 + _quality * 0.5)
+				t += _rng.randf_range(6.0, 9.0) # sỏi thưa, chỉ điểm xuyết
 	for r: Rect2 in WALLS + RUINS: # cây bụi nhỏ chân tường (máy yếu bỏ)
 		if _quality == 0 or r.size.x > 50 or r.size.y > 30:
 			continue
@@ -398,14 +400,11 @@ func _add_cave_mansion() -> void:
 	_add_disc(ALTAR + Vector3(0, 0.485, 0), 0.5, BLUE_SOFT, true)
 	for p: Vector2 in [Vector2(x0 + 1.7, 2.8), Vector2(x1 - 2.3, 2.8), Vector2(x0 + 1.7, 10.6), Vector2(x1 - 2.3, 10.6)]:
 		_add_model(DUNGEON + "pillar_decorated.obj", Vector3(p.x, 0, p.y), 0.0, Vector3(0.4, 0.65, 0.4), DUNGEON + "dungeon_texture.png")
-	for i in DECOR_BUSHES.size(): # bụi lá xanh xen bụi lá đỏ (máy yếu một nửa)
+	for i in DECOR_BUSHES.size(): # bụi lá xanh (máy yếu một nửa)
 		if _quality == 0 and i % 2 == 1:
 			continue
 		var b := DECOR_BUSHES[i]
-		if i % 3 == 1:
-			_add_nature("Bush_Common", Vector3(b.x, 0, b.y), _rng.randf() * TAU, b.z * 0.75, true)
-		else:
-			_add_nature("Bush_Large", Vector3(b.x, 0, b.y), _rng.randf() * TAU, b.z * 0.45, true)
+		_add_nature("Bush_Large", Vector3(b.x, 0, b.y), _rng.randf() * TAU, b.z * 0.45, true)
 
 
 ## Trận linh ngũ tinh vàng dưới bệ trận linh.
@@ -422,12 +421,8 @@ func _add_pentagram(center: Vector3, radius: float) -> void:
 		_add_strip(pts[k], pts[(k + 2) % 5], 0.08, c.y + 0.004, _glow(GOLD_GLOW))
 
 
-## Đá vụn và cột gãy quanh tường đổ phía dưới phải (chỉ để nhìn, thấp dưới gối).
+## Cột gãy đổ cạnh tường vỡ phía dưới phải (chỉ để nhìn, thấp dưới gối).
 func _add_rubble() -> void:
-	for i in 7:
-		var p := Vector3(_rng.randf_range(33.0, 41.0), 0, _rng.randf_range(25.2, 33.0))
-		_add_model(DUNGEON + "rubble_half.obj", p, _rng.randf() * TAU, Vector3(0.18, 0.12, 0.18), DUNGEON + "dungeon_texture.png")
-	_add_model(DUNGEON + "rubble_large.obj", Vector3(22.0, 0, 3.0), 0.3, Vector3(0.22, 0.14, 0.22), DUNGEON + "dungeon_texture.png")
 	_add_model(DUNGEON + "pillar_decorated.obj", Vector3(38.8, 0, 30.0), 0.4, Vector3(0.5, 0.35, 0.5), DUNGEON + "dungeon_texture.png")
 
 
@@ -764,15 +759,15 @@ func _add_lighting() -> void:
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-55, 30, 0)
 	sun.shadow_enabled = int(ProjectSettings.get_setting("game/graphics_quality", 0)) > 0 # đồ họa Thấp: không bóng
-	sun.light_energy = 0.8
-	sun.light_color = Color(1.0, 0.95, 0.84) # nắng ấm
+	sun.light_energy = 0.75
+	sun.light_color = Color(1.0, 0.96, 0.9) # nắng nhẹ, không gắt
 	add_child(sun)
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.56, 0.74, 0.88) # trời xanh
+	env.background_color = Color(0.4, 0.52, 0.58) # trời xám xanh, không chói
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.72, 0.82, 0.95) # bóng râm ngả xanh trời như tranh vẽ
-	env.ambient_light_energy = 0.42
+	env.ambient_light_color = Color(0.62, 0.72, 0.8) # bóng râm ngả xanh lạnh như bản đồ MOBA
+	env.ambient_light_energy = 0.45
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC # màu đỡ cháy dưới nắng
 	var world_env := WorldEnvironment.new()
 	world_env.environment = env
