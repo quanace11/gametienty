@@ -6,6 +6,10 @@ extends InputSource
 ## ngang qua nút hủy rồi kéo ra thì vẫn ngắm tiếp (không khóa hủy cả lần kéo).
 ## Thẻ kéo-thả: UI giữ item_* (hướng + độ xa 0..1) cùng lúc bấm skill_N; lúc đó
 ## get_aim() trả đúng vector này (không chuẩn hóa) để server tính chỗ ném.
+## Phím thẻ 1..5 (card_N) không bấm thẳng skill_N: UI đọc card_N, thẻ ném được
+## thì giữ phím để ngắm theo con trỏ chuột, thả phím là ném (như kéo thẻ).
+## Mỗi phím gắn cả mã vật lý lẫn mã ký tự, để bộ gõ tiếng Việt / remote desktop
+## / bàn phím khác kiểu vẫn đi được.
 
 const KEYS := {
 	&"move_left": [KEY_A, KEY_LEFT],
@@ -14,11 +18,18 @@ const KEYS := {
 	&"move_down": [KEY_S, KEY_DOWN],
 	&"interact": [KEY_E, KEY_SPACE],
 	&"dash": [KEY_SHIFT],
-	&"skill_1": [KEY_1, KEY_Q], # ô thẻ 1..5
-	&"skill_2": [KEY_2, KEY_R],
-	&"skill_3": [KEY_3, KEY_F],
-	&"skill_4": [KEY_4, KEY_G],
-	&"skill_5": [KEY_5, KEY_T],
+	&"card_1": [KEY_1, KEY_Q, KEY_KP_1], # phím ô thẻ 1..5 (UI đọc, rồi bấm skill_N)
+	&"card_2": [KEY_2, KEY_R, KEY_KP_2],
+	&"card_3": [KEY_3, KEY_F, KEY_KP_3],
+	&"card_4": [KEY_4, KEY_G, KEY_KP_4],
+	&"card_5": [KEY_5, KEY_T, KEY_KP_5],
+	# Ô thẻ 1..5 gửi lên server (UI bấm), không có phím.
+	&"skill_1": [],
+	&"skill_2": [],
+	&"skill_3": [],
+	&"skill_4": [],
+	&"skill_5": [],
+	&"card_cancel": [KEY_ESCAPE], # đang giữ phím thẻ: thôi không ném
 	&"spectate_next": [KEY_TAB], # đã thoát / bị loại: xem người khác (chỉ camera đọc)
 	# Cần ngắm cảm ứng (UI bấm với độ mạnh 0..1), không có phím.
 	&"aim_left": [],
@@ -52,6 +63,9 @@ func _init() -> void:
 			var ev := InputEventKey.new()
 			ev.physical_keycode = key
 			InputMap.action_add_event(action, ev)
+			var logical := InputEventKey.new() # máy gửi phím không có mã vật lý
+			logical.keycode = key
+			InputMap.action_add_event(action, logical)
 
 
 func attach(e: EntityBase) -> void:

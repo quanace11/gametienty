@@ -5,6 +5,9 @@ extends Node3D
 ## đúng bán kính hồi máu, 5 lá cờ ngũ hành mọc quanh mép; lựu đạn) theo item_used. Phần luật của vật thể (bẫy
 ## kẹp, đệm hất) chạy trong chính node đó trên server.
 ## Hiệu ứng ném, nổ, vùng xanh, cột sáng lấy từ pool (không tạo / xóa node mỗi lần).
+## Ném trận bàn: vật rời tay sau RELEASE_DELAY (khớp lúc vung tay của động tác
+## Throw) nhưng vẫn rơi đúng lúc server cứu người; chỗ rơi hiện vòng vàng co dần
+## ngay khi ném để mọi người thấy trận bàn sẽ bày ở đâu.
 
 const T := GameTypes.ItemType
 const MedkitMesh = preload("res://Items/medkit_mesh.gd")
@@ -18,6 +21,8 @@ const Medkit = preload("res://Items/effects/medkit.gd")
 const GRENADE_FLIGHT := 0.6
 const ARRAY_FLAGS := 5
 const ARRAY_TIME := 1.4 # giây trận hồi phục hiện trên đất
+const RELEASE_DELAY := 0.12 # giây từ lúc bấm tới lúc vật rời tay (động tác ném)
+const THROW_HEIGHT := 1.2 # mét, độ cao vật rời tay (UI/touch_controls.gd vẽ đường bay cùng số này)
 
 var _placed := {} # obj_id -> Node3D
 var _pool := {} # Mesh -> Array[MeshInstance3D] đang rảnh
@@ -74,9 +79,11 @@ func _on_item_used(id: int, type: GameTypes.ItemType, _target_id: int, target_po
 	match type:
 		T.MEDKIT:
 			var flat := Vector2((from as Vector3).x - target_pos.x, (from as Vector3).z - target_pos.z)
-			_throw(MedkitMesh.get_mesh(), from, target_pos, Medkit.flight_time(flat.length()), _heal_area.bind(target_pos), true)
+			var flight := Medkit.flight_time(flat.length())
+			_landing_mark(target_pos, flight)
+			_throw(MedkitMesh.get_mesh(), id, target_pos, flight, _heal_area.bind(target_pos), true)
 		T.STUN_GRENADE:
-			_throw(_grenade_mesh, from, target_pos, GRENADE_FLIGHT, _blast.bind(target_pos))
+			_throw(_grenade_mesh, id, target_pos, GRENADE_FLIGHT, _blast.bind(target_pos))
 
 
 ## Thợ săn tụ lực: cột sáng ở chỗ đứng và chỗ sẽ tới (người trốn thấy để chạy).
@@ -93,21 +100,48 @@ func _on_teleport_started(id: int, target: Vector3, seconds: float) -> void:
 		tween.tween_callback(_give.bind(mi))
 
 
-## Vật bay theo đường cong từ `from` tới `to` (ném xa thì vòng cao hơn), lộn
-## vòng trên không (`flat_spin`: nằm ngang xoay tròn như đĩa), rơi xuống thì gọi `on_land`.
-func _throw(mesh: Mesh, from: Vector3, to: Vector3, time: float, on_land: Callable, flat_spin := false) -> void:
+## Vật bay theo đường cong từ tay người ném `thrower_id` tới `to` (ném xa thì vòng
+## cao hơn), lộn vòng trên không (`flat_spin`: nằm ngang xoay tròn như đĩa), rơi
+## xuống đúng `time` giây sau lúc ném thì gọi `on_land`. Vật rời tay sau
+## RELEASE_DELAY, lấy vị trí tay lúc đó (người ném đang chạy thì không bị tụt lại).
+func _throw(mesh: Mesh, thrower_id: int, to: Vector3, time: float, on_land: Callable, flat_spin := false) -> void:
 	var mi := _take(mesh)
-	var start := from + Vector3(0, 1.2, 0)
+	mi.visible = false
+	var delay := minf(RELEASE_DELAY, time * 0.3)
 	var end := to + Vector3(0, 0.25, 0)
-	var height := 1.2 + 0.2 * Vector2(to.x - from.x, to.z - from.z).length()
+	var arc := [end, 0.0] # chỗ rời tay, độ cao vòng bay: đặt lúc vật rời tay
 	var tween := mi.create_tween()
+	tween.tween_interval(delay)
+	tween.tween_callback(func() -> void:
+		var at: Variant = _entity_pos(thrower_id)
+		var from: Vector3 = at if at != null else to
+		var start := from + Vector3(0, THROW_HEIGHT, 0)
+		arc[0] = start
+		arc[1] = 1.2 + 0.2 * Vector2(to.x - from.x, to.z - from.z).length()
+		mi.visible = true
+		mi.global_position = start)
 	tween.tween_method(func(t: float) -> void:
-		mi.global_position = start.lerp(end, t) + Vector3(0, sin(t * PI) * height, 0)
-		mi.rotation = Vector3(0.0, t * TAU * 3.0, 0.0) if flat_spin else Vector3(t * TAU, t * PI, 0.0), 0.0, 1.0, time)
+		mi.global_position = (arc[0] as Vector3).lerp(end, t) + Vector3(0, sin(t * PI) * float(arc[1]), 0)
+		mi.rotation = Vector3(0.0, t * TAU * 3.0, 0.0) if flat_spin else Vector3(t * TAU, t * PI, 0.0), 0.0, 1.0, time - delay)
 	tween.tween_callback(func() -> void:
 		_give(mi)
 		if on_land.is_valid():
 			on_land.call())
+
+
+## Vòng vàng chỗ trận bàn sẽ rơi: hiện ngay lúc ném, co dần về đúng bán kính hồi
+## máu trong lúc trận bàn bay, rơi xuống thì nhường cho vòng trận hồi phục.
+func _landing_mark(pos: Vector3, time: float) -> void:
+	var r := _area(T.MEDKIT)
+	var mi := _take(_rune_mesh)
+	mi.global_position = pos + Vector3(0, 0.06, 0)
+	mi.scale = Vector3(r * 1.4, 0.12, r * 1.4)
+	mi.transparency = 0.5
+	var tween := mi.create_tween().set_parallel()
+	tween.tween_property(mi, "scale", Vector3(r, 0.12, r), time).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tween.tween_property(mi, "transparency", 0.1, time)
+	tween.tween_property(mi, "rotation:y", -PI, time)
+	tween.chain().tween_callback(_give.bind(mi))
 
 
 func _blast(pos: Vector3) -> void:

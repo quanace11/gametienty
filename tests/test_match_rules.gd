@@ -25,6 +25,8 @@ func _initialize() -> void:
 		&"_test_two_openers_faster",
 		&"_test_gate_opens_after_delay",
 		&"_test_escape_waits_for_gate",
+		&"_test_gate_needs_all_safes",
+		&"_test_gate_custom_safes_required",
 		&"_test_qte_appears",
 		&"_test_qte_perfect",
 		&"_test_qte_good",
@@ -276,6 +278,30 @@ func _test_escape_waits_for_gate() -> void:
 	_check(not r.escape(A), "cổng đang rung thì chưa thoát được")
 	r.tick(r.config.gate_open_delay + 0.1)
 	_check(r.escape(A), "cổng mở thì thoát")
+
+
+func _test_gate_needs_all_safes() -> void:
+	var cfg := MatchConfig.new()
+	cfg.countdown = 0.0
+	var r := MatchRules.new(cfg, {H: GameTypes.Role.HUNTER, A: GameTypes.Role.ESCAPEE}, {}, 6, 2)
+	r.tick(0.001)
+	_check(r.safes_required() == 6, "mặc định phải giải hết trận linh")
+	for i in 5:
+		_open_chest(r, i)
+	_check(r.gate_opening_left == 0.0 and not r.gate_open, "giải 5/6 thì lối ra chưa mở")
+	_open_chest(r, 5)
+	_check(r.gate_opening_left > 0.0, "giải 6/6 thì lối ra bắt đầu mở")
+
+
+func _test_gate_custom_safes_required() -> void:
+	var cfg := MatchConfig.new()
+	cfg.countdown = 0.0
+	cfg.safes_required = 2
+	var r := MatchRules.new(cfg, {H: GameTypes.Role.HUNTER, A: GameTypes.Role.ESCAPEE}, {}, 6, 2)
+	r.tick(0.001)
+	_open_chest(r, 0)
+	_open_chest(r, 1)
+	_check(r.safes_required() == 2 and r.gate_opening_left > 0.0, "đặt số riêng thì đủ số đó là mở")
 
 
 func _test_qte_appears() -> void:
