@@ -5,7 +5,7 @@ extends Node3D
 ## có nhân vật của mình đứng trong bụi thì bụi đó trong mờ để còn thấy mình.
 ## Mức chi tiết theo cài đặt đồ họa (ProjectSettings "game/graphics_quality"):
 ## mỗi khóm Thấp ~250, Vừa ~400, Cao ~800 tam giác (mỗi bụi 3 khóm). Cả bụi là
-## một mesh dùng chung (bụi bán kính 1 m, cao ~1,1 m), mỗi bụi một lần vẽ.
+## một mesh dùng chung (bụi bán kính 1 m, cao ~2,1 m), mỗi bụi một lần vẽ.
 
 const CHECK_INTERVAL := 0.1
 const MODELS := [ # theo mức đồ họa 0 Thấp, 1 Vừa, 2 Cao
@@ -14,7 +14,7 @@ const MODELS := [ # theo mức đồ họa 0 Thấp, 1 Vừa, 2 Cao
 	"res://Objects/models/bui_co/bui_co_cao.obj",
 ]
 const LEAF_TEXTURE := "res://Objects/models/bui_co/la_co.jpg"
-const HEIGHT := 1.1 # mét, ngang hông nhân vật chibi
+const HEIGHT := 2.1 # mét, cao hơn đầu nhân vật (1,7 m): đứng trong là khuất hẳn
 const TINT := Color(0.62, 0.9, 0.62) # nhuộm lá ngọc của ảnh gốc cho hợp sân cỏ
 
 var index := 0 ## chỉ số trong MapBase.get_bushes()

@@ -1,100 +1,106 @@
 extends MapBase
-## Bản đồ "Động phủ Linh Đài" 52 x 30 m dựng bằng code, theo ảnh thiết kế
+## Bản đồ "Động phủ Linh Đài" 60 x 36 m dựng bằng code, theo ảnh thiết kế
 ## (ban-do/ban_do_v4.png và ảnh dựng 3D): phòng truyền tống mái đỏ bên trái
-## (đệ tử xuất hiện ở trận tròn xanh), huyết trận ở giữa, 4 trận linh ngũ tinh
-## vàng ở 4 góc, phế tích có hốc tường phía trên (ma tu xuất hiện), động phủ
+## (đệ tử xuất hiện ở trận tròn xanh), huyết trận ở giữa, 6 trận linh ngũ tinh
+## vàng, phế tích có hốc tường phía trên, ma tu chui ra từ cửa hang bên phải, động phủ
 ## tường đá bên phải với 2 cửa phong ấn cam (2 lối ra), linh đài và 4 cột đá bên
 ## trong, cửa hang mật đạo, đá tảng, cây cổ thụ, lối đất và bụi cỏ cao để nấp.
 ## Sau này có thể thay bằng scene dựng trong editor, giữ nguyên các hàm của MapBase.
 ## Phần chỉ để nhìn gộp thành một mesh cho mỗi material: cả bản đồ tĩnh chỉ vài
 ## chục lần vẽ (draw call) thay vì vài trăm.
 
-const SIZE := Vector2(52, 30) # x, z
+const SIZE := Vector2(60, 36) # x, z
 const WALL_HEIGHT := 1.5 # tường thấp, camera nhìn qua được (vẫn cao hơn đường đạn 1.1 m)
 const RUIN_HEIGHT := 1.2 # tường phế tích đổ nát
 ## Tường trên mặt sàn: Rect2(x, z, rộng theo x, sâu theo z), đơn vị mét.
 const WALLS := [
 	# Viền đá
-	Rect2(0, 0, 52, 0.5), Rect2(0, 29.5, 52, 0.5),
-	Rect2(0, 0, 0.5, 30), Rect2(51.5, 0, 0.5, 30),
+	Rect2(0, 0, 60, 0.5), Rect2(0, 35.5, 60, 0.5),
+	Rect2(0, 0, 0.5, 36), Rect2(59.5, 0, 0.5, 36),
 	# Phòng truyền tống (trái): 3 cửa mở sẵn trên, dưới, phải
-	Rect2(0.5, 11.5, 2.5, 0.5), Rect2(5.6, 11.5, 2.9, 0.5),
-	Rect2(0.5, 22, 2.5, 0.5), Rect2(5.6, 22, 2.9, 0.5),
-	Rect2(8, 12, 0.5, 3.8), Rect2(8, 18.6, 0.5, 3.4),
+	Rect2(0.5, 14.5, 2.5, 0.5), Rect2(5.6, 14.5, 2.9, 0.5),
+	Rect2(0.5, 25, 2.5, 0.5), Rect2(5.6, 25, 2.9, 0.5),
+	Rect2(8, 15, 0.5, 3.8), Rect2(8, 21.6, 0.5, 3.4),
 	# Động phủ (phải trên): khe ở giữa tường trái và tường dưới là 2 cửa phong ấn
-	Rect2(40.6, 0.5, 0.5, 5.2), Rect2(40.6, 8.1, 0.5, 5.0),
-	Rect2(40.6, 12.6, 4.9, 0.5), Rect2(47.9, 12.6, 3.6, 0.5),
+	Rect2(48.6, 0.5, 0.5, 5.2), Rect2(48.6, 8.1, 0.5, 5.0),
+	Rect2(48.6, 12.6, 4.9, 0.5), Rect2(55.9, 12.6, 3.6, 0.5),
 ]
 ## Tường phế tích (thấp hơn, đầu tường lởm chởm): hốc tường trên có 2 khe vào, đoạn tường đổ dưới phải.
 const RUINS := [
-	Rect2(16.3, 0.5, 0.6, 2.3), Rect2(16.3, 5.2, 0.6, 2.1),
-	Rect2(25.2, 0.5, 0.6, 2.3), Rect2(25.2, 5.2, 0.6, 2.1),
-	Rect2(16.3, 6.7, 9.5, 0.6),
-	Rect2(30.2, 25.4, 2.4, 0.5), Rect2(32.9, 23.4, 2.2, 0.5),
+	Rect2(18.8, 0.5, 0.6, 2.3), Rect2(18.8, 5.2, 0.6, 2.1),
+	Rect2(27.7, 0.5, 0.6, 2.3), Rect2(27.7, 5.2, 0.6, 2.1),
+	Rect2(18.8, 6.7, 9.5, 0.6),
+	Rect2(34.8, 30.5, 2.4, 0.5), Rect2(38.0, 28.1, 2.2, 0.5),
 ]
 ## Nhà mái đỏ trong phòng truyền tống (chắn đường), thấp để không che camera lúc vào trận.
-const PAVILION := Rect2(0.5, 12, 2.6, 5.2)
+const PAVILION := Rect2(0.5, 15, 2.6, 5.2)
 ## Cửa hang mật đạo sát tường phải (chỉ để nhìn, chắn đường).
-const CAVE := Rect2(49.6, 14.6, 1.9, 2.8)
-## 4 trận linh ngũ tinh ở 4 phía, cần giải MatchConfig.safes_required.
+const CAVE := Rect2(57.6, 17.6, 1.9, 2.8)
+## 6 trận linh ngũ tinh: 4 ở 4 phía, 2 ở giữa (trái và phải dưới); cần giải MatchConfig.safes_required.
 const SAFES := [
-	Vector3(7.9, 0, 4.8), Vector3(35.6, 0, 3.6), Vector3(20.8, 0, 27.0), Vector3(45.7, 0, 26.6),
+	Vector3(9.1, 0, 5.8), Vector3(41.1, 0, 4.3), Vector3(24.0, 0, 32.4), Vector3(52.7, 0, 31.9), Vector3(17.5, 0, 20.5),
+	Vector3(36.5, 0, 26.5),
 ]
 ## 2 lối ra là 2 cửa phong ấn của động phủ: tường trái (quay theo trục x) và tường dưới (xoay 90°).
-const EXIT_GATES := [Vector3(40.85, 0, 6.9), Vector3(46.7, 0, 12.85)]
+const EXIT_GATES := [Vector3(48.85, 0, 6.9), Vector3(54.7, 0, 12.85)]
 const EXIT_GATE_YAW := [0.0, PI / 2]
 ## Thanh chắn trong khe cửa: cửa phong ấn đóng thì không vào động phủ được,
 ## vùng thoát của lối ra vẫn chìa ra ngoài tường.
-const GATE_BLOCKERS := [Rect2(40.75, 5.7, 0.2, 2.4), Rect2(45.5, 12.75, 2.4, 0.2)]
+const GATE_BLOCKERS := [Rect2(48.75, 5.7, 0.2, 2.4), Rect2(53.5, 12.75, 2.4, 0.2)]
 ## Huyết trận ở giữa, kết giới cao 3 m, chỉ đệm lò xo bay qua được.
-const PRISONS := [Vector3(27.1, 0, 13.6)]
-## Bụi cỏ cao để nấp: Vector3(x, z, bán kính).
+const PRISONS := [Vector3(31.3, 0, 16.3)]
+## Bụi cỏ cao (hơn đầu người) để nấp: Vector3(x, z, bán kính).
 const BUSHES: Array[Vector3] = [
-	Vector3(13.6, 4.6, 1.5), Vector3(29.8, 3.4, 1.1), Vector3(36.4, 8.4, 1.3), Vector3(10.2, 8.2, 1.1),
-	Vector3(11.6, 15.0, 1.2), Vector3(20.6, 18.4, 1.0), Vector3(14.8, 21.4, 1.6), Vector3(26.4, 25.0, 1.4),
-	Vector3(22.6, 9.6, 1.1), Vector3(23.0, 17.4, 1.2), Vector3(31.4, 17.6, 1.2), Vector3(38.0, 17.0, 1.0),
-	Vector3(40.4, 17.0, 1.0), Vector3(37.4, 23.4, 1.4), Vector3(46.4, 21.0, 1.4), Vector3(33.8, 28.0, 0.9),
-	Vector3(6.6, 13.4, 0.9), Vector3(1.8, 20.4, 0.9),
+	Vector3(15.7, 5.5, 1.8), Vector3(34.4, 4.1, 1.3), Vector3(42.0, 10.1, 1.6), Vector3(11.8, 9.8, 1.3),
+	Vector3(13.4, 18.0, 1.4), Vector3(23.8, 22.1, 1.2), Vector3(17.1, 25.7, 1.9), Vector3(30.5, 30.0, 1.7),
+	Vector3(26.1, 11.5, 1.3), Vector3(26.5, 20.9, 1.4), Vector3(36.2, 21.1, 1.4), Vector3(43.8, 20.4, 1.2),
+	Vector3(46.6, 20.4, 1.2), Vector3(43.2, 28.1, 1.7), Vector3(53.5, 25.2, 1.7), Vector3(39.0, 33.6, 1.1),
+	Vector3(6.6, 16.4, 1.0), Vector3(1.8, 23.4, 1.0), Vector3(6.0, 33.6, 1.4), Vector3(49.5, 15.8, 1.3),
+	Vector3(20.5, 13.5, 1.3), Vector3(30.0, 8.6, 1.4), Vector3(46.4, 33.4, 1.3),
 ]
 ## Bụi cỏ trang trí trong động phủ (không vào được nên không tính luật nấp): Vector3(x, z, bán kính).
 const DECOR_BUSHES: Array[Vector3] = [
-	Vector3(42.0, 1.8, 0.8), Vector3(44.6, 1.6, 0.7), Vector3(48.2, 1.7, 0.8), Vector3(50.4, 3.6, 0.7),
-	Vector3(41.9, 4.4, 0.7), Vector3(42.0, 10.2, 0.8), Vector3(50.3, 9.6, 0.8), Vector3(43.0, 11.8, 0.7),
-	Vector3(49.6, 11.8, 0.7),
+	Vector3(50.0, 1.8, 0.8), Vector3(52.6, 1.6, 0.7), Vector3(56.2, 1.7, 0.8), Vector3(58.4, 3.6, 0.7),
+	Vector3(49.9, 4.4, 0.7), Vector3(50.0, 10.2, 0.8), Vector3(58.3, 9.6, 0.8), Vector3(51.0, 11.8, 0.7),
+	Vector3(57.6, 11.8, 0.7),
 ]
-## Đá tảng chắn đường: Vector3(x, z, bán kính).
+## Đá tảng chắn đường (và chắn phi kiếm): Vector3(x, z, bán kính).
 const ROCKS: Array[Vector3] = [
-	Vector3(28.2, 2.2, 0.55), Vector3(13.9, 10.4, 0.5), Vector3(17.6, 13.8, 0.6), Vector3(18.9, 15.2, 0.4),
-	Vector3(10.6, 20.6, 0.55), Vector3(32.4, 19.6, 0.5), Vector3(35.0, 16.2, 0.45), Vector3(42.2, 27.2, 0.5),
-	Vector3(26.0, 20.8, 1.0), Vector3(27.4, 21.8, 0.55),
+	Vector3(32.5, 2.6, 0.55), Vector3(16.0, 12.5, 0.5), Vector3(20.3, 16.6, 0.6), Vector3(21.8, 18.2, 0.4),
+	Vector3(12.2, 24.7, 0.55), Vector3(37.4, 23.5, 0.5), Vector3(40.4, 19.4, 0.45), Vector3(48.7, 32.6, 0.5),
+	Vector3(30.0, 25.0, 1.0), Vector3(31.6, 26.2, 0.55),
+	Vector3(8.0, 12.0, 0.6), Vector3(20.0, 24.0, 0.7), Vector3(28.0, 28.5, 0.6), Vector3(17.0, 30.5, 0.6),
+	Vector3(45.5, 24.0, 0.7), Vector3(48.5, 28.5, 0.6), Vector3(39.0, 7.5, 0.6), Vector3(36.0, 12.0, 0.6),
+	Vector3(24.5, 15.0, 0.6), Vector3(47.0, 17.5, 0.55), Vector3(56.0, 28.0, 0.6), Vector3(12.5, 7.0, 0.5),
 ]
 ## Cây cổ thụ: thân chắn đường, tán che: Vector3(x, z, cỡ).
 const TREES: Array[Vector3] = [
-	Vector3(12.0, 1.8, 1.0), Vector3(44.6, 16.8, 1.0), Vector3(5.0, 25.4, 0.9), Vector3(10.2, 27.6, 0.8),
-	Vector3(38.6, 10.6, 0.8),
+	Vector3(13.8, 2.2, 1.0), Vector3(51.5, 20.2, 1.0), Vector3(5.8, 30.5, 0.9), Vector3(11.8, 33.1, 0.8),
+	Vector3(44.5, 12.7, 0.8),
 ]
 ## Lối đất: mỗi lối là một chuỗi điểm (x, z).
 const PATHS := [
-	[Vector2(4.3, 11.0), Vector2(8.4, 8.4), Vector2(17.4, 8.6), Vector2(23.8, 10.0)],
-	[Vector2(4.3, 23.0), Vector2(8.4, 25.4), Vector2(20.5, 22.6), Vector2(25.6, 17.6), Vector2(30.4, 16.4),
-		Vector2(35.1, 13.6), Vector2(46.7, 14.2)],
-	[Vector2(35.1, 13.6), Vector2(37.8, 8.6), Vector2(40.2, 6.9)],
-	[Vector2(8.6, 17.2), Vector2(11.0, 17.6)],
+	[Vector2(4.3, 14.0), Vector2(9.7, 10.1), Vector2(20.1, 10.3), Vector2(27.5, 12.0)],
+	[Vector2(4.3, 26.0), Vector2(9.7, 30.5), Vector2(23.7, 27.1), Vector2(29.5, 21.1), Vector2(35.1, 19.7),
+		Vector2(40.5, 16.3), Vector2(54.7, 14.2)],
+	[Vector2(40.5, 16.3), Vector2(43.6, 10.3), Vector2(48.2, 6.9)],
+	[Vector2(8.6, 20.2), Vector2(12.0, 20.6)],
 ]
 const PATH_WIDTH := 1.5
-const TELEPORT := Vector3(5.4, 0, 18.2) # truyền tống trận trong phòng trái
-const ALTAR := Vector3(46.0, 0, 6.7) # linh đài trong động phủ
-const HUNTER_SPAWN := Vector3(21.0, 0.05, 3.8) # trong hốc tường phế tích
+const TELEPORT := Vector3(5.4, 0, 21.2) # truyền tống trận trong phòng trái
+const ALTAR := Vector3(54.0, 0, 6.7) # linh đài trong động phủ
+const COURTYARD := Rect2(49.1, 0.5, 10.4, 12.1) # sàn động phủ trong tường
+const HUNTER_SPAWN := Vector3(55.6, 0.05, 19.0) # ma tu chui ra từ cửa hang mật đạo, xa phòng truyền tống
 const ESCAPEE_SPAWNS: Array[Vector3] = [
-	Vector3(4.6, 0.05, 17.4), Vector3(6.2, 0.05, 17.4), Vector3(4.6, 0.05, 19.0), Vector3(6.2, 0.05, 19.0),
+	Vector3(4.6, 0.05, 20.4), Vector3(6.2, 0.05, 20.4), Vector3(4.6, 0.05, 22.0), Vector3(6.2, 0.05, 22.0),
 ]
 ## Linh thạch rải sẵn trên sàn.
 const COIN_SPOTS: Array[Vector3] = [
-	Vector3(5.0, 0, 8.6), Vector3(4.6, 0, 26.6), Vector3(12.4, 0, 12.6), Vector3(8.8, 0, 23.6),
-	Vector3(20.6, 0, 4.4), Vector3(19.8, 0, 11.4), Vector3(17.4, 0, 25.6), Vector3(23.6, 0, 27.6),
-	Vector3(31.0, 0, 8.6), Vector3(33.4, 0, 11.6), Vector3(38.6, 0, 2.6), Vector3(35.4, 0, 19.6),
-	Vector3(29.6, 0, 21.4), Vector3(38.8, 0, 13.6), Vector3(43.8, 0, 19.6), Vector3(49.0, 0, 19.6),
-	Vector3(49.2, 0, 27.2), Vector3(39.6, 0, 27.4), Vector3(28.2, 0, 27.8), Vector3(23.4, 0, 6.4),
+	Vector3(5.8, 0, 10.3), Vector3(5.3, 0, 31.9), Vector3(14.3, 0, 15.1), Vector3(10.2, 0, 28.3),
+	Vector3(23.1, 0, 4.4), Vector3(22.8, 0, 13.7), Vector3(20.1, 0, 30.7), Vector3(27.2, 0, 33.1),
+	Vector3(35.8, 0, 10.3), Vector3(38.5, 0, 13.9), Vector3(44.5, 0, 3.1), Vector3(40.8, 0, 25.0),
+	Vector3(34.2, 0, 25.7), Vector3(44.8, 0, 16.3), Vector3(50.5, 0, 23.5), Vector3(56.5, 0, 23.5),
+	Vector3(56.8, 0, 32.6), Vector3(45.7, 0, 32.9), Vector3(32.5, 0, 33.4), Vector3(25.9, 0, 5.6),
 ]
 
 const SafeScript = preload("res://Objects/safe.gd")
@@ -221,9 +227,9 @@ func _add_scenery() -> void:
 
 ## Phòng truyền tống: sàn đá, nhà mái ngói đỏ, trận tròn xanh có 6 viên sáng.
 func _add_spawn_room() -> void:
-	_add_mesh(Vector3(4.25, 0.01, 17.0), Vector3(7.5, 0.02, 10.0), PAVING)
-	_add_rock(Vector3(1.4, 0, 21.2), 0.35)
-	_add_rock(Vector3(7.2, 0, 21.3), 0.3)
+	_add_mesh(Vector3(4.25, 0.01, 20.0), Vector3(7.5, 0.02, 10.0), PAVING)
+	_add_rock(Vector3(1.4, 0, 24.2), 0.35)
+	_add_rock(Vector3(7.2, 0, 24.3), 0.3)
 	var c := PAVILION.get_center()
 	var pc := Vector3(c.x, 0, c.y)
 	_add_mesh(pc + Vector3(0, 0.15, 0), Vector3(PAVILION.size.x, 0.3, PAVILION.size.y), STONE) # nền
@@ -252,10 +258,10 @@ func _add_spawn_room() -> void:
 
 ## Động phủ: sàn đá lát kẻ ô, linh đài cẩm thạch với trận xanh, 4 cột đá, bụi cỏ quanh tường.
 func _add_cave_mansion() -> void:
-	var x0 := 41.1
-	var z0 := 0.5
-	var x1 := 51.5
-	var z1 := 12.6
+	var x0 := COURTYARD.position.x
+	var z0 := COURTYARD.position.y
+	var x1 := COURTYARD.end.x
+	var z1 := COURTYARD.end.y
 	_add_mesh(Vector3((x0 + x1) / 2, 0.01, (z0 + z1) / 2), Vector3(x1 - x0, 0.02, z1 - z0), PAVING)
 	var x := x0 + 1.2
 	while x < x1:
@@ -271,7 +277,7 @@ func _add_cave_mansion() -> void:
 	_add_ring(ALTAR + Vector3(0, 0.49, 0), 1.05, BLUE_GLOW)
 	_add_disc(ALTAR + Vector3(0, 0.485, 0), 0.5, BLUE_SOFT, true)
 	var pillar := _cylinder(&"pillar", 0.3, 0.36, 1.0, 8)
-	for p: Vector2 in [Vector2(42.8, 2.8), Vector2(49.2, 2.8), Vector2(42.8, 10.6), Vector2(49.2, 10.6)]:
+	for p: Vector2 in [Vector2(x0 + 1.7, 2.8), Vector2(x1 - 2.3, 2.8), Vector2(x0 + 1.7, 10.6), Vector2(x1 - 2.3, 10.6)]:
 		_batch(pillar, Transform3D(Basis.from_scale(Vector3(1, 2.2, 1)), Vector3(p.x, 1.1, p.y)), _material(STONE))
 		_add_mesh(Vector3(p.x, 2.25, p.y), Vector3(0.8, 0.14, 0.8), RUIN)
 	for b: Vector3 in DECOR_BUSHES:
@@ -295,11 +301,11 @@ func _add_pentagram(center: Vector3, radius: float) -> void:
 ## Đá vụn và cột gãy quanh tường đổ phía dưới phải.
 func _add_rubble() -> void:
 	for i in 14:
-		var p := Vector3(_rng.randf_range(28.5, 35.5), 0, _rng.randf_range(21.0, 27.5))
+		var p := Vector3(_rng.randf_range(33.0, 41.0), 0, _rng.randf_range(25.2, 33.0))
 		_add_mesh(p + Vector3(0, 0.08, 0), Vector3(_rng.randf_range(0.2, 0.5), 0.16, _rng.randf_range(0.2, 0.5)), RUIN)
 	var pillar := _cylinder(&"pillar", 0.3, 0.36, 1.0, 8)
-	_batch(pillar, Transform3D(Basis.from_scale(Vector3(1, 1.3, 1)), Vector3(33.6, 0.65, 25.0)), _material(RUIN))
-	_batch(pillar, Transform3D(Basis(Vector3(1, 0, 0.4).normalized(), PI / 2) * Basis.from_scale(Vector3(0.9, 1.4, 0.9)), Vector3(31.4, 0.28, 22.6)), _material(RUIN))
+	_batch(pillar, Transform3D(Basis.from_scale(Vector3(1, 1.3, 1)), Vector3(38.8, 0.65, 30.0)), _material(RUIN))
+	_batch(pillar, Transform3D(Basis(Vector3(1, 0, 0.4).normalized(), PI / 2) * Basis.from_scale(Vector3(0.9, 1.4, 0.9)), Vector3(36.2, 0.28, 27.1)), _material(RUIN))
 
 
 ## Cửa hang mật đạo: ụ đá có lỗ tối, rễ cây phủ trên.
