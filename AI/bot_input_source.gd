@@ -27,6 +27,7 @@ const COIN_GRAB_DIST := 5.0 # tiền trong bán kính này thì ghé nhặt
 const SHOOT_DIST := 8.0 # thợ săn bắn súng khi người trốn gần hơn chừng này
 const PRISON_INSIDE := 2.4 # mét từ giữa nhà tù: đang kẹt trong tường (huyết trận cạnh trong 4,2 m)
 const TELEPORT_DIST := 14.0 # thợ săn: người trốn gần nhất xa hơn chừng này thì dịch chuyển tới
+const TELEPORT_AFTER := 30.0 # giây: đầu trận thợ săn chưa dịch chuyển, để người trốn kịp tản ra
 ## Tỉ lệ bot căn vòng: trúng vùng đậm / vùng mờ, còn lại trượt.
 const QTE_PERFECT_CHANCE := 0.65
 const QTE_GOOD_CHANCE := 0.25
@@ -115,7 +116,7 @@ func _think(rules: MatchRules, rec: PlayerRecord, delta: float) -> void:
 			var prey := _nearest(_flat_positions(runners), me, me + Vector2(1000, 0))
 			if rules.can_attack(entity.peer_id) and me.distance_to(prey) <= SHOOT_DIST:
 				_interact = true # bắn súng; người gục trong tầm túm thì nhân vật ưu tiên túm
-			elif not runners.is_empty() and me.distance_to(prey) > TELEPORT_DIST:
+			elif not runners.is_empty() and me.distance_to(prey) > TELEPORT_DIST and rules.elapsed >= TELEPORT_AFTER:
 				_use_slot_of(rules, rec, GameTypes.ItemType.TELEPORT, func() -> void:
 					_set_aim_point(Vector3(prey.x, 0, prey.y)))
 			elif runners.is_empty() or me.distance_to(prey) > SHOOT_DIST * 1.5:
