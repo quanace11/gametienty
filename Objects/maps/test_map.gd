@@ -1,14 +1,13 @@
 extends MapBase
 ## Bản đồ "Động phủ Linh Đài" 50 x 45 m dựng bằng code, xếp theo bố cục bản Meshy quan gửi:
-## phòng truyền tống mái đỏ bên trái (đệ tử xuất hiện ở trận tròn xanh), động phủ sàn đá góc
-## đông bắc với linh đài, 5 cột cao và 2 cửa phong ấn cam (2 lối ra), huyết trận ở giữa, 6 trận
+## pháp trận truyền tống ở bờ tây (đệ tử xuất hiện trên vòng phù văn, mô hình Meshy quan gửi), động phủ
+## sàn đá góc đông bắc với linh đài, 5 cột cao và 2 cửa phong ấn cam (2 lối ra), huyết trận ở giữa, 6 trận
 ## linh quanh sân, tảng đá to có cây mọc ở phía bắc, cột đá đổ, bụi cỏ cao để nấp. Mặt sân và viền
-## (vách đá, lan can, cổng vòng 2 góc bắc) là mô hình bản Meshy thứ hai (ban_do_meshy/ban_do.glb), làm nét
-## bằng shaders/ban_do_meshy.gdshader; thêm lối lát đá chéo và 5 vòng phù văn đúng chỗ của bản đó.
-## Cây, đá, cỏ, hoa, sỏi kiểu tranh vẽ dùng Quaternius Stylized Nature MegaKit (CC0);
-## tường, cột, nhà mái đỏ dùng KayKit (CC0, Kay Lousberg: Dungeon Remastered và
-## Medieval Hexagon). Phong cách Stylized Fantasy: nền, đá, tường dùng ảnh vẽ tay CC0 (rubberduck,
-## MELLE; shaders/ban_do_meshy, nen_tranh, da_ve_tay), nắng ấm bóng xanh tím, phù văn phát sáng (phu_van).
+## (vách đá, lan can, cổng vòng 2 góc bắc) là mô hình bản Meshy thứ hai (ban_do_meshy/ban_do.glb), giữ
+## nguyên màu gốc bằng shaders/ban_do_meshy.gdshader.
+## Cây, đá, cỏ, hoa kiểu tranh vẽ dùng Quaternius Stylized Nature MegaKit (CC0);
+## tường, cột dùng KayKit Dungeon Remastered (CC0, Kay Lousberg). Đá, tường dùng ảnh vẽ tay CC0
+## (rubberduck, MELLE; shaders/da_ve_tay), nắng ấm bóng xanh tím, phù văn phát sáng (phu_van).
 ## Tỉ lệ so với nhân vật theo kiểu Liên Quân: tường cao hơn người, cây gấp 3 lần
 ## người, bụi cỏ thành đám rộng 3 - 4 m.
 ## Phần chỉ để nhìn gộp thành một mesh cho mỗi material trong mỗi ô 15 x 12 m: ít
@@ -19,22 +18,17 @@ const WALL_HEIGHT := 2.4 # cao hơn đầu người (1,7 m) như tường Liên 
 const RUIN_HEIGHT := 1.8 # tường phế tích đổ nát
 ## Tường trên mặt sàn: Rect2(x, z, rộng theo x, sâu theo z), đơn vị mét.
 const WALLS := [
-	# Viền ngoài (4 rect đầu): hình là vách đá, không phải tường gạch
+	# Viền ngoài (5 rect đầu): hình là vách đá, không phải tường gạch
 	Rect2(0, 0, 50, 0.5), Rect2(0, 44.5, 50, 0.5),
-	Rect2(0, 0, 0.5, 45), Rect2(49.5, 0, 0.5, 45),
-	# Phòng truyền tống (trái): cửa bắc, cửa đông, cửa tây nam
-	Rect2(0.5, 23.0, 2.3, 0.5), Rect2(4.8, 23.0, 1.7, 0.5),
-	Rect2(6.0, 23.5, 0.5, 3.5), Rect2(6.0, 29.5, 0.5, 3.0),
+	Rect2(49.5, 0, 0.5, 45),
+	# Bờ tây (2 rect): hở chỗ pháp trận truyền tống, tường vòng của pháp trận chắn thay
+	Rect2(0, 0, 0.5, 26.5), Rect2(0, 32.3, 0.5, 12.7),
 	# Động phủ (đông bắc): khe ở tường tây và tường nam là 2 cửa phong ấn
 	Rect2(40.0, 0.5, 0.5, 7.0), Rect2(40.0, 9.9, 0.5, 4.6),
 	Rect2(40.0, 14.5, 5.0, 0.5), Rect2(47.4, 14.5, 2.1, 0.5),
 ]
-## Tường phế tích (thấp, đầu lởm chởm): tường nam phòng truyền tống, thấp cho khỏi che người ngay chỗ xuất hiện.
-const RUINS := [Rect2(2.6, 32.0, 3.9, 0.5)]
-## Phòng truyền tống (sàn đá lát, bụi cỏ trang trí không mọc vào).
-const SPAWN_ROOM := Rect2(0.5, 23.0, 6.0, 9.5)
-## Nhà mái đỏ góc tây bắc phòng truyền tống (chắn đường).
-const PAVILION := Rect2(0.6, 23.6, 2.6, 2.6)
+## Tường phế tích (thấp, đầu lởm chởm): Rect2 như WALLS.
+const RUINS: Array[Rect2] = []
 ## 6 trận linh quanh sân, chừa giữa cho huyết trận; cần giải MatchConfig.safes_required.
 const SAFES := [
 	Vector3(6.6, 0, 3.4), Vector3(21.9, 0, 6.1), Vector3(37.6, 0, 3.4), Vector3(41.8, 0, 28.0),
@@ -85,14 +79,18 @@ const STONE_PATHS := [
 		Vector2(40.0, 22.5), Vector2(43.1, 21.4)],
 	[Vector2(36.8, 23.5), Vector2(37.8, 19.1), Vector2(39.0, 14.0), Vector2(39.6, 9.2)],
 ]
-const TELEPORT := Vector3(3.25, 0, 29.4) # pháp trận truyền tống trong phòng trái, người trốn hiện ra ở đây
+## Pháp trận truyền tống ở bờ tây (người trốn hiện ra trên vòng phù văn): tường vòng sau lưng thay một đoạn
+## bờ kè (đoạn bờ kè này đã bỏ khỏi mô hình bản đồ, xem CUT trong tools/ban_do_meshy/build_ban_do.py).
+const TELEPORT := Vector3(1.6, 0, 29.4)
+const TELEPORT_WALL_RADIUS := 3.2 # m, tâm tường vòng (khối va chạm)
+const TELEPORT_CLEAR := 4.6 # m: không rải cỏ, hoa trong vòng này
 const ALTAR := Vector3(45.0, 0, 8.5) # linh đài trong động phủ
 const COURTYARD := Rect2(40.5, 0.5, 9.0, 14.0) # sàn động phủ trong tường
 ## 5 cột cao trong động phủ (như bản Meshy): 3 cột hàng bắc, 2 cột dọc tường đông.
 const MANSION_PILLARS := [Vector2(42.4, 2.6), Vector2(45.6, 2.6), Vector2(48.6, 2.6), Vector2(48.6, 7.0), Vector2(48.6, 11.2)]
-const HUNTER_SPAWN := Vector3(42.5, 0.05, 39.5) # ma tu xuất hiện ở phế tích đông nam, xa phòng truyền tống
+const HUNTER_SPAWN := Vector3(42.5, 0.05, 39.5) # ma tu xuất hiện ở phế tích đông nam, xa pháp trận truyền tống
 const ESCAPEE_SPAWNS: Array[Vector3] = [
-	Vector3(2.7, 0.05, 28.85), Vector3(3.8, 0.05, 28.85), Vector3(2.7, 0.05, 29.95), Vector3(3.8, 0.05, 29.95),
+	Vector3(1.0, 0.05, 28.7), Vector3(2.4, 0.05, 28.7), Vector3(1.0, 0.05, 30.1), Vector3(2.4, 0.05, 30.1),
 ]
 ## Linh thạch rải sẵn trên sàn.
 const COIN_SPOTS: Array[Vector3] = [
@@ -109,15 +107,14 @@ const PrisonScript = preload("res://Objects/prison.gd")
 const CoinScript = preload("res://Objects/coin.gd")
 const BushScript = preload("res://Objects/bush.gd")
 const DUNGEON := "res://Objects/models/kaykit_dungeon/" # tường, cột, đá vụn (khuôn tường 4 x 4 x 1 m)
-const HEX := "res://Objects/models/kaykit_hex/" # nhà mái đỏ (khuôn ô lục giác ~1 m)
 const NATURE := "res://Objects/models/quaternius_nature/" # cây, đá, cỏ, hoa, sỏi (đơn vị mét)
 const GROUND := "res://Objects/models/nen_ve_tay/" # ảnh vẽ tay CC0: nền, đá, tường, phù văn
 ## Ảnh lớp nền tách từ bản Meshy quan gửi (R: lối đất, G: nền đá vỡ), phủ đúng sân SIZE.
 const LAYOUT := "res://Objects/models/ban_do_meshy/lop_nen.png"
 ## Mô hình bản Meshy đã đưa về tọa độ trận (tools/ban_do_meshy/build_ban_do.py).
 const MODEL := "res://Objects/models/ban_do_meshy/ban_do.glb"
-## Pháp trận truyền tống Meshy quan gửi (4k tam giác, ngang 4,9 m, vòng phù văn bán kính ~0,9 m ở tâm),
-## tường vòng sau lưng quay về phía tây, mở ra cửa đông của phòng.
+## Pháp trận truyền tống Meshy quan gửi (4k tam giác, ngang 9 m, vòng phù văn bán kính ~1,6 m ở tâm, tường vòng
+## cao ~1,4 m sau lưng): quay tường vòng ra phía tây, mở về phía sân.
 const TELEPORT_MODEL := "res://Objects/models/phap_tran/phap_tran.glb"
 const MESHY_ORIGINAL := "res://Objects/models/ban_do_meshy/mau_goc.jpg" # ảnh màu gốc 2048 px, chỉ đồ họa Cao
 const MESHY_SHARPEN := [0.0, 0.35, 0.6] # độ làm nét ảnh Meshy theo mức đồ họa
@@ -149,7 +146,7 @@ const TEXTURE_TINTS := {
 }
 ## Số khóm cỏ thấp rải trên sân theo mức đồ họa 0 Thấp, 1 Vừa, 2 Cao (mỗi khóm ~155 tam giác).
 const TUFT_CLUSTERS := [14, 45, 75]
-const BORDER_WALLS := 4 # số rect viền ngoài ở đầu WALLS
+const BORDER_WALLS := 5 # số rect viền ngoài ở đầu WALLS
 const ROCK_TINT := Color(1.0, 1.0, 1.05) # tảng đá, vách viền
 const WALL_TINT := Color(0.85, 0.85, 0.9) # tường gạch phòng xuất phát, động phủ
 const MOSS_TINT := Color(0.5, 0.58, 0.45) # rêu trên mặt đá
@@ -192,7 +189,8 @@ func _ready() -> void:
 		_add_wall(r, RUIN_HEIGHT, true)
 	for r: Rect2 in GATE_BLOCKERS:
 		_add_collider(r, WALL_HEIGHT)
-	_add_collider(PAVILION, 2.5)
+	for r: Rect2 in _teleport_walls():
+		_add_collider(r, WALL_HEIGHT)
 	var fa: Vector2 = FALLEN_PILLAR[0]
 	var fb: Vector2 = FALLEN_PILLAR[1]
 	for k in 3: # cột đổ: 3 khúc chắn dọc thân
@@ -239,7 +237,7 @@ func _ready() -> void:
 ## Mọi thứ chỉ để nhìn: sàn, lối đất, trận pháp, nhà, cây, đá, động phủ.
 func _add_scenery() -> void:
 	_add_ground()
-	_add_spawn_room()
+	_add_teleport()
 	_add_cave_mansion()
 	for p: Vector3 in PRISONS: # nền đá đỏ thẫm, viền đỏ sáng quanh huyết trận
 		_add_mesh(p + Vector3(0, 0.015, 0), Vector3(6.4, 0.02, 6.4), BLOOD_STONE)
@@ -353,7 +351,7 @@ func _add_ground_cover() -> void:
 func _free_spot() -> Vector3:
 	for attempt in 12:
 		var p := Vector2(_rng.randf_range(1.0, SIZE.x - 1.0), _rng.randf_range(1.0, SIZE.y - 1.0))
-		if SPAWN_ROOM.grow(0.3).has_point(p) or COURTYARD.grow(0.6).has_point(p):
+		if p.distance_to(Vector2(TELEPORT.x, TELEPORT.z)) < TELEPORT_CLEAR or COURTYARD.grow(0.6).has_point(p):
 			continue
 		if p.distance_to(Vector2(PRISONS[0].x, PRISONS[0].z)) < 4.2:
 			continue
@@ -380,18 +378,23 @@ func _segment_distance(p: Vector2, a: Vector2, b: Vector2) -> float:
 	return p.distance_to(Geometry2D.get_closest_point_to_segment(p, a, b))
 
 
-## Phòng truyền tống: sàn đá, nhà mái ngói đỏ, pháp trận truyền tống Meshy (người trốn hiện ra trên trận).
-func _add_spawn_room() -> void:
-	var room := SPAWN_ROOM.get_center()
-	_add_floor(SPAWN_ROOM)
-	var c := PAVILION.get_center()
-	# Nhà KayKit 0,8 x 0,93 x 0,85: phóng to cỡ nhà thật (cao ~3,2 m), cửa quay về phía đông.
-	_add_model(HEX + "building_home_A_red.obj", Vector3(c.x, 0, c.y), PI / 2, Vector3.ONE * 3.4, HEX + "hexagons_medieval.png")
+## Pháp trận truyền tống Meshy, tường vòng quay ra bờ tây.
+func _add_teleport() -> void:
 	var tp: Node3D = (load(TELEPORT_MODEL) as PackedScene).instantiate()
-	tp.position = TELEPORT + Vector3(0, 0.01, 0) # đế đá ngang sàn phòng, vòng phù văn nhô ~6 cm
-	tp.rotation.y = PI / 2
+	tp.position = TELEPORT
+	tp.rotation.y = PI / 2 # mặt sau (-z) của mô hình quay về phía tây
 	_meshy_look(tp, null)
 	add_child(tp)
+
+
+## Khối va chạm theo tường vòng pháp trận: 13 khối dọc nửa vòng phía tây.
+func _teleport_walls() -> Array[Rect2]:
+	var out: Array[Rect2] = []
+	for k in 13:
+		var a := deg_to_rad(-90.0 + 15.0 * k)
+		var c := Vector2(TELEPORT.x - cos(a) * TELEPORT_WALL_RADIUS, TELEPORT.z + sin(a) * TELEPORT_WALL_RADIUS)
+		out.append(Rect2(c - Vector2(0.45, 0.45), Vector2(0.9, 0.9)))
+	return out
 
 
 ## Sàn đá lát phiến lớn (ảnh Poly Haven CC0) phủ một khu chữ nhật.
@@ -724,5 +727,5 @@ func get_bushes() -> Array[Vector3]:
 
 func get_walls() -> Array[Rect2]:
 	var out: Array[Rect2] = []
-	out.assign(WALLS + RUINS + [PAVILION])
+	out.assign(WALLS + RUINS + _teleport_walls())
 	return out

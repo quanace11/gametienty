@@ -27,7 +27,7 @@ from scipy import ndimage
 from scipy.spatial import cKDTree
 
 TRIS = 4000
-WIDTH = 4.9 # m
+WIDTH = 9.0 # m
 FLOOR_Y = -0.11 # mặt vòng phù văn trong mô hình gốc
 LOW_SCALE = 0.3
 BAKE = 2048 # px lúc nướng ảnh
