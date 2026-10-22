@@ -82,7 +82,8 @@ const STONE_PATHS := [
 ## Pháp trận truyền tống lùi ra bờ tây (người trốn hiện ra trên vòng phù văn): mũi 2 cánh tường rìa chạm
 ## lan can bờ kè (x ~ -1), đoạn bờ kè giữa 2 cánh đã phá (CUT trong tools/ban_do_meshy/build_ban_do.py),
 ## vòng bậc thềm bán nguyệt chìa ra sân.
-const TELEPORT := Vector3(-2.5, 0, 29.4)
+const TELEPORT := Vector3(-2.5, 0, 29.0)
+const TELEPORT_YAW := -4.0 # độ, xoay nhẹ cho 2 đầu tường bán nguyệt cân với bờ kè (âm: cánh bắc ra đông, cánh nam vào tây theo bờ kè)
 const TELEPORT_WING := 3.9 # m: nửa khoảng cách 2 mũi cánh theo z
 const TELEPORT_WALL_RADIUS := 3.2 # m, tâm tường vòng (khối va chạm)
 const TELEPORT_CLEAR := 4.6 # m: không rải cỏ, hoa trong vòng này
@@ -92,7 +93,7 @@ const COURTYARD := Rect2(40.5, 0.5, 9.0, 14.0) # sàn động phủ trong tườ
 const MANSION_PILLARS := [Vector2(42.4, 2.6), Vector2(45.6, 2.6), Vector2(48.6, 2.6), Vector2(48.6, 7.0), Vector2(48.6, 11.2)]
 const HUNTER_SPAWN := Vector3(42.5, 0.05, 39.5) # ma tu xuất hiện ở phế tích đông nam, xa pháp trận truyền tống
 const ESCAPEE_SPAWNS: Array[Vector3] = [
-	Vector3(-3.15, 0.05, 28.7), Vector3(-1.85, 0.05, 28.7), Vector3(-3.15, 0.05, 30.1), Vector3(-1.85, 0.05, 30.1),
+	Vector3(-3.15, 0.05, 28.3), Vector3(-1.85, 0.05, 28.3), Vector3(-3.15, 0.05, 29.7), Vector3(-1.85, 0.05, 29.7),
 ]
 ## Linh thạch rải sẵn trên sàn.
 const COIN_SPOTS: Array[Vector3] = [
@@ -383,23 +384,30 @@ func _segment_distance(p: Vector2, a: Vector2, b: Vector2) -> float:
 func _add_teleport() -> void:
 	var tp: Node3D = (load(TELEPORT_MODEL) as PackedScene).instantiate()
 	tp.position = TELEPORT
-	tp.rotation.y = PI / 2 # mặt sau (-z) của mô hình quay về phía tây
+	tp.rotation.y = PI / 2 + deg_to_rad(TELEPORT_YAW) # mặt sau (-z) của mô hình quay về phía tây
 	_meshy_look(tp, null)
 	add_child(tp)
 
 
-## Khối va chạm: 13 khối dọc tường vòng pháp trận (nửa vòng phía tây), 2 bên theo 2 cánh nối tới bờ kè.
+## Khối va chạm: 13 khối dọc tường vòng pháp trận (nửa vòng phía tây), chuỗi khối theo 2 cánh nối tới bờ kè.
+## Tính quanh tâm pháp trận rồi xoay theo TELEPORT_YAW.
 func _teleport_walls() -> Array[Rect2]:
-	var w := TELEPORT_WING
-	var out: Array[Rect2] = [
-		Rect2(TELEPORT.x - 0.45, TELEPORT.z - w - 0.5, 0.95 - TELEPORT.x, 0.5), # cánh bắc tới bờ kè
-		Rect2(TELEPORT.x - 0.45, TELEPORT.z + w, 0.95 - TELEPORT.x, 0.5), # cánh nam
-		Rect2(TELEPORT.x - 0.45, TELEPORT.z - w - 0.5, 0.9, w + 0.5 - TELEPORT_WALL_RADIUS), # nối đầu tường vòng
-		Rect2(TELEPORT.x - 0.45, TELEPORT.z + TELEPORT_WALL_RADIUS, 0.9, w + 0.5 - TELEPORT_WALL_RADIUS),
-	]
+	var w := TELEPORT_WING + 0.25
+	var spots: Array[Vector2] = []
 	for k in 13:
 		var a := deg_to_rad(-90.0 + 15.0 * k)
-		var c := Vector2(TELEPORT.x - cos(a) * TELEPORT_WALL_RADIUS, TELEPORT.z + sin(a) * TELEPORT_WALL_RADIUS)
+		spots.append(Vector2(-cos(a), sin(a)) * TELEPORT_WALL_RADIUS)
+	for side in [-1.0, 1.0]:
+		for i in 3: # nối đầu tường vòng ra cánh
+			spots.append(Vector2(0.0, side * (TELEPORT_WALL_RADIUS + (w - TELEPORT_WALL_RADIUS) * (i + 1) / 3.0)))
+		var x := 0.4
+		while x < 0.95 - TELEPORT.x: # cánh tới bờ kè
+			spots.append(Vector2(x, side * w))
+			x += 0.4
+	var yaw := deg_to_rad(TELEPORT_YAW)
+	var out: Array[Rect2] = []
+	for p in spots:
+		var c := Vector2(TELEPORT.x, TELEPORT.z) + Vector2(p.x * cos(yaw) + p.y * sin(yaw), p.y * cos(yaw) - p.x * sin(yaw))
 		out.append(Rect2(c - Vector2(0.45, 0.45), Vector2(0.9, 0.9)))
 	return out
 
