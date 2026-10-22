@@ -1,111 +1,107 @@
 extends MapBase
-## Bản đồ "Động phủ Linh Đài" 60 x 36 m dựng bằng code, theo ảnh thiết kế
-## (ban-do/ban_do_v4.png và ảnh dựng 3D): phòng truyền tống mái đỏ bên trái
-## (đệ tử xuất hiện ở trận tròn xanh), huyết trận ở giữa, 6 trận linh ngũ tinh
-## vàng, phế tích có hốc tường phía trên, ma tu chui ra từ cửa hang bên phải, động phủ
-## tường đá bên phải với 2 cửa phong ấn cam (2 lối ra), linh đài và 4 cột đá bên
-## trong, cửa hang mật đạo, đá tảng, cây cổ thụ, lối đất và bụi cỏ cao để nấp.
-## Sau này có thể thay bằng scene dựng trong editor, giữ nguyên các hàm của MapBase.
-## Cây, đá, cỏ, hoa, sỏi kiểu tranh vẽ dùng Quaternius Stylized Nature MegaKit (CC0);
-## tường, cột, nhà mái đỏ dùng KayKit (CC0, Kay Lousberg: Dungeon Remastered và
-## Medieval Hexagon). Nền cỏ và lối đất loang màu bằng nhiễu (shaders/nen.gdshader).
+## Bản đồ "Động phủ Linh Đài" 50 x 45 m dựng bằng code, xếp theo bố cục bản Meshy quan gửi:
+## pháp trận truyền tống ở bờ tây (đệ tử xuất hiện trên vòng phù văn, mô hình Meshy quan gửi), động phủ
+## sàn đá góc đông bắc với linh đài, 5 cột cao và 2 cửa phong ấn cam (2 lối ra), huyết trận ở giữa, 6 trận
+## linh quanh sân, tảng đá to có cây mọc ở phía bắc, cột đá đổ, bụi cỏ cao để nấp. Mặt sân và viền
+## (vách đá, lan can, cổng vòng 2 góc bắc) là mô hình bản Meshy thứ hai (ban_do_meshy/ban_do.glb), giữ
+## nguyên màu gốc bằng shaders/ban_do_meshy.gdshader.
+## Cây, đá, cỏ, hoa kiểu tranh vẽ dùng Quaternius Stylized Nature MegaKit (CC0);
+## tường, cột dùng KayKit Dungeon Remastered (CC0, Kay Lousberg). Đá, tường dùng ảnh vẽ tay CC0
+## (rubberduck, MELLE; shaders/da_ve_tay), nắng ấm bóng xanh tím, phù văn phát sáng (phu_van).
 ## Tỉ lệ so với nhân vật theo kiểu Liên Quân: tường cao hơn người, cây gấp 3 lần
-## người, bụi cỏ thành đám rộng 3 - 5 m.
+## người, bụi cỏ thành đám rộng 3 - 4 m.
 ## Phần chỉ để nhìn gộp thành một mesh cho mỗi material trong mỗi ô 15 x 12 m: ít
 ## lần vẽ (draw call) mà ô nằm ngoài màn hình vẫn bị bỏ qua không vẽ.
 
-const SIZE := Vector2(60, 36) # x, z
+const SIZE := Vector2(50, 45) # x, z
 const WALL_HEIGHT := 2.4 # cao hơn đầu người (1,7 m) như tường Liên Quân, camera chéo 49° vẫn thấy sau tường
 const RUIN_HEIGHT := 1.8 # tường phế tích đổ nát
 ## Tường trên mặt sàn: Rect2(x, z, rộng theo x, sâu theo z), đơn vị mét.
 const WALLS := [
-	# Viền đá
-	Rect2(0, 0, 60, 0.5), Rect2(0, 35.5, 60, 0.5),
-	Rect2(0, 0, 0.5, 36), Rect2(59.5, 0, 0.5, 36),
-	# Phòng truyền tống (trái): 3 cửa mở sẵn trên, dưới, phải
-	Rect2(0.5, 14.5, 2.5, 0.5), Rect2(5.6, 14.5, 2.9, 0.5),
-	Rect2(0.5, 25, 2.5, 0.5), Rect2(5.6, 25, 2.9, 0.5),
-	Rect2(8, 15, 0.5, 3.8), Rect2(8, 21.6, 0.5, 3.4),
-	# Động phủ (phải trên): khe ở giữa tường trái và tường dưới là 2 cửa phong ấn
-	Rect2(48.6, 0.5, 0.5, 5.2), Rect2(48.6, 8.1, 0.5, 5.0),
-	Rect2(48.6, 12.6, 4.9, 0.5), Rect2(55.9, 12.6, 3.6, 0.5),
+	# Viền ngoài (5 rect đầu): hình là vách đá, không phải tường gạch
+	Rect2(0, 0, 50, 0.5), Rect2(0, 44.5, 50, 0.5),
+	Rect2(49.5, 0, 0.5, 45),
+	# Bờ tây (2 rect): hở chỗ lối vào từ pháp trận truyền tống
+	Rect2(0, 0, 0.5, 25.5), Rect2(0, 33.3, 0.5, 11.7),
+	# Động phủ (đông bắc): khe ở tường tây và tường nam là 2 cửa phong ấn
+	Rect2(40.0, 0.5, 0.5, 7.0), Rect2(40.0, 9.9, 0.5, 4.6),
+	Rect2(40.0, 14.5, 5.0, 0.5), Rect2(47.4, 14.5, 2.1, 0.5),
 ]
-## Tường phế tích (thấp hơn, đầu tường lởm chởm): hốc tường trên có 2 khe vào, đoạn tường đổ dưới phải.
-const RUINS := [
-	Rect2(18.8, 0.5, 0.6, 2.3), Rect2(18.8, 5.2, 0.6, 2.1),
-	Rect2(27.7, 0.5, 0.6, 2.3), Rect2(27.7, 5.2, 0.6, 2.1),
-	Rect2(18.8, 6.7, 9.5, 0.6),
-	Rect2(34.8, 30.5, 2.4, 0.5), Rect2(38.0, 28.1, 2.2, 0.5),
-]
-## Nhà mái đỏ trong phòng truyền tống (chắn đường), ở phía bắc chỗ xuất hiện nên không che camera.
-const PAVILION := Rect2(0.5, 15.4, 2.8, 3.0)
-## Cửa hang mật đạo sát tường phải (chỉ để nhìn, chắn đường).
-const CAVE := Rect2(57.6, 17.6, 1.9, 2.8)
-## 6 trận linh ngũ tinh: 4 ở 4 phía, 2 ở giữa (trái và phải dưới); cần giải MatchConfig.safes_required.
+## Tường phế tích (thấp, đầu lởm chởm): Rect2 như WALLS.
+const RUINS: Array[Rect2] = []
+## 6 trận linh quanh sân, chừa giữa cho huyết trận; cần giải MatchConfig.safes_required.
 const SAFES := [
-	Vector3(9.1, 0, 5.8), Vector3(41.1, 0, 4.3), Vector3(24.0, 0, 32.4), Vector3(52.7, 0, 31.9), Vector3(17.5, 0, 20.5),
-	Vector3(36.5, 0, 26.5),
+	Vector3(6.6, 0, 3.4), Vector3(21.9, 0, 6.1), Vector3(37.6, 0, 3.4), Vector3(41.8, 0, 28.0),
+	Vector3(45.1, 0, 41.1), Vector3(22.6, 0, 42.1),
 ]
-## 2 lối ra là 2 cửa phong ấn của động phủ: tường trái (quay theo trục x) và tường dưới (xoay 90°).
-const EXIT_GATES := [Vector3(48.85, 0, 6.9), Vector3(54.7, 0, 12.85)]
+## 2 lối ra là 2 cửa phong ấn của động phủ: tường tây (quay theo trục x) và tường nam (xoay 90°).
+const EXIT_GATES := [Vector3(40.25, 0, 8.7), Vector3(46.2, 0, 14.75)]
 const EXIT_GATE_YAW := [0.0, PI / 2]
 ## Thanh chắn trong khe cửa: cửa phong ấn đóng thì không vào động phủ được,
 ## vùng thoát của lối ra vẫn chìa ra ngoài tường.
-const GATE_BLOCKERS := [Rect2(48.75, 5.7, 0.2, 2.4), Rect2(53.5, 12.75, 2.4, 0.2)]
+const GATE_BLOCKERS := [Rect2(40.15, 7.5, 0.2, 2.4), Rect2(45.0, 14.65, 2.4, 0.2)]
 ## Huyết trận ở giữa, kết giới cao 3 m, chỉ đệm lò xo bay qua được.
-const PRISONS := [Vector3(31.3, 0, 16.3)]
-## Bụi cỏ cao (hơn đầu người) để nấp, thành đám rộng như Liên Quân: Vector3(x, z, bán kính).
+const PRISONS := [Vector3(26.0, 0, 22.5)]
+## Bụi cỏ cao (hơn đầu người) để nấp, đúng chỗ các bụi tròn của bản Meshy: Vector3(x, z, bán kính).
 const BUSHES: Array[Vector3] = [
-	Vector3(15.7, 5.5, 2.4), Vector3(34.4, 4.1, 1.8), Vector3(42.0, 10.1, 2.2), Vector3(11.8, 9.8, 1.8),
-	Vector3(13.4, 18.0, 1.9), Vector3(23.3, 22.7, 1.6), Vector3(17.1, 25.7, 2.5), Vector3(30.5, 30.0, 2.3),
-	Vector3(26.1, 11.5, 1.8), Vector3(26.5, 20.9, 1.9), Vector3(36.2, 21.1, 1.9), Vector3(43.4, 20.4, 1.6),
-	Vector3(47.2, 20.6, 1.6), Vector3(43.2, 28.1, 2.3), Vector3(53.5, 25.2, 2.3), Vector3(39.0, 33.6, 1.5),
-	Vector3(6.6, 16.6, 1.1), Vector3(1.9, 23.4, 1.1), Vector3(6.0, 33.4, 1.8), Vector3(49.5, 15.8, 1.8),
-	Vector3(20.5, 13.5, 1.8), Vector3(30.0, 8.6, 1.9), Vector3(46.4, 33.4, 1.8),
+	Vector3(5.1, 41.5, 1.9), Vector3(9.3, 9.7, 1.6), Vector3(10.2, 14.1, 1.8), Vector3(10.2, 23.8, 1.9),
+	Vector3(16.3, 20.5, 2.0), Vector3(16.6, 13.0, 2.0), Vector3(18.2, 29.6, 1.8), Vector3(20.6, 19.0, 1.6),
+	Vector3(21.0, 28.1, 1.7), Vector3(21.3, 11.6, 1.9), Vector3(28.2, 2.8, 1.7), Vector3(29.2, 29.6, 1.8),
+	Vector3(35.0, 29.0, 1.8), Vector3(35.3, 10.6, 2.1), Vector3(35.6, 36.0, 2.0), Vector3(38.0, 41.2, 2.0),
+	Vector3(38.4, 27.8, 1.6), Vector3(40.4, 24.5, 1.8), Vector3(43.0, 21.9, 1.5), Vector3(44.3, 34.5, 2.0),
+	Vector3(47.8, 42.4, 1.4),
 ]
-## Bụi cỏ trang trí trong động phủ (không vào được nên không tính luật nấp): Vector3(x, z, bán kính).
+## Bụi lá trang trí trong động phủ (không vào được nên không tính luật nấp): Vector3(x, z, bán kính).
 const DECOR_BUSHES: Array[Vector3] = [
-	Vector3(50.0, 1.8, 0.8), Vector3(52.6, 1.6, 0.7), Vector3(56.2, 1.7, 0.8), Vector3(58.4, 3.6, 0.7),
-	Vector3(49.9, 4.4, 0.7), Vector3(50.0, 10.2, 0.8), Vector3(58.3, 9.6, 0.8), Vector3(51.0, 11.8, 0.7),
-	Vector3(57.6, 11.8, 0.7),
+	Vector3(41.3, 1.5, 0.8), Vector3(48.6, 1.6, 0.7), Vector3(41.2, 13.5, 0.8), Vector3(48.7, 13.4, 0.8),
+	Vector3(41.3, 5.6, 0.7),
 ]
 ## Đá tảng chắn đường (và chắn phi kiếm): Vector3(x, z, bán kính).
 const ROCKS: Array[Vector3] = [
-	Vector3(32.5, 2.6, 0.55), Vector3(16.0, 12.5, 0.5), Vector3(20.3, 16.6, 0.6), Vector3(21.8, 18.2, 0.4),
-	Vector3(12.2, 24.7, 0.55), Vector3(37.4, 23.5, 0.5), Vector3(40.4, 19.4, 0.45), Vector3(48.7, 32.6, 0.5),
-	Vector3(30.0, 25.0, 1.0), Vector3(31.6, 26.2, 0.55),
-	Vector3(8.0, 12.0, 0.6), Vector3(20.0, 24.0, 0.7), Vector3(28.0, 28.5, 0.6), Vector3(17.0, 30.5, 0.6),
-	Vector3(45.5, 24.0, 0.7), Vector3(48.5, 28.5, 0.6), Vector3(39.0, 7.5, 0.6), Vector3(36.0, 12.0, 0.6),
-	Vector3(24.5, 15.0, 0.6), Vector3(47.0, 17.5, 0.55), Vector3(56.0, 28.0, 0.6), Vector3(12.5, 7.0, 0.5),
+	Vector3(26.0, 10.3, 1.7), Vector3(17.6, 40.2, 2.0), # tảng nam cách bờ ~2 m để lách qua Vector3(43.0, 17.6, 1.5), Vector3(48.1, 26.8, 1.0),
+	Vector3(3.8, 34.8, 0.7), Vector3(6.0, 11.3, 0.45), Vector3(12.8, 36.3, 0.6), Vector3(15.0, 30.4, 0.6),
+	Vector3(22.5, 35.9, 0.55), Vector3(23.6, 32.0, 0.8), Vector3(32.9, 6.6, 0.45), Vector3(38.6, 12.7, 0.4),
+	Vector3(39.6, 35.5, 0.5), Vector3(46.1, 36.1, 0.45), Vector3(44.6, 18.8, 0.9),
 ]
 ## Cây cổ thụ: thân chắn đường, tán che: Vector3(x, z, cỡ).
 const TREES: Array[Vector3] = [
-	Vector3(13.8, 2.2, 1.0), Vector3(51.5, 20.2, 1.0), Vector3(5.8, 30.5, 0.9), Vector3(11.8, 33.1, 0.8),
-	Vector3(44.5, 12.7, 0.8),
+	Vector3(9.8, 42.3, 0.9), Vector3(12.1, 4.2, 1.1), Vector3(12.9, 32.3, 0.9), Vector3(24.4, 38.0, 0.8),
+	Vector3(31.9, 42.0, 0.8), Vector3(37.7, 19.8, 0.8), Vector3(37.8, 15.4, 0.85), Vector3(43.4, 30.1, 0.9),
+	Vector3(26.9, 9.2, 0.6),
 ]
-## Lối đất: mỗi lối là một chuỗi điểm (x, z).
-const PATHS := [
-	[Vector2(4.3, 14.0), Vector2(9.7, 10.1), Vector2(20.1, 10.3), Vector2(27.5, 12.0)],
-	[Vector2(4.3, 26.0), Vector2(9.7, 30.5), Vector2(23.7, 27.1), Vector2(29.5, 21.1), Vector2(35.1, 19.7),
-		Vector2(40.5, 16.3), Vector2(54.7, 14.2)],
-	[Vector2(40.5, 16.3), Vector2(43.6, 10.3), Vector2(48.2, 6.9)],
-	[Vector2(8.6, 20.2), Vector2(12.0, 20.6)],
-]
+## Cột đá đổ nằm chéo phía bắc huyết trận (chắn đường): 2 đầu (x, z).
+const FALLEN_PILLAR := [Vector2(28.6, 12.4), Vector2(31.4, 17.4)]
+## Bề rộng lối gạch (m).
 const PATH_WIDTH := 1.5
-const TELEPORT := Vector3(5.4, 0, 21.2) # truyền tống trận trong phòng trái
-const ALTAR := Vector3(54.0, 0, 6.7) # linh đài trong động phủ
-const COURTYARD := Rect2(49.1, 0.5, 10.4, 12.1) # sàn động phủ trong tường
-const HUNTER_SPAWN := Vector3(55.6, 0.05, 19.0) # ma tu chui ra từ cửa hang mật đạo, xa phòng truyền tống
+## Lối gạch của bản Meshy (đo theo mô hình): không rải cỏ lên.
+const STONE_PATHS := [
+	[Vector2(14.9, 33.6), Vector2(18.8, 30.1), Vector2(23.8, 27.1), Vector2(29.4, 25.4), Vector2(35.0, 24.1),
+		Vector2(40.0, 22.5), Vector2(43.1, 21.4)],
+	[Vector2(36.8, 23.5), Vector2(37.8, 19.1), Vector2(39.0, 14.0), Vector2(39.6, 9.2)],
+]
+## Pháp trận truyền tống lùi ra bờ tây (người trốn hiện ra trên vòng phù văn): mũi 2 cánh tường rìa chạm
+## lan can bờ kè (x ~ -1), đoạn bờ kè giữa 2 cánh đã phá (CUT trong tools/ban_do_meshy/build_ban_do.py),
+## vòng bậc thềm bán nguyệt chìa ra sân.
+const TELEPORT := Vector3(-2.5, 0, 29.0)
+const TELEPORT_YAW := -4.0 # độ, xoay nhẹ cho 2 đầu tường bán nguyệt cân với bờ kè (âm: cánh bắc ra đông, cánh nam vào tây theo bờ kè)
+const TELEPORT_WING := 3.9 # m: nửa khoảng cách 2 mũi cánh theo z
+const TELEPORT_WALL_RADIUS := 3.2 # m, tâm tường vòng (khối va chạm)
+const TELEPORT_CLEAR := 4.6 # m: không rải cỏ, hoa trong vòng này
+const ALTAR := Vector3(45.0, 0, 8.5) # linh đài trong động phủ
+const COURTYARD := Rect2(40.5, 0.5, 9.0, 14.0) # sàn động phủ trong tường
+## 5 cột cao trong động phủ (như bản Meshy): 3 cột hàng bắc, 2 cột dọc tường đông.
+const MANSION_PILLARS := [Vector2(42.4, 2.6), Vector2(45.6, 2.6), Vector2(48.6, 2.6), Vector2(48.6, 7.0), Vector2(48.6, 11.2)]
+const HUNTER_SPAWN := Vector3(42.5, 0.05, 39.5) # ma tu xuất hiện ở phế tích đông nam, xa pháp trận truyền tống
 const ESCAPEE_SPAWNS: Array[Vector3] = [
-	Vector3(4.6, 0.05, 20.4), Vector3(6.2, 0.05, 20.4), Vector3(4.6, 0.05, 22.0), Vector3(6.2, 0.05, 22.0),
+	Vector3(-3.15, 0.05, 28.3), Vector3(-1.85, 0.05, 28.3), Vector3(-3.15, 0.05, 29.7), Vector3(-1.85, 0.05, 29.7),
 ]
 ## Linh thạch rải sẵn trên sàn.
 const COIN_SPOTS: Array[Vector3] = [
-	Vector3(5.8, 0, 10.3), Vector3(5.3, 0, 31.9), Vector3(14.3, 0, 15.1), Vector3(10.2, 0, 28.3),
-	Vector3(23.1, 0, 4.4), Vector3(22.8, 0, 13.7), Vector3(20.1, 0, 30.7), Vector3(27.2, 0, 33.1),
-	Vector3(35.8, 0, 10.3), Vector3(38.5, 0, 13.9), Vector3(44.5, 0, 3.1), Vector3(40.8, 0, 25.0),
-	Vector3(34.2, 0, 25.7), Vector3(44.8, 0, 16.3), Vector3(50.5, 0, 23.5), Vector3(56.5, 0, 23.5),
-	Vector3(56.8, 0, 32.6), Vector3(45.7, 0, 32.9), Vector3(32.5, 0, 33.4), Vector3(25.9, 0, 5.6),
+	Vector3(34.6, 0, 43.4), Vector3(47.1, 0, 16.1), Vector3(47.1, 0, 33.4), Vector3(39.6, 0, 19.9),
+	Vector3(29.6, 0, 1.4), Vector3(29.9, 0, 41.1), Vector3(1.4, 0, 7.9), Vector3(16.4, 0, 38.1),
+	Vector3(5.9, 0, 43.6), Vector3(7.4, 0, 10.9), Vector3(38.6, 0, 39.1), Vector3(12.4, 0, 22.4),
+	Vector3(34.1, 0, 38.9), Vector3(38.6, 0, 9.6), Vector3(14.1, 0, 43.4), Vector3(32.9, 0, 30.4),
+	Vector3(15.1, 0, 34.1), Vector3(18.1, 0, 22.6), Vector3(47.4, 0, 20.1), Vector3(39.4, 0, 43.1),
 ]
 
 const SafeScript = preload("res://Objects/safe.gd")
@@ -114,44 +110,54 @@ const PrisonScript = preload("res://Objects/prison.gd")
 const CoinScript = preload("res://Objects/coin.gd")
 const BushScript = preload("res://Objects/bush.gd")
 const DUNGEON := "res://Objects/models/kaykit_dungeon/" # tường, cột, đá vụn (khuôn tường 4 x 4 x 1 m)
-const HEX := "res://Objects/models/kaykit_hex/" # nhà mái đỏ (khuôn ô lục giác ~1 m)
 const NATURE := "res://Objects/models/quaternius_nature/" # cây, đá, cỏ, hoa, sỏi (đơn vị mét)
-const TREE_LEAVES := [["vo", "vo_cay.png", false], ["la", "la_cay.png", true]]
-const SMALL_PLANT := [["la_hoa", "la_nho.png", true]]
-const FLOWER := [["la_hoa", "la_nho.png", true], ["hoa", "hoa.png", true]]
+const GROUND := "res://Objects/models/nen_ve_tay/" # ảnh vẽ tay CC0: nền, đá, tường, phù văn
+## Ảnh lớp nền tách từ bản Meshy quan gửi (R: lối đất, G: nền đá vỡ), phủ đúng sân SIZE.
+const LAYOUT := "res://Objects/models/ban_do_meshy/lop_nen.png"
+## Mô hình bản Meshy đã đưa về tọa độ trận (tools/ban_do_meshy/build_ban_do.py).
+const MODEL := "res://Objects/models/ban_do_meshy/ban_do.glb"
+## Pháp trận truyền tống Meshy quan gửi (4k tam giác, ngang 9 m, vòng phù văn bán kính ~1,6 m ở tâm, tường vòng
+## cao ~1,4 m sau lưng): quay tường vòng ra phía tây, mở về phía sân.
+const TELEPORT_MODEL := "res://Objects/models/phap_tran/phap_tran.glb"
+const MESHY_ORIGINAL := "res://Objects/models/ban_do_meshy/mau_goc.jpg" # ảnh màu gốc 2048 px, chỉ đồ họa Cao
+const MESHY_SHARPEN := [0.0, 0.35, 0.6] # độ làm nét ảnh Meshy theo mức đồ họa
+const MESHY_DETAIL := 0.22 # hạt chi tiết đồ họa Cao (chỉ đổi độ sáng)
+const TREE_LEAVES := [["vo", "vo_cay.png", false], ["la", "la_cay_reu.png", true]]
+const SMALL_PLANT := [["la_hoa", "la_nho_reu.png", true]]
+const FLOWER := [["la_hoa", "la_nho_reu.png", true], ["hoa", "hoa.png", true]]
 const STONE_PART := [["da", "da.png", false]]
 const PEBBLE := [["soi", "soi.png", false]]
 ## Mô hình Quaternius: tên -> các phần [đuôi file, ảnh, lá cắt viền theo kênh alpha].
 const NATURE_PARTS := {
 	"CommonTree_3": TREE_LEAVES, "CommonTree_5": TREE_LEAVES,
-	"Pine_5": [["vo", "vo_cay.png", false], ["la", "la_thong.png", true]],
-	"Bush_Large": [["la", "la_bui.png", true]], "Bush_Common": [["la", "la_bui_do.png", true]],
+	"Pine_5": [["vo", "vo_cay.png", false], ["la", "la_thong_reu.png", true]],
+	"Bush_Large": [["la", "la_bui_reu.png", true]],
 	"Rock_Medium_1": STONE_PART, "Rock_Medium_2": STONE_PART, "Rock_Medium_3": STONE_PART, "Rock_Medium_4": STONE_PART,
 	"Rock_Big_1": STONE_PART, "Rock_Big_2": STONE_PART,
 	"Flower_3_Single": FLOWER, "Flower_4_Single": FLOWER, "Flower_7_Single": FLOWER,
-	"Clover_1": SMALL_PLANT, "Plant_2": SMALL_PLANT,
+	"Plant_2": SMALL_PLANT,
 	"Pebble_Round_1": PEBBLE, "Pebble_Round_3": PEBBLE, "Pebble_Square_2": PEBBLE, "Pebble_Square_5": PEBBLE,
 }
 ## Đá vừa: tên -> chiều rộng khuôn (m), để co theo bán kính tảng đá.
 const ROCK_WIDTHS := {"Rock_Medium_1": 3.2, "Rock_Medium_2": 3.0, "Rock_Medium_3": 3.4, "Rock_Medium_4": 3.8}
 const FLOWERS: Array[String] = ["Flower_3_Single", "Flower_4_Single", "Flower_7_Single"]
-## Nhuộm ảnh gốc: sỏi, đá, tường sáng quá dưới nắng, ngả xám rêu cho hợp sân cỏ.
-const TEXTURE_TINTS := {"soi.png": Color(0.62, 0.6, 0.55), "da.png": Color(0.82, 0.82, 0.78), "dungeon_texture.png": Color(0.8, 0.83, 0.76)}
-const PEBBLES: Array[String] = ["Pebble_Round_1", "Pebble_Round_3", "Pebble_Square_2", "Pebble_Square_5"]
+## Nhuộm ảnh gốc cho dịu như bản đồ MOBA: đá, tường ngả xám rêu. Lá *_reu.png đã tô sẵn màu rêu sàn (tools/la_reu).
+const TEXTURE_TINTS := {
+	"soi.png": Color(0.55, 0.54, 0.5), "da.png": Color(0.7, 0.72, 0.7), "dungeon_texture.png": Color(0.72, 0.75, 0.72),
+	"vo_cay.png": Color(0.8, 0.78, 0.76),
+}
 ## Số khóm cỏ thấp rải trên sân theo mức đồ họa 0 Thấp, 1 Vừa, 2 Cao (mỗi khóm ~155 tam giác).
 const TUFT_CLUSTERS := [14, 45, 75]
-## Khoảng cách giữa các cây rừng ngoài viền theo mức đồ họa (m): máy yếu ít cây hơn.
-const BORDER_SPACING := [9.0, 6.0, 4.8]
+const BORDER_WALLS := 5 # số rect viền ngoài ở đầu WALLS
+const ROCK_TINT := Color(1.0, 1.0, 1.05) # tảng đá, vách viền
+const WALL_TINT := Color(0.85, 0.85, 0.9) # tường gạch phòng xuất phát, động phủ
+const MOSS_TINT := Color(0.56, 0.65, 0.31) # rêu trên mặt đá: xanh nõn chuối nhạt như rêu sàn Meshy
 
-const GRASS_DARK := Color(0.19, 0.34, 0.12)
-const GRASS_LIGHT := Color(0.36, 0.5, 0.17)
-const DIRT_DARK := Color(0.5, 0.38, 0.24)
-const DIRT_LIGHT := Color(0.66, 0.53, 0.35)
-const PAVING := Color(0.45, 0.47, 0.5) # sàn đá lát
-const PAVING_LINE := Color(0.36, 0.37, 0.4)
+# Sắc nhân lên ảnh nền vẽ tay (1 = giữ nguyên màu ảnh): vệt tối và vệt sáng loang như bản Meshy.
+const GROUND_SATURATION := 0.5 # nền bớt rực để nhân vật, đạn, hiệu ứng nổi lên
+const PAVING_DARK := Color(0.82, 0.84, 0.88) # sắc nhân lên ảnh sàn đá lát
+const PAVING_LIGHT := Color(0.95, 0.96, 1.0)
 const MARBLE := Color(0.88, 0.88, 0.86)
-const CAVE_DARK := Color(0.07, 0.06, 0.06)
-const GOLD_GLOW := Color(1.0, 0.78, 0.25)
 const BLOOD_STONE := Color(0.36, 0.12, 0.11)
 const BLOOD_GLOW := Color(1.0, 0.18, 0.15)
 const BLUE_GLOW := Color(0.4, 0.75, 1.0)
@@ -165,6 +171,9 @@ var _textured := {} # đường dẫn ảnh (+ cắt viền) -> material dùng c
 var _quality := clampi(int(ProjectSettings.get_setting("game/graphics_quality", 0)), 0, 2)
 var _batches := {} # Vector3i(ô x, ô z, id material) -> SurfaceTool gom hình tĩnh, dựng thành một mesh lúc xong
 var _batch_mats := {} # id material -> material
+var _layout: Image # ảnh lớp nền Meshy (chỉ máy có hình), để rải cỏ tránh lối đất
+var _stones := {} # bộ tham số -> material đá vẽ tay dùng chung
+var _ground_materials := {} # bộ tham số -> material nền vẽ tay dùng chung
 var _no_shadow := {} # material -> true: mesh gộp của nó không đổ bóng (hình sát sàn, trận pháp)
 var _rng := RandomNumberGenerator.new() # hình trang trí lệch ngẫu nhiên nhưng cố định mỗi lần dựng
 var _headless := DisplayServer.get_name() == "headless" # server riêng: chỉ dựng va chạm, không dựng hình
@@ -173,14 +182,22 @@ var _headless := DisplayServer.get_name() == "headless" # server riêng: chỉ d
 func _ready() -> void:
 	_rng.seed = 20261020
 	_add_collider(Rect2(-8, -8, SIZE.x + 16, SIZE.y + 16), 0.2, -0.2) # sàn
-	for r: Rect2 in WALLS:
-		_add_wall(r, WALL_HEIGHT, false)
+	for i in WALLS.size():
+		if i < BORDER_WALLS:
+			_add_collider(WALLS[i], WALL_HEIGHT) # hình: vách đá, lan can của mô hình Meshy
+		else:
+			_add_wall(WALLS[i], WALL_HEIGHT, false)
 	for r: Rect2 in RUINS:
 		_add_wall(r, RUIN_HEIGHT, true)
 	for r: Rect2 in GATE_BLOCKERS:
 		_add_collider(r, WALL_HEIGHT)
-	_add_collider(PAVILION, 2.5)
-	_add_collider(CAVE, 1.5)
+	for r: Rect2 in _teleport_walls():
+		_add_collider(r, WALL_HEIGHT)
+	var fa: Vector2 = FALLEN_PILLAR[0]
+	var fb: Vector2 = FALLEN_PILLAR[1]
+	for k in 3: # cột đổ: 3 khúc chắn dọc thân
+		var c := fa.lerp(fb, (k + 0.5) / 3.0)
+		_add_collider(Rect2(c.x - 0.55, c.y - 0.55, 1.1, 1.1), 1.0)
 	for rock in ROCKS:
 		_add_collider(Rect2(rock.x - rock.z * 0.7, rock.y - rock.z * 0.7, rock.z * 1.4, rock.z * 1.4), 1.0)
 	for tree in TREES:
@@ -222,17 +239,8 @@ func _ready() -> void:
 ## Mọi thứ chỉ để nhìn: sàn, lối đất, trận pháp, nhà, cây, đá, động phủ.
 func _add_scenery() -> void:
 	_add_ground()
-	var dirt := _painted(DIRT_DARK, DIRT_LIGHT, 0.09)
-	var disc := _cylinder(&"disc", 1.0, 1.0, 0.01, 16)
-	for path: Array in PATHS:
-		for k in path.size() - 1:
-			_add_strip(path[k], path[k + 1], PATH_WIDTH, 0.012, dirt)
-		for p: Vector2 in path:
-			_batch(disc, Transform3D(Basis.from_scale(Vector3(PATH_WIDTH / 2, 1, PATH_WIDTH / 2)), Vector3(p.x, 0.013, p.y)), dirt)
-	_add_spawn_room()
+	_add_teleport()
 	_add_cave_mansion()
-	for s: Vector3 in SAFES:
-		_add_pentagram(s, 1.45)
 	for p: Vector3 in PRISONS: # nền đá đỏ thẫm, viền đỏ sáng quanh huyết trận
 		_add_mesh(p + Vector3(0, 0.015, 0), Vector3(6.4, 0.02, 6.4), BLOOD_STONE)
 		var corners: Array[Vector2] = [Vector2(-3.2, -3.2), Vector2(3.2, -3.2), Vector2(3.2, 3.2), Vector2(-3.2, 3.2)]
@@ -248,39 +256,70 @@ func _add_scenery() -> void:
 	for tree in TREES:
 		_add_tree(Vector3(tree.x, 0, tree.y), tree.z)
 	_add_rubble()
-	_add_cave()
-	_add_border_cliffs()
+	_add_runes()
 	_add_ground_cover()
 
 
-## Nền cỏ loang màu (một tấm phẳng phủ cả sân lẫn sườn núi ngoài tường).
+## Mô hình bản Meshy quan gửi (mặt sân, lối đi, vách đá, lan can, cổng vòng), giữ nguyên màu gốc
+## (shaders/ban_do_meshy.gdshader). Đồ họa Cao dùng ảnh gốc 2048 px, làm nét và thêm hạt chi tiết.
 func _add_ground() -> void:
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(SIZE.x + 60, SIZE.y + 50)
-	var mi := MeshInstance3D.new()
-	mi.mesh = plane
-	mi.material_override = _painted(GRASS_DARK, GRASS_LIGHT, 0.035)
-	mi.position = Vector3(SIZE.x / 2, 0, SIZE.y / 2)
-	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(mi)
+	var map: Node3D = (load(MODEL) as PackedScene).instantiate()
+	_meshy_look(map, BushScript.mip_texture(MESHY_ORIGINAL) if _quality == 2 else null)
+	add_child(map)
+	_layout = (load(LAYOUT) as Texture2D).get_image()
+	if _layout.is_compressed():
+		_layout.decompress()
 
 
-## Material nền tranh vẽ: 2 màu loang theo nhiễu, không đổ bóng.
-func _painted(dark: Color, light: Color, scale: float) -> ShaderMaterial:
+## Tô mô hình Meshy bằng shaders/ban_do_meshy.gdshader (giữ đúng màu ảnh gốc, làm nét theo mức đồ họa).
+## `original`: ảnh màu độ phân giải cao thay ảnh trong GLB (null: dùng ảnh trong GLB).
+func _meshy_look(model: Node3D, original: Texture2D) -> void:
 	var m := ShaderMaterial.new()
-	m.shader = load("res://Objects/shaders/nen.gdshader")
+	m.shader = load("res://Objects/shaders/ban_do_meshy.gdshader")
+	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		if original == null:
+			m.set_shader_parameter(&"meshy_albedo", (mi.mesh.surface_get_material(0) as StandardMaterial3D).albedo_texture)
+		mi.material_override = m
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF # ảnh gốc đã vẽ sẵn bóng
+	m.set_shader_parameter(&"sharpen", MESHY_SHARPEN[_quality])
+	if original != null:
+		m.set_shader_parameter(&"meshy_albedo", original)
+		m.set_shader_parameter(&"texel", Vector2.ONE / float(original.get_width()))
+		m.set_shader_parameter(&"detail", BushScript.mip_texture(GROUND + "da_tang.png"))
+		m.set_shader_parameter(&"detail_amount", MESHY_DETAIL)
+
+
+## Lớp nền tại điểm p trên sân (R: đất, G: đá vỡ), đọc từ ảnh lớp Meshy.
+func _layout_at(p: Vector2) -> Color:
+	var x := clampi(int(p.x / SIZE.x * _layout.get_width()), 0, _layout.get_width() - 1)
+	var y := clampi(int(p.y / SIZE.y * _layout.get_height()), 0, _layout.get_height() - 1)
+	return _layout.get_pixel(x, y)
+
+
+## Material nền vẽ tay: 2 ảnh màu nước trộn theo nhiễu, nhân sắc loang dark -> light. Dùng chung theo bộ tham số.
+func _hand_painted(a: String, b: String, dark: Color, light: Color, scale: float, tile: float) -> ShaderMaterial:
+	var key := "%s|%s|%s|%s" % [a, b, dark.to_html(), tile]
+	if _ground_materials.has(key):
+		return _ground_materials[key]
+	var m := ShaderMaterial.new()
+	m.shader = load("res://Objects/shaders/nen_tranh.gdshader")
+	m.set_shader_parameter(&"albedo_a", BushScript.mip_texture(GROUND + a))
+	m.set_shader_parameter(&"albedo_b", BushScript.mip_texture(GROUND + b))
 	m.set_shader_parameter(&"noise", BushScript.mip_texture(NATURE + "nhieu.png"))
 	m.set_shader_parameter(&"dark", dark)
 	m.set_shader_parameter(&"light", light)
 	m.set_shader_parameter(&"scale", scale)
+	m.set_shader_parameter(&"tile", tile)
+	m.set_shader_parameter(&"saturation", GROUND_SATURATION)
 	_no_shadow[m] = true
+	_ground_materials[key] = m
 	return m
 
 
-## Cỏ thấp, hoa, cỏ ba lá rải thành cụm trên sân; sỏi dọc lối đất; cây bụi nhỏ chân tường.
+## Cỏ thấp, hoa, cỏ ba lá rải thành cụm trên sân; cây bụi nhỏ chân tường.
 ## Chỉ để nhìn, không đổ bóng; số lượng theo mức đồ họa.
 func _add_ground_cover() -> void:
-	var tuft := BushScript.grass_material(0.5, Color(0.16, 0.32, 0.11), Color(0.45, 0.66, 0.24), 1.0)
+	var tuft := BushScript.grass_material(0.5, BushScript.ROOT_COLOR, BushScript.TIP_COLOR, 1.0)
 	_no_shadow[tuft] = true
 	var short: Mesh = load(NATURE + "Grass_Common_Short_co.obj")
 	var wide: Mesh = load(NATURE + "Grass_Wide_Short_co.obj")
@@ -293,22 +332,10 @@ func _add_ground_cover() -> void:
 			var mesh := wide if _quality == 2 and k == 0 else short
 			var sc := _rng.randf_range(0.3, 0.42)
 			_batch(mesh, Transform3D(Basis(Vector3.UP, _rng.randf() * TAU) * Basis.from_scale(Vector3(sc, sc, sc)), p), tuft)
-		if c % 3 == 0: # hoa mọc cạnh cỏ
+		if c % 7 == 0 and _quality > 0: # hoa lác đác, ít thôi cho khỏi rối mắt
 			var f: String = FLOWERS[_rng.randi() % FLOWERS.size()]
-			for k in 1 + _quality:
+			for k in _quality:
 				_add_nature(f, center + Vector3(_rng.randf_range(-0.9, 0.9), 0, _rng.randf_range(-0.9, 0.9)), _rng.randf() * TAU, 0.7, false)
-		elif c % 5 == 1 and _quality > 0:
-			_add_nature("Clover_1", center, _rng.randf() * TAU, 0.6, false)
-	for path: Array in PATHS: # sỏi lác đác hai bên lối đất
-		for k in path.size() - 1:
-			var a: Vector2 = path[k]
-			var b: Vector2 = path[k + 1]
-			var side := (b - a).orthogonal().normalized()
-			var t := _rng.randf_range(0.5, 2.0)
-			while t < a.distance_to(b):
-				var q := a.lerp(b, t / a.distance_to(b)) + side * _rng.randf_range(-0.95, 0.95)
-				_add_nature(PEBBLES[_rng.randi() % PEBBLES.size()], Vector3(q.x, 0, q.y), _rng.randf() * TAU, _rng.randf_range(0.8, 1.3), false)
-				t += _rng.randf_range(2.0, 3.5) / (1 + _quality * 0.5)
 	for r: Rect2 in WALLS + RUINS: # cây bụi nhỏ chân tường (máy yếu bỏ)
 		if _quality == 0 or r.size.x > 50 or r.size.y > 30:
 			continue
@@ -326,7 +353,7 @@ func _add_ground_cover() -> void:
 func _free_spot() -> Vector3:
 	for attempt in 12:
 		var p := Vector2(_rng.randf_range(1.0, SIZE.x - 1.0), _rng.randf_range(1.0, SIZE.y - 1.0))
-		if Rect2(0.5, 14.5, 8.0, 11.0).grow(0.3).has_point(p) or COURTYARD.grow(0.6).has_point(p):
+		if p.distance_to(Vector2(TELEPORT.x, TELEPORT.z)) < TELEPORT_CLEAR or COURTYARD.grow(0.6).has_point(p):
 			continue
 		if p.distance_to(Vector2(PRISONS[0].x, PRISONS[0].z)) < 4.2:
 			continue
@@ -337,7 +364,10 @@ func _free_spot() -> Vector3:
 		for r: Rect2 in WALLS + RUINS:
 			if r.grow(0.6).has_point(p):
 				ok = false
-		for path: Array in PATHS:
+		var lay := _layout_at(p)
+		if lay.r > 0.3 or lay.g > 0.3:
+			ok = false
+		for path: Array in STONE_PATHS:
 			for k in path.size() - 1:
 				if _segment_distance(p, path[k], path[k + 1]) < PATH_WIDTH / 2 + 0.3:
 					ok = false
@@ -350,126 +380,78 @@ func _segment_distance(p: Vector2, a: Vector2, b: Vector2) -> float:
 	return p.distance_to(Geometry2D.get_closest_point_to_segment(p, a, b))
 
 
-## Phòng truyền tống: sàn đá, nhà mái ngói đỏ, trận tròn xanh có 6 viên sáng.
-func _add_spawn_room() -> void:
-	_add_mesh(Vector3(4.25, 0.01, 20.0), Vector3(7.5, 0.02, 10.0), PAVING)
-	_add_rock(Vector3(1.4, 0, 24.2), 0.35)
-	_add_rock(Vector3(7.2, 0, 24.3), 0.3)
-	var c := PAVILION.get_center()
-	# Nhà KayKit 0,8 x 0,93 x 0,85: phóng to cỡ nhà thật (cao ~3,2 m), cửa quay về phía đông.
-	_add_model(HEX + "building_home_A_red.obj", Vector3(c.x, 0, c.y), PI / 2, Vector3.ONE * 3.4, HEX + "hexagons_medieval.png")
-	# Truyền tống trận
-	_add_disc(TELEPORT + Vector3(0, 0.02, 0), 1.25, BLUE_SOFT, true)
-	_add_ring(TELEPORT + Vector3(0, 0.03, 0), 1.3, BLUE_GLOW)
-	_add_ring(TELEPORT + Vector3(0, 0.035, 0), 0.75, BLUE_GLOW)
-	for k in 6:
-		var a := TAU * k / 6
-		_add_disc(TELEPORT + Vector3(cos(a) * 1.3, 0.04, sin(a) * 1.3), 0.17, Color.WHITE, true)
+## Pháp trận truyền tống Meshy, tường vòng quay ra bờ tây.
+func _add_teleport() -> void:
+	var tp: Node3D = (load(TELEPORT_MODEL) as PackedScene).instantiate()
+	tp.position = TELEPORT
+	tp.rotation.y = PI / 2 + deg_to_rad(TELEPORT_YAW) # mặt sau (-z) của mô hình quay về phía tây
+	_meshy_look(tp, null)
+	add_child(tp)
 
 
-## Động phủ: sàn đá lát kẻ ô, linh đài cẩm thạch với trận xanh, 4 cột đá, bụi cỏ quanh tường.
+## Khối va chạm: 13 khối dọc tường vòng pháp trận (nửa vòng phía tây), chuỗi khối theo 2 cánh nối tới bờ kè.
+## Tính quanh tâm pháp trận rồi xoay theo TELEPORT_YAW.
+func _teleport_walls() -> Array[Rect2]:
+	var w := TELEPORT_WING + 0.25
+	var spots: Array[Vector2] = []
+	for k in 13:
+		var a := deg_to_rad(-90.0 + 15.0 * k)
+		spots.append(Vector2(-cos(a), sin(a)) * TELEPORT_WALL_RADIUS)
+	for side in [-1.0, 1.0]:
+		for i in 3: # nối đầu tường vòng ra cánh
+			spots.append(Vector2(0.0, side * (TELEPORT_WALL_RADIUS + (w - TELEPORT_WALL_RADIUS) * (i + 1) / 3.0)))
+		var x := 0.4
+		while x < 0.95 - TELEPORT.x: # cánh tới bờ kè
+			spots.append(Vector2(x, side * w))
+			x += 0.4
+	var yaw := deg_to_rad(TELEPORT_YAW)
+	var out: Array[Rect2] = []
+	for p in spots:
+		var c := Vector2(TELEPORT.x, TELEPORT.z) + Vector2(p.x * cos(yaw) + p.y * sin(yaw), p.y * cos(yaw) - p.x * sin(yaw))
+		out.append(Rect2(c - Vector2(0.45, 0.45), Vector2(0.9, 0.9)))
+	return out
+
+
+## Sàn đá lát phiến lớn (ảnh Poly Haven CC0) phủ một khu chữ nhật.
+func _add_floor(r: Rect2) -> void:
+	var c := r.get_center()
+	var box := _shape(&"floor") as BoxMesh
+	if box == null:
+		box = BoxMesh.new()
+		box.size = Vector3(1, 0.02, 1)
+		_shapes[&"floor"] = box
+	_batch(box, Transform3D(Basis.from_scale(Vector3(r.size.x, 1, r.size.y)), Vector3(c.x, 0.01, c.y)),
+		_hand_painted("san_da.png", "san_da.png", PAVING_DARK, PAVING_LIGHT, 0.08, 0.25))
+
+
+## Động phủ: sàn đá lát phiến lớn, linh đài cẩm thạch với trận xanh, 4 cột đá, bụi cỏ quanh tường.
 func _add_cave_mansion() -> void:
-	var x0 := COURTYARD.position.x
-	var z0 := COURTYARD.position.y
-	var x1 := COURTYARD.end.x
-	var z1 := COURTYARD.end.y
-	_add_mesh(Vector3((x0 + x1) / 2, 0.01, (z0 + z1) / 2), Vector3(x1 - x0, 0.02, z1 - z0), PAVING)
-	var x := x0 + 1.2
-	while x < x1:
-		_add_mesh(Vector3(x, 0.022, (z0 + z1) / 2), Vector3(0.05, 0.01, z1 - z0), PAVING_LINE)
-		x += 1.2
-	var z := z0 + 1.2
-	while z < z1:
-		_add_mesh(Vector3((x0 + x1) / 2, 0.022, z), Vector3(x1 - x0, 0.01, 0.05), PAVING_LINE)
-		z += 1.2
+	_add_floor(COURTYARD)
 	var dais := _cylinder(&"dais", 1.0, 1.1, 1.0, 16)
 	_batch(dais, Transform3D(Basis.from_scale(Vector3(1.7, 0.3, 1.7)), ALTAR + Vector3(0, 0.15, 0)), _material(MARBLE))
 	_batch(dais, Transform3D(Basis.from_scale(Vector3(1.35, 0.2, 1.35)), ALTAR + Vector3(0, 0.38, 0)), _material(MARBLE))
 	_add_ring(ALTAR + Vector3(0, 0.49, 0), 1.05, BLUE_GLOW)
 	_add_disc(ALTAR + Vector3(0, 0.485, 0), 0.5, BLUE_SOFT, true)
-	for p: Vector2 in [Vector2(x0 + 1.7, 2.8), Vector2(x1 - 2.3, 2.8), Vector2(x0 + 1.7, 10.6), Vector2(x1 - 2.3, 10.6)]:
-		_add_model(DUNGEON + "pillar_decorated.obj", Vector3(p.x, 0, p.y), 0.0, Vector3(0.4, 0.65, 0.4), DUNGEON + "dungeon_texture.png")
-	for i in DECOR_BUSHES.size(): # bụi lá xanh xen bụi lá đỏ (máy yếu một nửa)
+	for p: Vector2 in MANSION_PILLARS:
+		_add_model(DUNGEON + "pillar_decorated.obj", Vector3(p.x, 0, p.y), 0.0, Vector3(0.4, 1.05, 0.4), DUNGEON + "dungeon_texture.png")
+	for i in DECOR_BUSHES.size(): # bụi lá xanh (máy yếu một nửa)
 		if _quality == 0 and i % 2 == 1:
 			continue
 		var b := DECOR_BUSHES[i]
-		if i % 3 == 1:
-			_add_nature("Bush_Common", Vector3(b.x, 0, b.y), _rng.randf() * TAU, b.z * 0.75, true)
-		else:
-			_add_nature("Bush_Large", Vector3(b.x, 0, b.y), _rng.randf() * TAU, b.z * 0.45, true)
+		_add_nature("Bush_Large", Vector3(b.x, 0, b.y), _rng.randf() * TAU, b.z * 0.45, true)
 
 
-## Trận linh ngũ tinh vàng dưới bệ trận linh.
-func _add_pentagram(center: Vector3, radius: float) -> void:
-	var c := center + Vector3(0, 0.025, 0)
-	_add_disc(c - Vector3(0, 0.008, 0), radius + 0.1, Color(0.42, 0.33, 0.18), false)
-	_add_ring(c, radius, GOLD_GLOW)
-	_add_ring(c, radius * 0.86, GOLD_GLOW)
-	var pts: Array[Vector2] = []
-	for k in 5:
-		var a := -PI / 2 + TAU * k / 5
-		pts.append(Vector2(c.x + cos(a) * radius * 0.84, c.z + sin(a) * radius * 0.84))
-	for k in 5:
-		_add_strip(pts[k], pts[(k + 2) % 5], 0.08, c.y + 0.004, _glow(GOLD_GLOW))
-
-
-## Đá vụn và cột gãy quanh tường đổ phía dưới phải (chỉ để nhìn, thấp dưới gối).
+## Phế tích đông nam: cột đá đổ nằm chéo phía bắc huyết trận (chỉ để nhìn,
+## va chạm của cột đổ dựng trong _ready).
 func _add_rubble() -> void:
-	for i in 7:
-		var p := Vector3(_rng.randf_range(33.0, 41.0), 0, _rng.randf_range(25.2, 33.0))
-		_add_model(DUNGEON + "rubble_half.obj", p, _rng.randf() * TAU, Vector3(0.18, 0.12, 0.18), DUNGEON + "dungeon_texture.png")
-	_add_model(DUNGEON + "rubble_large.obj", Vector3(22.0, 0, 3.0), 0.3, Vector3(0.22, 0.14, 0.22), DUNGEON + "dungeon_texture.png")
-	_add_model(DUNGEON + "pillar_decorated.obj", Vector3(38.8, 0, 30.0), 0.4, Vector3(0.5, 0.35, 0.5), DUNGEON + "dungeon_texture.png")
-
-
-## Cửa hang mật đạo: ụ đá to có lỗ tối, cây mọc trên.
-func _add_cave() -> void:
-	var c := CAVE.get_center()
-	_add_nature("Rock_Big_1", Vector3(c.x + 0.9, 0, c.y), PI / 2, 0.62, true)
-	_add_nature("Rock_Big_2", Vector3(c.x + 0.7, 0, c.y - 1.8), 1.0, 0.4, true)
-	_add_rock(Vector3(c.x + 0.4, 0, c.y + 1.7), 0.7)
-	var hole := _shape(&"hole") as SphereMesh
-	if hole == null:
-		hole = SphereMesh.new()
-		hole.radius = 0.5
-		hole.height = 1.0
-		hole.radial_segments = 10
-		hole.rings = 5
-		_shapes[&"hole"] = hole
-	_batch(hole, Transform3D(Basis.from_scale(Vector3(0.5, 1.6, 1.6)), Vector3(c.x - 0.9, 0.5, c.y)), _material(CAVE_DARK))
-	_add_nature("Bush_Large", Vector3(c.x + 1.3, 1.6, c.y + 0.4), 0.5, 0.5, true)
-
-
-## Rừng cây ngoài tường viền (bắc, tây, đông) như rìa bản đồ Liên Quân.
-func _add_border_cliffs() -> void:
-	var x := -2.0
-	while x < SIZE.x + 3:
-		_add_border_trees(Vector3(x, 0, -2.6 + _rng.randf_range(-0.5, 0.3)))
-		x += BORDER_SPACING[_quality] * _rng.randf_range(0.9, 1.1)
-	var z := 2.0
-	while z < SIZE.y + 2:
-		_add_border_trees(Vector3(-2.6 + _rng.randf_range(-0.3, 0.5), 0, z))
-		_add_border_trees(Vector3(SIZE.x + 2.6 + _rng.randf_range(-0.5, 0.3), 0, z))
-		z += BORDER_SPACING[_quality] * _rng.randf_range(0.9, 1.1)
-	x = 1.0
-	while x < SIZE.x: # phía nam gần camera: chỉ đá thấp và bụi lá, không che màn hình
-		if _rng.randf() < 0.5:
-			_add_rock(Vector3(x, 0.0, SIZE.y + 0.9), _rng.randf_range(0.5, 0.8))
-		else:
-			_add_nature("Bush_Large", Vector3(x, 0, SIZE.y + 1.0), _rng.randf() * TAU, _rng.randf_range(0.3, 0.4), false)
-		x += _rng.randf_range(2.5, 4.0)
-
-
-## Một cây rừng (thông hoặc cây tán tròn cao ~6 m), mức Cao thêm bụi lá dưới gốc.
-## Rừng ngoài viền không đổ bóng (bóng chỉ rơi ra ngoài sân, tốn mà không ai nhìn).
-func _add_border_trees(pos: Vector3) -> void:
-	var yaw := _rng.randf() * TAU
-	if _rng.randf() < 0.5:
-		_add_nature("Pine_5", pos, yaw, _rng.randf_range(0.85, 1.0), false)
-	else:
-		_add_nature("CommonTree_5", pos, yaw, _rng.randf_range(1.25, 1.45), false)
-	if _quality == 2:
-		_add_nature("Bush_Large", pos + Vector3(_rng.randf_range(-1.8, 1.8), 0, _rng.randf_range(-1.8, 1.8)), yaw, _rng.randf_range(0.55, 0.75), false)
+	var fa: Vector2 = FALLEN_PILLAR[0]
+	var fb: Vector2 = FALLEN_PILLAR[1]
+	var d := fb - fa
+	var mid := (fa + fb) / 2
+	# khuôn cột cao 4 m dựng đứng: quay nằm xuống theo hướng fa -> fb, nửa thân vùi đất
+	var lying := Basis(Vector3.UP, atan2(d.x, d.y)) * Basis(Vector3.RIGHT, PI / 2) * Basis.from_scale(Vector3(0.45, d.length() / 4.0, 0.45))
+	var xf := Transform3D(lying, Vector3(mid.x, 0.25, mid.y) - lying * Vector3(0, 2.0, 0))
+	_batch(_load_model(DUNGEON + "pillar_decorated.obj"), xf, _textured_material(DUNGEON + "dungeon_texture.png", false, true))
 
 
 ## Tường đá: khuôn tường KayKit 4 x 4 x 1 m kéo theo đoạn tường; phế tích xen tường vỡ.
@@ -487,7 +469,8 @@ func _add_wall(r: Rect2, height: float, ruin: bool) -> void:
 		var pos := Vector3(r.position.x + t, 0, center.y) if along_x else Vector3(center.x, 0, r.position.y + t)
 		var model := "wall_broken.obj" if ruin and k % 2 == 0 else "wall.obj"
 		var scale := Vector3(seg / 4.0, height / 4.0, minf(r.size.x, r.size.y))
-		_add_model(DUNGEON + model, pos, 0.0 if along_x else PI / 2, scale, DUNGEON + "dungeon_texture.png")
+		var xf := Transform3D(Basis(Vector3.UP, 0.0 if along_x else PI / 2) * Basis.from_scale(scale), pos)
+		_batch(_load_model(DUNGEON + model), xf, _stone("tuong.png", WALL_TINT, 0.0, 0.5))
 
 
 ## Đá tảng tranh vẽ, rộng ~2,2 lần bán kính, xoay ngẫu nhiên.
@@ -599,7 +582,8 @@ func _add_model(path: String, pos: Vector3, yaw: float, scale: Vector3, texture:
 func _add_nature(model: String, pos: Vector3, yaw: float, scale: float, shadow: bool) -> void:
 	var xf := Transform3D(Basis(Vector3.UP, yaw) * Basis.from_scale(Vector3.ONE * scale), pos)
 	for part: Array in NATURE_PARTS[model]:
-		_batch(_load_model(NATURE + model + "_" + part[0] + ".obj"), xf, _textured_material(NATURE + part[1], part[2], shadow))
+		var mat: Material = _stone("da_tang.png", ROCK_TINT, 0.3, 0.32) if part[1] == "da.png" else _textured_material(NATURE + part[1], part[2], shadow)
+		_batch(_load_model(NATURE + model + "_" + part[0] + ".obj"), xf, mat)
 
 
 func _load_model(path: String) -> Mesh:
@@ -608,19 +592,70 @@ func _load_model(path: String) -> Mesh:
 	return _models[path]
 
 
-## Material dùng chung cho mọi mô hình cùng một ảnh. Lá thì cắt viền theo alpha, thấy cả 2 mặt.
-func _textured_material(path: String, cutout: bool, shadow: bool) -> StandardMaterial3D:
+## Vòng phù văn phát sáng trên nền: quanh linh đài, huyết trận.
+func _add_runes() -> void:
+	_add_rune(ALTAR, 2.7, BLUE_GLOW, -0.06)
+	for p: Vector3 in PRISONS:
+		_add_rune(p, 4.6, BLOOD_GLOW, 0.05)
+
+
+## Một vòng phù văn bán kính `radius` (ảnh vẽ bằng code, shaders/phu_van.gdshader).
+func _add_rune(center: Vector3, radius: float, color: Color, spin: float) -> void:
+	var quad := _shape(&"rune") as PlaneMesh
+	if quad == null:
+		quad = PlaneMesh.new()
+		quad.size = Vector2(2, 2)
+		_shapes[&"rune"] = quad
+	var m := ShaderMaterial.new()
+	m.shader = load("res://Objects/shaders/phu_van.gdshader")
+	m.set_shader_parameter(&"rune", BushScript.mip_texture(GROUND + "phu_van.png"))
+	m.set_shader_parameter(&"color", color)
+	m.set_shader_parameter(&"spin", spin)
+	var mi := MeshInstance3D.new()
+	mi.mesh = quad
+	mi.material_override = m
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	mi.position = center + Vector3(0, 0.045, 0)
+	mi.scale = Vector3(radius, 1, radius)
+	add_child(mi)
+
+
+## Material đá vẽ tay chiếu 3 phía (shaders/da_ve_tay.gdshader), dùng chung theo bộ tham số.
+## `moss`: phần mặt trên phủ rêu (0 không rêu); `tile`: số lần lặp ảnh trên 1 m.
+func _stone(texture: String, tint: Color, moss: float, tile: float) -> ShaderMaterial:
+	var key := "%s|%s|%s|%s" % [texture, tint.to_html(), moss, tile]
+	if not _stones.has(key):
+		var m := ShaderMaterial.new()
+		m.shader = load("res://Objects/shaders/da_ve_tay.gdshader")
+		m.set_shader_parameter(&"albedo", BushScript.mip_texture(GROUND + texture))
+		m.set_shader_parameter(&"moss", BushScript.mip_texture(GROUND + "co_1.png"))
+		m.set_shader_parameter(&"tint", tint)
+		m.set_shader_parameter(&"moss_tint", MOSS_TINT)
+		m.set_shader_parameter(&"moss_amount", moss)
+		m.set_shader_parameter(&"tile", tile)
+		_stones[key] = m
+	return _stones[key]
+
+
+## Material dùng chung cho mọi mô hình cùng một ảnh. Lá thì cắt viền theo alpha, thấy cả 2 mặt (shaders/la.gdshader).
+func _textured_material(path: String, cutout: bool, shadow: bool) -> Material:
 	var key := "%s|%s|%s" % [path, cutout, shadow]
 	if not _textured.has(key):
-		var m := StandardMaterial3D.new()
-		m.albedo_texture = BushScript.mip_texture(path)
-		m.albedo_color = TEXTURE_TINTS.get(path.get_file(), Color.WHITE)
-		m.roughness = 1.0
-		m.metallic_specular = 0.2
+		var tint: Color = TEXTURE_TINTS.get(path.get_file(), Color.WHITE)
+		var m: Material
 		if cutout:
-			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
-			m.alpha_scissor_threshold = 0.3
-			m.cull_mode = BaseMaterial3D.CULL_DISABLED
+			var leaf := ShaderMaterial.new()
+			leaf.shader = load("res://Objects/shaders/la.gdshader")
+			leaf.set_shader_parameter(&"tex", BushScript.mip_texture(path))
+			leaf.set_shader_parameter(&"tint", tint)
+			m = leaf
+		else:
+			var solid := StandardMaterial3D.new()
+			solid.albedo_texture = BushScript.mip_texture(path)
+			solid.albedo_color = tint
+			solid.roughness = 1.0
+			solid.metallic_specular = 0.2
+			m = solid
 		if not shadow:
 			_no_shadow[m] = true
 		_textured[key] = m
@@ -670,15 +705,17 @@ func _add_lighting() -> void:
 	var sun := DirectionalLight3D.new()
 	sun.rotation_degrees = Vector3(-55, 30, 0)
 	sun.shadow_enabled = int(ProjectSettings.get_setting("game/graphics_quality", 0)) > 0 # đồ họa Thấp: không bóng
-	sun.light_energy = 0.8
-	sun.light_color = Color(1.0, 0.95, 0.84) # nắng ấm
+	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL # camera nhìn từ trên: 1 lượt vẽ bóng thay vì 4
+	sun.directional_shadow_max_distance = 32.0 # đủ phủ khung nhìn trong trận
+	sun.light_energy = 0.95
+	sun.light_color = Color(1.0, 0.9, 0.72) # nắng vàng ấm, tương phản bóng râm xanh tím
 	add_child(sun)
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.56, 0.74, 0.88) # trời xanh
+	env.background_color = Color(0.4, 0.52, 0.58) # trời xám xanh, không chói
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.72, 0.82, 0.95) # bóng râm ngả xanh trời như tranh vẽ
-	env.ambient_light_energy = 0.42
+	env.ambient_light_color = Color(0.5, 0.6, 0.95) # bóng râm ngả xanh lam tím như bản đồ MOBA
+	env.ambient_light_energy = 0.5
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC # màu đỡ cháy dưới nắng
 	var world_env := WorldEnvironment.new()
 	world_env.environment = env
@@ -711,5 +748,5 @@ func get_bushes() -> Array[Vector3]:
 
 func get_walls() -> Array[Rect2]:
 	var out: Array[Rect2] = []
-	out.assign(WALLS + RUINS + [PAVILION, CAVE])
+	out.assign(WALLS + RUINS + _teleport_walls())
 	return out
