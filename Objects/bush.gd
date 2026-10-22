@@ -15,8 +15,8 @@ const CLUMPS := [4, 6, 9] # số khóm mỗi bụi theo mức đồ họa 0 Th�
 const GRASS_SHADER := "res://Objects/shaders/co.gdshader"
 const GRASS_TEXTURE := "res://Objects/models/quaternius_nature/co.png"
 const HEIGHT := 2.1 # mét, cao hơn đầu nhân vật (1,7 m): đứng trong là khuất hẳn
-const ROOT_COLOR := Color(0.22, 0.36, 0.1) # tông rêu sàn Meshy: gốc xanh rêu, ngọn xanh nõn chuối nhạt
-const TIP_COLOR := Color(0.58, 0.74, 0.26)
+const ROOT_COLOR := Color(0.46, 0.58, 0.26) # tông rêu sàn Meshy: gốc xanh rêu, ngọn xanh nõn chuối nhạt
+const TIP_COLOR := Color(0.66, 0.76, 0.36)
 
 var index := 0 ## chỉ số trong MapBase.get_bushes()
 var radius := 1.4

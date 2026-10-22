@@ -121,16 +121,16 @@ const TELEPORT_MODEL := "res://Objects/models/phap_tran/phap_tran.glb"
 const MESHY_ORIGINAL := "res://Objects/models/ban_do_meshy/mau_goc.jpg" # ảnh màu gốc 2048 px, chỉ đồ họa Cao
 const MESHY_SHARPEN := [0.0, 0.35, 0.6] # độ làm nét ảnh Meshy theo mức đồ họa
 const MESHY_DETAIL := 0.22 # hạt chi tiết đồ họa Cao (chỉ đổi độ sáng)
-const TREE_LEAVES := [["vo", "vo_cay.png", false], ["la", "la_cay.png", true]]
-const SMALL_PLANT := [["la_hoa", "la_nho.png", true]]
-const FLOWER := [["la_hoa", "la_nho.png", true], ["hoa", "hoa.png", true]]
+const TREE_LEAVES := [["vo", "vo_cay.png", false], ["la", "la_cay_reu.png", true]]
+const SMALL_PLANT := [["la_hoa", "la_nho_reu.png", true]]
+const FLOWER := [["la_hoa", "la_nho_reu.png", true], ["hoa", "hoa.png", true]]
 const STONE_PART := [["da", "da.png", false]]
 const PEBBLE := [["soi", "soi.png", false]]
 ## Mô hình Quaternius: tên -> các phần [đuôi file, ảnh, lá cắt viền theo kênh alpha].
 const NATURE_PARTS := {
 	"CommonTree_3": TREE_LEAVES, "CommonTree_5": TREE_LEAVES,
-	"Pine_5": [["vo", "vo_cay.png", false], ["la", "la_thong.png", true]],
-	"Bush_Large": [["la", "la_bui.png", true]],
+	"Pine_5": [["vo", "vo_cay.png", false], ["la", "la_thong_reu.png", true]],
+	"Bush_Large": [["la", "la_bui_reu.png", true]],
 	"Rock_Medium_1": STONE_PART, "Rock_Medium_2": STONE_PART, "Rock_Medium_3": STONE_PART, "Rock_Medium_4": STONE_PART,
 	"Rock_Big_1": STONE_PART, "Rock_Big_2": STONE_PART,
 	"Flower_3_Single": FLOWER, "Flower_4_Single": FLOWER, "Flower_7_Single": FLOWER,
@@ -140,19 +140,17 @@ const NATURE_PARTS := {
 ## Đá vừa: tên -> chiều rộng khuôn (m), để co theo bán kính tảng đá.
 const ROCK_WIDTHS := {"Rock_Medium_1": 3.2, "Rock_Medium_2": 3.0, "Rock_Medium_3": 3.4, "Rock_Medium_4": 3.8}
 const FLOWERS: Array[String] = ["Flower_3_Single", "Flower_4_Single", "Flower_7_Single"]
-## Nhuộm ảnh gốc cho dịu như bản đồ MOBA: đá, tường ngả xám rêu; lá cây bớt vàng chanh, ngả xanh lục sẫm.
+## Nhuộm ảnh gốc cho dịu như bản đồ MOBA: đá, tường ngả xám rêu. Lá *_reu.png đã tô sẵn màu rêu sàn (tools/la_reu).
 const TEXTURE_TINTS := {
 	"soi.png": Color(0.55, 0.54, 0.5), "da.png": Color(0.7, 0.72, 0.7), "dungeon_texture.png": Color(0.72, 0.75, 0.72),
-	# Lá: nhân ra màu rêu xanh nõn chuối nhạt của sàn Meshy (~0,48 0,63 0,15), mỗi ảnh lá gốc sáng tối khác nhau
-	"la_cay.png": Color(1.4, 1.3, 1.0), "la_thong.png": Color(2.4, 1.82, 1.0), "la_bui.png": Color(2.0, 1.47, 1.0),
-	"la_nho.png": Color(1.06, 1.22, 0.9), "vo_cay.png": Color(0.8, 0.78, 0.76),
+	"vo_cay.png": Color(0.8, 0.78, 0.76),
 }
 ## Số khóm cỏ thấp rải trên sân theo mức đồ họa 0 Thấp, 1 Vừa, 2 Cao (mỗi khóm ~155 tam giác).
 const TUFT_CLUSTERS := [14, 45, 75]
 const BORDER_WALLS := 5 # số rect viền ngoài ở đầu WALLS
 const ROCK_TINT := Color(1.0, 1.0, 1.05) # tảng đá, vách viền
 const WALL_TINT := Color(0.85, 0.85, 0.9) # tường gạch phòng xuất phát, động phủ
-const MOSS_TINT := Color(0.58, 0.74, 0.32) # rêu trên mặt đá: xanh nõn chuối nhạt như rêu sàn Meshy
+const MOSS_TINT := Color(0.56, 0.65, 0.31) # rêu trên mặt đá: xanh nõn chuối nhạt như rêu sàn Meshy
 
 # Sắc nhân lên ảnh nền vẽ tay (1 = giữ nguyên màu ảnh): vệt tối và vệt sáng loang như bản Meshy.
 const GROUND_SATURATION := 0.5 # nền bớt rực để nhân vật, đạn, hiệu ứng nổi lên
@@ -631,19 +629,25 @@ func _stone(texture: String, tint: Color, moss: float, tile: float) -> ShaderMat
 	return _stones[key]
 
 
-## Material dùng chung cho mọi mô hình cùng một ảnh. Lá thì cắt viền theo alpha, thấy cả 2 mặt.
-func _textured_material(path: String, cutout: bool, shadow: bool) -> StandardMaterial3D:
+## Material dùng chung cho mọi mô hình cùng một ảnh. Lá thì cắt viền theo alpha, thấy cả 2 mặt (shaders/la.gdshader).
+func _textured_material(path: String, cutout: bool, shadow: bool) -> Material:
 	var key := "%s|%s|%s" % [path, cutout, shadow]
 	if not _textured.has(key):
-		var m := StandardMaterial3D.new()
-		m.albedo_texture = BushScript.mip_texture(path)
-		m.albedo_color = TEXTURE_TINTS.get(path.get_file(), Color.WHITE)
-		m.roughness = 1.0
-		m.metallic_specular = 0.2
+		var tint: Color = TEXTURE_TINTS.get(path.get_file(), Color.WHITE)
+		var m: Material
 		if cutout:
-			m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
-			m.alpha_scissor_threshold = 0.3
-			m.cull_mode = BaseMaterial3D.CULL_DISABLED
+			var leaf := ShaderMaterial.new()
+			leaf.shader = load("res://Objects/shaders/la.gdshader")
+			leaf.set_shader_parameter(&"tex", BushScript.mip_texture(path))
+			leaf.set_shader_parameter(&"tint", tint)
+			m = leaf
+		else:
+			var solid := StandardMaterial3D.new()
+			solid.albedo_texture = BushScript.mip_texture(path)
+			solid.albedo_color = tint
+			solid.roughness = 1.0
+			solid.metallic_specular = 0.2
+			m = solid
 		if not shadow:
 			_no_shadow[m] = true
 		_textured[key] = m
