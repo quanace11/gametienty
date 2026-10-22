@@ -1,4 +1,4 @@
-"""Tách ảnh lớp nền (R: lối đất, G: nền đá vỡ) từ bản Meshy quan gửi, cho shaders/nen_meshy.gdshader.
+"""Tách ảnh lớp nền (R: lối đất, G: nền đá vỡ) từ bản Meshy quan gửi, cho shaders/ban_do_meshy.gdshader.
 
 1. Chụp bản Meshy từ trên xuống (chỉ ánh sáng môi trường trắng, 2000 px phủ -1..1):
    godot --path <dự án trống> --rendering-driver opengl3 --resolution 2000x2000 -s chup_tu_tren.gd -- map.glb tu_tren.png
