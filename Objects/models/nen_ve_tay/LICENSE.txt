@@ -18,8 +18,8 @@ tuong.png (tường gạch)
   https://opengameart.org/content/handpainted-brick-texture-pack
 
 dat.png (lối đất)
-  Hand-Painted Watercolor Terrain Texture Pack, Jonas Voland / Voxel Core Lab (Dirt_03)
-  https://voxelcorelab.itch.io/watercolor-terrain-textures
+  handpainted stone way-texture, MELLE, OpenGameArt (dirt-texture)
+  https://opengameart.org/content/handpainted-stone-way-texture
 
 phu_van.png (vòng phù văn): vẽ bằng code cho dự án này.
 
