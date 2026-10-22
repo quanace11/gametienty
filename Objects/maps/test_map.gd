@@ -85,14 +85,14 @@ const STONE_PATHS := [
 		Vector2(40.0, 22.5), Vector2(43.1, 21.4)],
 	[Vector2(36.8, 23.5), Vector2(37.8, 19.1), Vector2(39.0, 14.0), Vector2(39.6, 9.2)],
 ]
-const TELEPORT := Vector3(3.8, 0, 29.4) # truyền tống trận trong phòng trái
+const TELEPORT := Vector3(3.25, 0, 29.4) # pháp trận truyền tống trong phòng trái, người trốn hiện ra ở đây
 const ALTAR := Vector3(45.0, 0, 8.5) # linh đài trong động phủ
 const COURTYARD := Rect2(40.5, 0.5, 9.0, 14.0) # sàn động phủ trong tường
 ## 5 cột cao trong động phủ (như bản Meshy): 3 cột hàng bắc, 2 cột dọc tường đông.
 const MANSION_PILLARS := [Vector2(42.4, 2.6), Vector2(45.6, 2.6), Vector2(48.6, 2.6), Vector2(48.6, 7.0), Vector2(48.6, 11.2)]
 const HUNTER_SPAWN := Vector3(42.5, 0.05, 39.5) # ma tu xuất hiện ở phế tích đông nam, xa phòng truyền tống
 const ESCAPEE_SPAWNS: Array[Vector3] = [
-	Vector3(3.0, 0.05, 28.6), Vector3(4.6, 0.05, 28.6), Vector3(3.0, 0.05, 30.2), Vector3(4.6, 0.05, 30.2),
+	Vector3(2.7, 0.05, 28.85), Vector3(3.8, 0.05, 28.85), Vector3(2.7, 0.05, 29.95), Vector3(3.8, 0.05, 29.95),
 ]
 ## Linh thạch rải sẵn trên sàn.
 const COIN_SPOTS: Array[Vector3] = [
@@ -116,6 +116,9 @@ const GROUND := "res://Objects/models/nen_ve_tay/" # ảnh vẽ tay CC0: nền, 
 const LAYOUT := "res://Objects/models/ban_do_meshy/lop_nen.png"
 ## Mô hình bản Meshy đã đưa về tọa độ trận (tools/ban_do_meshy/build_ban_do.py).
 const MODEL := "res://Objects/models/ban_do_meshy/ban_do.glb"
+## Pháp trận truyền tống Meshy quan gửi (4k tam giác, ngang 4,9 m, vòng phù văn bán kính ~0,9 m ở tâm),
+## tường vòng sau lưng quay về phía tây, mở ra cửa đông của phòng.
+const TELEPORT_MODEL := "res://Objects/models/phap_tran/phap_tran.glb"
 const MESHY_ORIGINAL := "res://Objects/models/ban_do_meshy/mau_goc.jpg" # ảnh màu gốc 2048 px, chỉ đồ họa Cao
 const MESHY_SHARPEN := [0.0, 0.35, 0.6] # độ làm nét ảnh Meshy theo mức đồ họa
 const MESHY_DETAIL := 0.22 # hạt chi tiết đồ họa Cao (chỉ đổi độ sáng)
@@ -261,23 +264,29 @@ func _add_scenery() -> void:
 ## (shaders/ban_do_meshy.gdshader). Đồ họa Cao dùng ảnh gốc 2048 px, làm nét và thêm hạt chi tiết.
 func _add_ground() -> void:
 	var map: Node3D = (load(MODEL) as PackedScene).instantiate()
-	var m := ShaderMaterial.new()
-	m.shader = load("res://Objects/shaders/ban_do_meshy.gdshader")
-	for mi: MeshInstance3D in map.find_children("*", "MeshInstance3D", true, false):
-		if _quality < 2:
-			m.set_shader_parameter(&"meshy_albedo", (mi.mesh.surface_get_material(0) as StandardMaterial3D).albedo_texture)
-		mi.material_override = m
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF # ảnh gốc đã vẽ sẵn bóng của viền
-	m.set_shader_parameter(&"sharpen", MESHY_SHARPEN[_quality])
-	if _quality == 2:
-		m.set_shader_parameter(&"meshy_albedo", BushScript.mip_texture(MESHY_ORIGINAL))
-		m.set_shader_parameter(&"texel", Vector2.ONE / 2048.0)
-		m.set_shader_parameter(&"detail", BushScript.mip_texture(GROUND + "da_tang.png"))
-		m.set_shader_parameter(&"detail_amount", MESHY_DETAIL)
+	_meshy_look(map, BushScript.mip_texture(MESHY_ORIGINAL) if _quality == 2 else null)
 	add_child(map)
 	_layout = (load(LAYOUT) as Texture2D).get_image()
 	if _layout.is_compressed():
 		_layout.decompress()
+
+
+## Tô mô hình Meshy bằng shaders/ban_do_meshy.gdshader (giữ đúng màu ảnh gốc, làm nét theo mức đồ họa).
+## `original`: ảnh màu độ phân giải cao thay ảnh trong GLB (null: dùng ảnh trong GLB).
+func _meshy_look(model: Node3D, original: Texture2D) -> void:
+	var m := ShaderMaterial.new()
+	m.shader = load("res://Objects/shaders/ban_do_meshy.gdshader")
+	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		if original == null:
+			m.set_shader_parameter(&"meshy_albedo", (mi.mesh.surface_get_material(0) as StandardMaterial3D).albedo_texture)
+		mi.material_override = m
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF # ảnh gốc đã vẽ sẵn bóng
+	m.set_shader_parameter(&"sharpen", MESHY_SHARPEN[_quality])
+	if original != null:
+		m.set_shader_parameter(&"meshy_albedo", original)
+		m.set_shader_parameter(&"texel", Vector2.ONE / float(original.get_width()))
+		m.set_shader_parameter(&"detail", BushScript.mip_texture(GROUND + "da_tang.png"))
+		m.set_shader_parameter(&"detail_amount", MESHY_DETAIL)
 
 
 ## Lớp nền tại điểm p trên sân (R: đất, G: đá vỡ), đọc từ ảnh lớp Meshy.
@@ -310,7 +319,7 @@ func _hand_painted(a: String, b: String, dark: Color, light: Color, scale: float
 ## Cỏ thấp, hoa, cỏ ba lá rải thành cụm trên sân; cây bụi nhỏ chân tường.
 ## Chỉ để nhìn, không đổ bóng; số lượng theo mức đồ họa.
 func _add_ground_cover() -> void:
-	var tuft := BushScript.grass_material(0.5, Color(0.1, 0.17, 0.11), Color(0.24, 0.32, 0.2), 1.0)
+	var tuft := BushScript.grass_material(0.5, BushScript.ROOT_COLOR, BushScript.TIP_COLOR, 1.0)
 	_no_shadow[tuft] = true
 	var short: Mesh = load(NATURE + "Grass_Common_Short_co.obj")
 	var wide: Mesh = load(NATURE + "Grass_Wide_Short_co.obj")
@@ -371,20 +380,18 @@ func _segment_distance(p: Vector2, a: Vector2, b: Vector2) -> float:
 	return p.distance_to(Geometry2D.get_closest_point_to_segment(p, a, b))
 
 
-## Phòng truyền tống: sàn đá, nhà mái ngói đỏ, trận tròn xanh có 6 viên sáng.
+## Phòng truyền tống: sàn đá, nhà mái ngói đỏ, pháp trận truyền tống Meshy (người trốn hiện ra trên trận).
 func _add_spawn_room() -> void:
 	var room := SPAWN_ROOM.get_center()
 	_add_floor(SPAWN_ROOM)
 	var c := PAVILION.get_center()
 	# Nhà KayKit 0,8 x 0,93 x 0,85: phóng to cỡ nhà thật (cao ~3,2 m), cửa quay về phía đông.
 	_add_model(HEX + "building_home_A_red.obj", Vector3(c.x, 0, c.y), PI / 2, Vector3.ONE * 3.4, HEX + "hexagons_medieval.png")
-	# Truyền tống trận
-	_add_disc(TELEPORT + Vector3(0, 0.02, 0), 1.25, BLUE_SOFT, true)
-	_add_ring(TELEPORT + Vector3(0, 0.03, 0), 1.3, BLUE_GLOW)
-	_add_ring(TELEPORT + Vector3(0, 0.035, 0), 0.75, BLUE_GLOW)
-	for k in 6:
-		var a := TAU * k / 6
-		_add_disc(TELEPORT + Vector3(cos(a) * 1.3, 0.04, sin(a) * 1.3), 0.17, Color.WHITE, true)
+	var tp: Node3D = (load(TELEPORT_MODEL) as PackedScene).instantiate()
+	tp.position = TELEPORT + Vector3(0, 0.01, 0) # đế đá ngang sàn phòng, vòng phù văn nhô ~6 cm
+	tp.rotation.y = PI / 2
+	_meshy_look(tp, null)
+	add_child(tp)
 
 
 ## Sàn đá lát phiến lớn (ảnh Poly Haven CC0) phủ một khu chữ nhật.
@@ -567,9 +574,8 @@ func _load_model(path: String) -> Mesh:
 	return _models[path]
 
 
-## Vòng phù văn phát sáng trên nền: quanh truyền tống trận, linh đài, huyết trận.
+## Vòng phù văn phát sáng trên nền: quanh linh đài, huyết trận.
 func _add_runes() -> void:
-	_add_rune(TELEPORT, 1.9, BLUE_GLOW, 0.1)
 	_add_rune(ALTAR, 2.7, BLUE_GLOW, -0.06)
 	for p: Vector3 in PRISONS:
 		_add_rune(p, 4.6, BLOOD_GLOW, 0.05)
