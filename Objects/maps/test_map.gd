@@ -143,8 +143,9 @@ const FLOWERS: Array[String] = ["Flower_3_Single", "Flower_4_Single", "Flower_7_
 ## Nhuộm ảnh gốc cho dịu như bản đồ MOBA: đá, tường ngả xám rêu; lá cây bớt vàng chanh, ngả xanh lục sẫm.
 const TEXTURE_TINTS := {
 	"soi.png": Color(0.55, 0.54, 0.5), "da.png": Color(0.7, 0.72, 0.7), "dungeon_texture.png": Color(0.72, 0.75, 0.72),
-	"la_cay.png": Color(0.56, 0.64, 0.6), "la_thong.png": Color(0.54, 0.62, 0.6), "la_bui.png": Color(0.56, 0.64, 0.6),
-	"la_nho.png": Color(0.6, 0.66, 0.62), "vo_cay.png": Color(0.8, 0.78, 0.76),
+	# Lá: nhân ra màu rêu xanh nõn chuối của sàn Meshy (~0,42 0,58 0,15), mỗi ảnh lá gốc sáng tối khác nhau
+	"la_cay.png": Color(1.22, 1.2, 1.0), "la_thong.png": Color(2.1, 1.68, 1.0), "la_bui.png": Color(1.76, 1.36, 1.0),
+	"la_nho.png": Color(0.94, 1.13, 0.77), "vo_cay.png": Color(0.8, 0.78, 0.76),
 }
 ## Số khóm cỏ thấp rải trên sân theo mức đồ họa 0 Thấp, 1 Vừa, 2 Cao (mỗi khóm ~155 tam giác).
 const TUFT_CLUSTERS := [14, 45, 75]
