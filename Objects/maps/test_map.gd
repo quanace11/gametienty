@@ -58,7 +58,7 @@ const DECOR_BUSHES: Array[Vector3] = [
 ]
 ## Đá tảng chắn đường (và chắn phi kiếm): Vector3(x, z, bán kính).
 const ROCKS: Array[Vector3] = [
-	Vector3(26.0, 10.3, 1.7), Vector3(18.0, 41.5, 2.0), Vector3(43.0, 17.6, 1.5), Vector3(48.1, 26.8, 1.0),
+	Vector3(26.0, 10.3, 1.7), Vector3(17.6, 40.2, 2.0), # tảng nam cách bờ ~2 m để lách qua Vector3(43.0, 17.6, 1.5), Vector3(48.1, 26.8, 1.0),
 	Vector3(3.8, 34.8, 0.7), Vector3(6.0, 11.3, 0.45), Vector3(12.8, 36.3, 0.6), Vector3(15.0, 30.4, 0.6),
 	Vector3(22.5, 35.9, 0.55), Vector3(23.6, 32.0, 0.8), Vector3(32.9, 6.6, 0.45), Vector3(38.6, 12.7, 0.4),
 	Vector3(39.6, 35.5, 0.5), Vector3(46.1, 36.1, 0.45), Vector3(44.6, 18.8, 0.9),
@@ -143,16 +143,16 @@ const FLOWERS: Array[String] = ["Flower_3_Single", "Flower_4_Single", "Flower_7_
 ## Nhuộm ảnh gốc cho dịu như bản đồ MOBA: đá, tường ngả xám rêu; lá cây bớt vàng chanh, ngả xanh lục sẫm.
 const TEXTURE_TINTS := {
 	"soi.png": Color(0.55, 0.54, 0.5), "da.png": Color(0.7, 0.72, 0.7), "dungeon_texture.png": Color(0.72, 0.75, 0.72),
-	# Lá: nhân ra màu rêu xanh nõn chuối của sàn Meshy (~0,42 0,58 0,15), mỗi ảnh lá gốc sáng tối khác nhau
-	"la_cay.png": Color(1.22, 1.2, 1.0), "la_thong.png": Color(2.1, 1.68, 1.0), "la_bui.png": Color(1.76, 1.36, 1.0),
-	"la_nho.png": Color(0.94, 1.13, 0.77), "vo_cay.png": Color(0.8, 0.78, 0.76),
+	# Lá: nhân ra màu rêu xanh nõn chuối nhạt của sàn Meshy (~0,48 0,63 0,15), mỗi ảnh lá gốc sáng tối khác nhau
+	"la_cay.png": Color(1.4, 1.3, 1.0), "la_thong.png": Color(2.4, 1.82, 1.0), "la_bui.png": Color(2.0, 1.47, 1.0),
+	"la_nho.png": Color(1.06, 1.22, 0.9), "vo_cay.png": Color(0.8, 0.78, 0.76),
 }
 ## Số khóm cỏ thấp rải trên sân theo mức đồ họa 0 Thấp, 1 Vừa, 2 Cao (mỗi khóm ~155 tam giác).
 const TUFT_CLUSTERS := [14, 45, 75]
 const BORDER_WALLS := 5 # số rect viền ngoài ở đầu WALLS
 const ROCK_TINT := Color(1.0, 1.0, 1.05) # tảng đá, vách viền
 const WALL_TINT := Color(0.85, 0.85, 0.9) # tường gạch phòng xuất phát, động phủ
-const MOSS_TINT := Color(0.5, 0.58, 0.45) # rêu trên mặt đá
+const MOSS_TINT := Color(0.58, 0.74, 0.32) # rêu trên mặt đá: xanh nõn chuối nhạt như rêu sàn Meshy
 
 # Sắc nhân lên ảnh nền vẽ tay (1 = giữ nguyên màu ảnh): vệt tối và vệt sáng loang như bản Meshy.
 const GROUND_SATURATION := 0.5 # nền bớt rực để nhân vật, đạn, hiệu ứng nổi lên

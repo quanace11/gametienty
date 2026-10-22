@@ -29,7 +29,8 @@ void fragment() {
 	c *= tint;
 	if (moss_amount > 0.0) {
 		float top = smoothstep(1.0 - moss_amount, 1.0 - moss_amount + 0.25, wn.y);
-		c = mix(c, texture(moss, wp.xz * 0.25).rgb * moss_tint, top);
+		float m = dot(texture(moss, wp.xz * 0.25).rgb, vec3(0.3, 0.59, 0.11)) * 3.0; // chỉ lấy vân sáng tối của ảnh rêu
+		c = mix(c, moss_tint * m, top);
 	}
 	float f = pow(1.0 - clamp(dot(NORMAL, VIEW), 0.0, 1.0), 3.0);
 	ALBEDO = c + rim_color * f * rim;
