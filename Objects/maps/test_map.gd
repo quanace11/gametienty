@@ -81,7 +81,7 @@ const STONE_PATHS := [
 ]
 ## Pháp trận truyền tống ở bờ tây (người trốn hiện ra trên vòng phù văn): tường vòng sau lưng thay một đoạn
 ## bờ kè (đoạn bờ kè này đã bỏ khỏi mô hình bản đồ, xem CUT trong tools/ban_do_meshy/build_ban_do.py).
-const TELEPORT := Vector3(1.6, 0, 29.4)
+const TELEPORT := Vector3(0.25, 0, 29.4) # tâm ngay trên bờ tây: vòng bậc thềm bán nguyệt mở ra sân, đường kính thẳng hàng bờ tường
 const TELEPORT_WALL_RADIUS := 3.2 # m, tâm tường vòng (khối va chạm)
 const TELEPORT_CLEAR := 4.6 # m: không rải cỏ, hoa trong vòng này
 const ALTAR := Vector3(45.0, 0, 8.5) # linh đài trong động phủ
@@ -90,7 +90,7 @@ const COURTYARD := Rect2(40.5, 0.5, 9.0, 14.0) # sàn động phủ trong tườ
 const MANSION_PILLARS := [Vector2(42.4, 2.6), Vector2(45.6, 2.6), Vector2(48.6, 2.6), Vector2(48.6, 7.0), Vector2(48.6, 11.2)]
 const HUNTER_SPAWN := Vector3(42.5, 0.05, 39.5) # ma tu xuất hiện ở phế tích đông nam, xa pháp trận truyền tống
 const ESCAPEE_SPAWNS: Array[Vector3] = [
-	Vector3(1.0, 0.05, 28.7), Vector3(2.4, 0.05, 28.7), Vector3(1.0, 0.05, 30.1), Vector3(2.4, 0.05, 30.1),
+	Vector3(-0.4, 0.05, 28.7), Vector3(0.9, 0.05, 28.7), Vector3(-0.4, 0.05, 30.1), Vector3(0.9, 0.05, 30.1),
 ]
 ## Linh thạch rải sẵn trên sàn.
 const COIN_SPOTS: Array[Vector3] = [

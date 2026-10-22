@@ -30,7 +30,7 @@ LOW_SCALE = 0.35
 HIGH_SCALE = 0.6
 TEXTURE_SIZE = 1024
 CHUNKS = (4, 3) # số ô theo x, z
-CUT = (1.6, 29.4, 4.0) # tâm x, z và bán kính (m) vòng phá bờ kè
+CUT = (0.25, 29.4, 4.0) # tâm x, z và bán kính (m) vòng phá bờ kè
 CUT_ABOVE = 0.05 # m: chỉ bỏ phần cao hơn mặt đất
 
 
