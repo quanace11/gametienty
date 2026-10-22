@@ -8,8 +8,8 @@ Chạy: python3 -I build_ban_do.py map_meshy.glb ../../models/ban_do_meshy/ban_d
 3. Chia lưới thành ô 4 x 3 theo tâm tam giác, mỗi ô một mesh để camera chỉ vẽ ô đang thấy.
 4. Giữ nguyên màu gốc: ảnh màu thu về 1024 px (nằm trong GLB, cho đồ họa Thấp / Vừa), ảnh 2048 px gốc
    chép nguyên ra mau_goc.jpg (đồ họa Cao); bỏ normal map, ảnh phát sáng, ảnh kim loại.
-5. Phá bờ kè tây chỗ đặt pháp trận truyền tống (pháp trận nằm ngoài bờ kè): bỏ tam giác vách đá, lan can chạm vào
-   khung CUT (giữ mặt đất) thành lối từ pháp trận vào sân. Đổi chỗ pháp trận (TELEPORT trong maps/test_map.gd) thì sửa CUT.
+5. Phá bờ kè tây giữa 2 cánh pháp trận truyền tống: bỏ tam giác vách đá, lan can chạm vào khung CUT
+   (giữ mặt đất), mũi 2 cánh nối vào 2 đầu bờ kè. Đổi chỗ pháp trận (TELEPORT trong maps/test_map.gd) thì sửa CUT.
 """
 
 import io
@@ -30,7 +30,7 @@ LOW_SCALE = 0.35
 HIGH_SCALE = 0.6
 TEXTURE_SIZE = 1024
 CHUNKS = (4, 3) # số ô theo x, z
-CUT = (-10.0, 0.6, 26.1, 32.7) # x từ, x đến, z từ, z đến (m): khung phá bờ kè
+CUT = (-10.0, 0.6, 25.5, 33.3) # x từ, x đến, z từ, z đến (m): khung phá bờ kè giữa 2 cánh pháp trận
 CUT_ABOVE = 0.05 # m: chỉ bỏ phần cao hơn mặt đất
 
 
