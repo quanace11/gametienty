@@ -8,8 +8,8 @@ Chạy: python3 -I build_ban_do.py map_meshy.glb ../../models/ban_do_meshy/ban_d
 3. Chia lưới thành ô 4 x 3 theo tâm tam giác, mỗi ô một mesh để camera chỉ vẽ ô đang thấy.
 4. Giữ nguyên màu gốc: ảnh màu thu về 1024 px (nằm trong GLB, cho đồ họa Thấp / Vừa), ảnh 2048 px gốc
    chép nguyên ra mau_goc.jpg (đồ họa Cao); bỏ normal map, ảnh phát sáng, ảnh kim loại.
-5. Phá bờ kè tây chỗ đặt pháp trận truyền tống: bỏ tam giác vách đá, lan can chạm vào vòng CUT (giữ mặt đất),
-   tường vòng của pháp trận nối vào 2 đầu bờ kè. Đổi chỗ pháp trận (TELEPORT trong maps/test_map.gd) thì sửa CUT.
+5. Phá bờ kè tây chỗ đặt pháp trận truyền tống (pháp trận nằm ngoài bờ kè): bỏ tam giác vách đá, lan can chạm vào
+   khung CUT (giữ mặt đất) thành lối từ pháp trận vào sân. Đổi chỗ pháp trận (TELEPORT trong maps/test_map.gd) thì sửa CUT.
 """
 
 import io
@@ -30,7 +30,7 @@ LOW_SCALE = 0.35
 HIGH_SCALE = 0.6
 TEXTURE_SIZE = 1024
 CHUNKS = (4, 3) # số ô theo x, z
-CUT = (0.25, 29.4, 4.0) # tâm x, z và bán kính (m) vòng phá bờ kè
+CUT = (-10.0, 0.6, 26.1, 32.7) # x từ, x đến, z từ, z đến (m): khung phá bờ kè
 CUT_ABOVE = 0.05 # m: chỉ bỏ phần cao hơn mặt đất
 
 
@@ -149,7 +149,7 @@ def main(src, dst):
 	c = pos[tris].mean(axis=1)
 	v = pos[tris] # tam giác x 3 đỉnh x 3
 	pts = np.concatenate([v, c[:, None]], axis=1) # 3 đỉnh và tâm (lan can dài: 2 đầu ngoài vòng, giữa trong vòng)
-	inside = (np.hypot(pts[:, :, 0] - CUT[0], pts[:, :, 2] - CUT[1]) < CUT[2]).any(axis=1)
+	inside = ((pts[:, :, 0] > CUT[0]) & (pts[:, :, 0] < CUT[1]) & (pts[:, :, 2] > CUT[2]) & (pts[:, :, 2] < CUT[3])).any(axis=1)
 	keep = ~inside | (v[:, :, 1].max(axis=1) < CUT_ABOVE)
 	tris, c = tris[keep], c[keep]
 	cx = np.clip((c[:, 0] / SIZE[0] * CHUNKS[0]).astype(int), 0, CHUNKS[0] - 1)

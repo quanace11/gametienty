@@ -21,7 +21,7 @@ const WALLS := [
 	# Viền ngoài (5 rect đầu): hình là vách đá, không phải tường gạch
 	Rect2(0, 0, 50, 0.5), Rect2(0, 44.5, 50, 0.5),
 	Rect2(49.5, 0, 0.5, 45),
-	# Bờ tây (2 rect): hở chỗ pháp trận truyền tống, tường vòng của pháp trận chắn thay
+	# Bờ tây (2 rect): hở chỗ lối vào từ pháp trận truyền tống
 	Rect2(0, 0, 0.5, 26.5), Rect2(0, 32.3, 0.5, 12.7),
 	# Động phủ (đông bắc): khe ở tường tây và tường nam là 2 cửa phong ấn
 	Rect2(40.0, 0.5, 0.5, 7.0), Rect2(40.0, 9.9, 0.5, 4.6),
@@ -79,9 +79,10 @@ const STONE_PATHS := [
 		Vector2(40.0, 22.5), Vector2(43.1, 21.4)],
 	[Vector2(36.8, 23.5), Vector2(37.8, 19.1), Vector2(39.0, 14.0), Vector2(39.6, 9.2)],
 ]
-## Pháp trận truyền tống ở bờ tây (người trốn hiện ra trên vòng phù văn): tường vòng sau lưng thay một đoạn
-## bờ kè (đoạn bờ kè này đã bỏ khỏi mô hình bản đồ, xem CUT trong tools/ban_do_meshy/build_ban_do.py).
-const TELEPORT := Vector3(0.25, 0, 29.4) # tâm ngay trên bờ tây: vòng bậc thềm bán nguyệt mở ra sân, đường kính thẳng hàng bờ tường
+## Pháp trận truyền tống nằm ngoài bờ tây (người trốn hiện ra trên vòng phù văn): mép trước vòng bậc thềm
+## thẳng hàng lan can bờ kè (x ~ -1), đoạn bờ kè trước mặt đã phá thành lối vào sân (CUT trong
+## tools/ban_do_meshy/build_ban_do.py).
+const TELEPORT := Vector3(-5.15, 0, 29.4)
 const TELEPORT_WALL_RADIUS := 3.2 # m, tâm tường vòng (khối va chạm)
 const TELEPORT_CLEAR := 4.6 # m: không rải cỏ, hoa trong vòng này
 const ALTAR := Vector3(45.0, 0, 8.5) # linh đài trong động phủ
@@ -90,7 +91,7 @@ const COURTYARD := Rect2(40.5, 0.5, 9.0, 14.0) # sàn động phủ trong tườ
 const MANSION_PILLARS := [Vector2(42.4, 2.6), Vector2(45.6, 2.6), Vector2(48.6, 2.6), Vector2(48.6, 7.0), Vector2(48.6, 11.2)]
 const HUNTER_SPAWN := Vector3(42.5, 0.05, 39.5) # ma tu xuất hiện ở phế tích đông nam, xa pháp trận truyền tống
 const ESCAPEE_SPAWNS: Array[Vector3] = [
-	Vector3(-0.4, 0.05, 28.7), Vector3(0.9, 0.05, 28.7), Vector3(-0.4, 0.05, 30.1), Vector3(0.9, 0.05, 30.1),
+	Vector3(-5.8, 0.05, 28.7), Vector3(-4.5, 0.05, 28.7), Vector3(-5.8, 0.05, 30.1), Vector3(-4.5, 0.05, 30.1),
 ]
 ## Linh thạch rải sẵn trên sàn.
 const COIN_SPOTS: Array[Vector3] = [
@@ -387,9 +388,10 @@ func _add_teleport() -> void:
 	add_child(tp)
 
 
-## Khối va chạm theo tường vòng pháp trận: 13 khối dọc nửa vòng phía tây.
+## Khối va chạm: 13 khối dọc tường vòng pháp trận (nửa vòng phía tây) và 2 tường hai bên lối vào sân.
 func _teleport_walls() -> Array[Rect2]:
-	var out: Array[Rect2] = []
+	var out: Array[Rect2] = [Rect2(TELEPORT.x - 0.45, TELEPORT.z - 3.75, -TELEPORT.x + 0.45, 0.5),
+		Rect2(TELEPORT.x - 0.45, TELEPORT.z + 3.25, -TELEPORT.x + 0.45, 0.5)]
 	for k in 13:
 		var a := deg_to_rad(-90.0 + 15.0 * k)
 		var c := Vector2(TELEPORT.x - cos(a) * TELEPORT_WALL_RADIUS, TELEPORT.z + sin(a) * TELEPORT_WALL_RADIUS)
