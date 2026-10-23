@@ -33,7 +33,8 @@ const KNOB_R := 36.0
 const MARGIN := 150.0 # tâm cần cách mép dưới / mép bên
 const CANCEL_R := 40.0
 const CANCEL_OFFSET := Vector2(-150, -130) # nút Hủy so với tâm cần ngắm
-const CARD_SIZE := Vector2(108, 92)
+const CARD_SIZE := Vector2(108, 108)
+const CARD_ICON := 42.0
 const CARD_GAP := 10.0
 const TAP_TIME := 0.25 # giây: chạm nhanh hơn chừng này mà không kéo là "chạm"
 const PULSE_TIME := 0.15 # giây giữ nút khi chạm (để server kịp nhận)
@@ -52,6 +53,7 @@ const THROW_START := 1.2 # mét: độ cao vật ném rời tay, khớp Items/it
 const MOUSE_FINGER := -1
 const INK := Color(0.12, 0.1, 0.16)
 const UiTheme = preload("res://UI/ui_theme.gd")
+const ItemIcons = preload("res://UI/item_icons.gd")
 
 var _fingers := {} # chỉ số ngón -> "move" | "aim" | "button"
 var _move := Vector2.ZERO
@@ -72,6 +74,7 @@ var _item_names := {}
 var _touch := false
 var _pie_points := PackedVector2Array()
 var _bind_ready := false # có đệ tử đang gục trong tầm trói (tính 10 lần/giây)
+var _rescue_id := 0 # đệ tử: đồng môn đang gục trong tầm đỡ (0 = không ai, tính 10 lần/giây)
 var _card_key := false # thẻ đang ngắm bằng phím 1..5 theo con trỏ chuột (không phải kéo thẻ)
 var _walking := false # đang giữ chuột trái ở chỗ trống: đi tới con trỏ
 var _arc_points := PackedVector2Array()
@@ -86,7 +89,7 @@ func _ready() -> void:
 	_touch = DisplayServer.is_touchscreen_available()
 	_update_inset()
 	get_viewport().size_changed.connect(_update_inset)
-	for size: int in [15, 16, 17, 18, 20, 22, 30]: # các cỡ chữ vẽ tay ở dưới: vẽ sẵn lúc vào trận
+	for size: int in [14, 15, 16, 18, 20, 30]: # các cỡ chữ vẽ tay ở dưới: vẽ sẵn lúc vào trận
 		RenderWarmup.register_text(get_theme_default_font(), size)
 
 
@@ -107,7 +110,9 @@ func _process(delta: float) -> void:
 		_card_aim = _mouse_card_aim(_card_slot)
 	if _redraw_left <= 0.0 or _card_slot >= 0 or _walking: # đang kéo thẻ: vòng dưới đất bám theo nhân vật từng frame
 		_redraw_left = REDRAW_INTERVAL
-		_bind_ready = _hunter() and _downed_in_reach()
+		var downed := _downed_in_reach()
+		_bind_ready = _hunter() and downed != 0
+		_rescue_id = 0 if _hunter() else downed
 		queue_redraw()
 
 
@@ -225,7 +230,7 @@ func _on_touch(finger: int, pos: Vector2, pressed: bool) -> void:
 		return
 	var kind := ""
 	if _hunter() and not _spectating() and pos.distance_to(_bind_center()) <= BIND_R * 1.2:
-		if _downed_in_reach(): # tính lại lúc chạm, khỏi lệch 0,1 giây
+		if _downed_in_reach() != 0: # tính lại lúc chạm, khỏi lệch 0,1 giây
 			_pulse(&"interact")
 		get_viewport().set_input_as_handled()
 		queue_redraw()
@@ -412,13 +417,50 @@ func _draw() -> void:
 		elif _card_slot < 0:
 			_cancel_button(font, _over_cancel)
 	else:
-		draw_circle(ac, AIM_R + 3, INK)
-		draw_circle(ac, AIM_R, Color(0.33, 0.78, 0.4).darkened(0.15 if held else 0.0))
-		draw_circle(ac + Vector2(-AIM_R * 0.3, -AIM_R * 0.35), AIM_R * 0.28, Color(1, 1, 1, 0.25))
-		_text(font, ac, "Giải / Đỡ" if _touch else "E\nGiải / Đỡ", 20, Color.WHITE)
+		_action_button(font, ac, held)
 	_draw_cards(me, font)
 	if _card_slot >= 0 and _card_slot < me.deck.size():
 		_draw_card_aim(me, font)
+
+
+## Nút hành động của đệ tử, đổi theo tình huống cho biết lúc này bấm thì làm gì:
+## vòng căn đang chạy thì vàng "CĂN!"; có đồng môn gục trong tầm thì xanh sáng
+## "ĐỠ DẬY" kèm vòng tiến độ đỡ; không có gì thì mờ (giải trận linh là tự động khi đứng trong trận).
+func _action_button(font: Font, ac: Vector2, held: bool) -> void:
+	var key := "" if _touch else "E · "
+	if _in_qte():
+		draw_circle(ac, AIM_R + 3, INK)
+		draw_circle(ac, AIM_R, UiTheme.GOLD.darkened(0.15 if held else 0.0))
+		draw_arc(ac, AIM_R + 9, 0, TAU, 40, Color(1, 0.95, 0.6, 0.9), 4.0)
+		_text(font, ac, "CĂN!", 30, Color.WHITE)
+		_text(font, ac + Vector2(0, AIM_R + 18), key + "chạm đúng lúc", 16, Color.WHITE)
+		return
+	var target := GameState.rules.record(_rescue_id) if _rescue_id != 0 else null
+	if target:
+		draw_circle(ac, AIM_R + 3, INK)
+		draw_circle(ac, AIM_R, UiTheme.GREEN.darkened(0.15 if held else 0.0))
+		draw_circle(ac + Vector2(-AIM_R * 0.3, -AIM_R * 0.35), AIM_R * 0.28, Color(1, 1, 1, 0.25))
+		draw_arc(ac, AIM_R + 9, 0, TAU, 40, Color(INK, 0.6), 7.0)
+		if target.rescue_progress > 0.0:
+			draw_arc(ac, AIM_R + 9, -PI / 2, -PI / 2 + TAU * target.rescue_progress, 40, UiTheme.GOLD, 7.0)
+		_hand_icon(ac + Vector2(0, -16), Color.WHITE)
+		_text(font, ac + Vector2(0, 20), "ĐỠ DẬY", 20, Color.WHITE)
+		_text(font, ac + Vector2(0, AIM_R + 22), key + "giữ để đỡ", 16, Color.WHITE)
+		return
+	draw_circle(ac, AIM_R + 3, Color(INK, 0.5))
+	draw_circle(ac, AIM_R, Color(0.35, 0.4, 0.45, 0.45))
+	_hand_icon(ac + Vector2(0, -16), Color(1, 1, 1, 0.5))
+	_text(font, ac + Vector2(0, 20), "Đỡ", 18, Color(1, 1, 1, 0.6))
+	if not _touch:
+		_text(font, ac + Vector2(0, AIM_R + 18), "E", 16, Color(1, 1, 1, 0.6))
+
+
+## Hình bàn tay đỡ: lòng bàn tay và bốn ngón.
+func _hand_icon(c: Vector2, color: Color) -> void:
+	draw_circle(c + Vector2(0, 4), 10, color)
+	for k in 4:
+		draw_line(c + Vector2(-9 + k * 6, 0), c + Vector2(-9 + k * 6, -12 + absf(k - 1.5) * 2.0), color, 4.0)
+	draw_line(c + Vector2(8, 6), c + Vector2(15, -2), color, 4.0)
 
 
 ## Nút Trói của ma tu: đỏ thẫm khi có người gục trong tầm, mờ khi không; đang kéo người thì ghi "Đang trói".
@@ -438,12 +480,12 @@ func _bind_button(font: Font, me: PlayerRecord) -> void:
 	_text(font, bc + Vector2(0, 16), "ĐANG TRÓI" if carrying else "TRÓI", 15 if carrying else 18, Color.WHITE if ready or carrying else Color(1, 1, 1, 0.6))
 
 
-## Có đệ tử đang gục trong tầm trói của mình không (đọc trạng thái từ GameState, vị trí từ nhân vật).
-func _downed_in_reach() -> bool:
+## Id đệ tử đang gục trong tầm trói / đỡ của mình, 0 nếu không có (đọc trạng thái từ GameState, vị trí từ nhân vật).
+func _downed_in_reach() -> int:
 	var me := _me()
 	var body := _my_entity() as EntityBase
-	if me == null or body == null or me.carrying_id != 0:
-		return false
+	if me == null or body == null or me.carrying_id != 0 or not (me.is_hunter() or GameTypes.is_active(me.state)):
+		return 0
 	var at := body.flat_position()
 	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
 		var e := node as EntityBase
@@ -451,8 +493,8 @@ func _downed_in_reach() -> bool:
 			continue
 		var rec := GameState.rules.record(e.peer_id)
 		if rec and rec.state == GameTypes.PlayerState.DOWNED and at.distance_to(e.flat_position()) <= BIND_RANGE:
-			return true
-	return false
+			return e.peer_id
+	return 0
 
 
 func _cancel_button(font: Font, over: bool) -> void:
@@ -544,30 +586,36 @@ func _knob(c: Vector2, color: Color) -> void:
 	draw_circle(c + Vector2(-KNOB_R * 0.3, -KNOB_R * 0.35), KNOB_R * 0.32, Color(1, 1, 1, 0.35))
 
 
-## Thanh thẻ: thẻ bo tròn, số ô, tên, giá (vàng, đỏ nếu thiếu tiền); hồi chiêu
-## là phần tối quét dần như kim đồng hồ kèm số giây.
+## Thanh thẻ: mỗi thẻ có biểu tượng riêng, tên, giá ở góc (viên linh thạch, đỏ
+## nếu thiếu). Dùng được thì viền vàng sáng; chưa dùng được thì mờ cả thẻ. Hồi
+## chiêu là phần tối quét dần như kim đồng hồ kèm số giây.
 func _draw_cards(me: PlayerRecord, font: Font) -> void:
 	_load_names()
 	var catalog := GameState.rules.catalog
 	var origin := _cards_origin(me.deck.size())
 	for i in me.deck.size():
 		var r := Rect2(origin + Vector2(i * (CARD_SIZE.x + CARD_GAP), 0), CARD_SIZE)
-		var cost: int = catalog[me.deck[i]]["cost"]
+		var type: int = me.deck[i]
+		var cost: int = catalog[type]["cost"]
 		var cd: float = me.item_cooldowns[i]
-		var usable := cd <= 0.0 and me.coins >= cost
+		var afford := me.coins >= cost
+		var usable := cd <= 0.0 and afford
 		draw_style_box(_card_ready if usable else _card_idle, r)
+		ItemIcons.draw_icon(self, type, r.position + Vector2(CARD_SIZE.x / 2, 36), CARD_ICON, not usable)
+		draw_multiline_string(font, r.position + Vector2(5, 76), _item_names.get(type, "?"),
+			HORIZONTAL_ALIGNMENT_CENTER, CARD_SIZE.x - 10, 14, 2, Color.WHITE if usable else Color(1, 1, 1, 0.6))
 		draw_circle(r.position + Vector2(14, 14), 11, INK)
 		draw_string(font, r.position + Vector2(3, 19), str(i + 1), HORIZONTAL_ALIGNMENT_CENTER, 22, 15, Color.WHITE)
-		if cd > 0.0: # đang hồi chiêu: chỉ hiện quạt tối + số giây cho dễ đọc
-			var total: float = maxf(catalog[me.deck[i]].get("cooldown", cd), cd)
-			_pie(r.get_center(), CARD_SIZE.y * 0.42, cd / total)
-			_text(font, r.get_center(), "%d" % ceili(cd), 30, Color.WHITE)
-			continue
-		draw_multiline_string(font, r.position + Vector2(6, 42), _item_names.get(me.deck[i], "?"),
-			HORIZONTAL_ALIGNMENT_CENTER, CARD_SIZE.x - 12, 16, 2, Color.WHITE)
-		if cost > 0:
-			_text(font, r.position + Vector2(CARD_SIZE.x / 2, CARD_SIZE.y - 14), "● %d" % cost, 17,
-				INK if me.coins >= cost else Color(1, 0.45, 0.4))
+		if cost > 0: # giá: viên linh thạch góc phải trên
+			var cc := r.position + Vector2(CARD_SIZE.x - 15, 15)
+			draw_circle(cc, 14, INK)
+			draw_circle(cc, 12, UiTheme.GOLD if afford else Color(0.85, 0.3, 0.28))
+			draw_string(font, cc + Vector2(-14, 6), str(cost), HORIZONTAL_ALIGNMENT_CENTER, 28, 16,
+				INK if afford else Color.WHITE)
+		if cd > 0.0: # đang hồi chiêu: quạt tối + số giây đè lên biểu tượng
+			var total: float = maxf(catalog[type].get("cooldown", cd), cd)
+			_pie(r.position + Vector2(CARD_SIZE.x / 2, 36), CARD_ICON * 0.75, cd / total)
+			_text(font, r.position + Vector2(CARD_SIZE.x / 2, 36), "%d" % ceili(cd), 30, Color.WHITE)
 
 
 ## Hình quạt tối phủ lên thẻ đang hồi chiêu (phần còn lại theo tỉ lệ `left`).
@@ -584,8 +632,9 @@ func _pie(c: Vector2, radius: float, left: float) -> void:
 func _build_styles() -> void:
 	if _card_ready:
 		return
-	_card_ready = UiTheme.panel(Color(0.98, 0.6, 0.2), 14, 3)
-	_card_idle = UiTheme.panel(Color(0.3, 0.33, 0.42, 0.9), 14, 3)
+	_card_ready = UiTheme.panel(Color(0.2, 0.26, 0.42, 0.95), 14, 4)
+	_card_ready.border_color = UiTheme.GOLD
+	_card_idle = UiTheme.panel(Color(0.22, 0.24, 0.3, 0.75), 14, 3)
 
 
 func _text(font: Font, center: Vector2, text: String, size_px: int, color: Color) -> void:

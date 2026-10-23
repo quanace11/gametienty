@@ -11,7 +11,7 @@ const HUNTER_TEXT := {
 	GameTypes.HunterResult.TOTAL: "THẮNG TUYỆT ĐỐI",
 }
 const COLUMNS := ["Người chơi", "Kết quả", "Trận linh", "Cứu", "Trúng", "Linh thạch", "Điểm"]
-const WIDTHS := [190, 170, 70, 55, 65, 60, 70]
+const WIDTHS := [170, 190, 90, 55, 65, 100, 70]
 
 
 func show_result(res: Dictionary, my_id: int) -> void:
@@ -36,7 +36,7 @@ func show_result(res: Dictionary, my_id: int) -> void:
 	var sub := _label(box, hunter_line, 20)
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
-	box.add_child(_row(COLUMNS, Color(1, 1, 1, 0.65), null))
+	box.add_child(_row(COLUMNS, Color(1, 1, 1, 0.65), null, 16))
 	var ids := players.keys()
 	ids.sort_custom(func(a: int, b: int) -> bool: return players[a]["score"] > players[b]["score"])
 	for id: int in ids:
@@ -80,14 +80,14 @@ func _my_title(row: Dictionary) -> String:
 	return "BẠN ĐÃ THOÁT!" if row["result"] == GameTypes.EscapeeResult.ESCAPED else "BẠN BỊ BẮT"
 
 
-func _row(cells: Array, color: Color, bg: StyleBox) -> Control:
+func _row(cells: Array, color: Color, bg: StyleBox, font_size := 18) -> Control:
 	var holder := PanelContainer.new()
 	holder.add_theme_stylebox_override("panel", bg if bg else StyleBoxEmpty.new())
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 6)
 	holder.add_child(row)
 	for i in cells.size():
-		var l := _label(row, str(cells[i]), 18)
+		var l := _label(row, str(cells[i]), font_size)
 		l.custom_minimum_size = Vector2(WIDTHS[i], 0)
 		l.clip_text = true
 		l.modulate = color
