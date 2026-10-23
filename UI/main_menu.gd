@@ -6,7 +6,7 @@ extends CanvasLayer
 ## - Chọn nhân vật: Tiên Môn (đệ tử) bên trái, Ma Đạo (ma tu) bên phải; chạm ô
 ##   nào thì sân khấu đổi ngay sang nhân vật đó, Xác nhận mới lưu.
 ## - Chọn chế độ: luyện công với bot (offline) hoặc phòng LAN; vai trong trận theo
-##   nhân vật đang chọn.
+##   nhân vật đang chọn. Chọn độ khó bot Dễ / Trung bình / Khó ngay trên màn này.
 ## Đang ở trong phòng LAN thì hiện bảng phòng thay ba màn trên.
 ## Bộ phù bảo của đệ tử (tối đa DECK_SIZE thẻ) lưu vào Net.my_deck, server gửi kèm
 ## thông tin trận. Ma tu dùng bộ bài cố định. Chỉ gọi API công khai của Net.
@@ -16,6 +16,7 @@ enum Screen { LOBBY, SELECT, MODE }
 const DECK_SIZE := 5 # khớp MatchConfig.deck_size
 const UiTheme = preload("res://UI/ui_theme.gd")
 const GraphicsSettings = preload("res://UI/graphics_settings.gd")
+const BotLevelSetting = preload("res://UI/bot_level_setting.gd")
 const CharacterRoster = preload("res://UI/character_roster.gd")
 const LobbyStage = preload("res://UI/lobby_stage.gd")
 const ORANGE := Color(0.98, 0.58, 0.15)
@@ -55,6 +56,7 @@ var _status: Label
 
 func _ready() -> void:
 	GraphicsSettings.load_and_apply(get_viewport()) # trước khi dựng nhân vật / bản đồ
+	BotLevelSetting.load_and_apply()
 	_character = CharacterRoster.load_selected()
 	_preview = _character
 	var root := Control.new()
@@ -313,6 +315,8 @@ func _build_mode(layer: Control) -> void:
 	_mode_title.add_theme_font_size_override("font_size", 17)
 	box.add_child(_mode_title)
 
+	_build_choice_row(box, "Bot", BotLevelSetting.NAMES, BotLevelSetting.current(),
+		func(level: int) -> void: BotLevelSetting.save_and_apply(level))
 	var practice := _add_button(box, "Luyện công cùng bot", func() -> void:
 		Net.my_name = _player_name()
 		Net.start_offline(match_time, _character["role"]))
