@@ -1,0 +1,99 @@
+name: APK Android
+
+# Build APK thử (khóa debug) để cài thẳng lên điện thoại, không cần bật Tùy chọn nhà phát triển.
+# Push lên main: cập nhật Release "apk-moi-nhat", link tải cố định:
+#   https://github.com/quanace11/gametienty/releases/download/apk-moi-nhat/gametienty.apk
+# PR sửa preset / workflow này: chỉ build để kiểm tra, APK để trong mục Artifacts của lần chạy.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - export_presets.cfg
+      - .github/workflows/android.yml
+      - .github/android/**
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      GODOT_VERSION: 4.6.2
+      # Khóa debug cố định (commit sẵn) để bản mới cài đè lên bản cũ, không phải gỡ.
+      GODOT_ANDROID_KEYSTORE_DEBUG_PATH: ${{ github.workspace }}/.github/android/debug.keystore
+      GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
+      GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Cài Godot + mẫu xuất Android
+        run: |
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          curl -sSL -o godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" "$RUNNER_TEMP/godot"
+          chmod +x "$RUNNER_TEMP/godot"
+          rm godot.zip
+          # Gói mẫu nặng hơn 1 GB, chỉ giải nén phần Android.
+          curl -sSL -o "$RUNNER_TEMP/templates.tpz" "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          dir="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$dir"
+          unzip -q -j "$RUNNER_TEMP/templates.tpz" templates/version.txt 'templates/android_*' -d "$dir"
+          rm "$RUNNER_TEMP/templates.tpz"
+          ls "$dir"
+
+      - name: Cấu hình đường dẫn Android SDK / Java cho Godot
+        run: |
+          sdk="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          mkdir -p "$HOME/.config/godot"
+          for f in editor_settings-4.tres "editor_settings-${GODOT_VERSION%.*}.tres"; do
+            cat > "$HOME/.config/godot/$f" <<CFG
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "$sdk"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/debug_keystore = "$GODOT_ANDROID_KEYSTORE_DEBUG_PATH"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          CFG
+          done
+          # Số phiên bản tăng theo mỗi lần build để điện thoại nhận là bản mới.
+          sed -i "s/^version\/code=.*/version\/code=${GITHUB_RUN_NUMBER}/" export_presets.cfg
+          sed -i "s/^version\/name=.*/version\/name=\"0.1.${GITHUB_RUN_NUMBER}\"/" export_presets.cfg
+
+      - name: Import + xuất APK
+        run: |
+          mkdir -p export
+          "$RUNNER_TEMP/godot" --headless --path . --import > import.log 2>&1 || true
+          "$RUNNER_TEMP/godot" --headless --path . --export-debug "Android" export/gametienty.apk 2>&1 | tee export.log
+          test -s export/gametienty.apk
+          ls -lh export/gametienty.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gametienty-apk
+          path: export/gametienty.apk
+
+      - name: Cập nhật Release "apk-moi-nhat"
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete apk-moi-nhat --cleanup-tag --yes || true
+          gh release create apk-moi-nhat export/gametienty.apk \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "APK thử mới nhất (build ${GITHUB_RUN_NUMBER})" \
+            --notes "Bản debug build tự động từ commit ${GITHUB_SHA::7}. Mở link này trên điện thoại để tải và cài."
