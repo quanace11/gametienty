@@ -12,6 +12,7 @@ const Minimap = preload("res://UI/minimap.gd")
 const HealthBars = preload("res://UI/health_bars.gd")
 const ResultsScreen = preload("res://UI/results_screen.gd")
 const TouchControls = preload("res://UI/touch_controls.gd")
+const ObjectiveArrows = preload("res://UI/objective_arrows.gd")
 const ALERT_TIME := 3.0
 const HINT_TIME := 7.0
 const UPDATE_INTERVAL := 0.1
@@ -35,6 +36,7 @@ var _hint_left := HINT_TIME
 var _update_left := 0.0
 var _touch: Control
 var _minimap: Control
+var _arrows: Control
 
 
 func _ready() -> void:
@@ -48,6 +50,8 @@ func _ready() -> void:
 	add_child(_root)
 	_root.add_child(HealthBars.new()) # dưới cùng: thanh máu trên đầu, các bảng HUD đè lên
 	_root.add_child(QteRing.new())
+	_arrows = ObjectiveArrows.new()
+	_root.add_child(_arrows)
 	_touch = TouchControls.new()
 	_root.add_child(_touch)
 	_minimap = Minimap.new()
@@ -126,8 +130,8 @@ func _set_gate(text: String, color: Color) -> void:
 
 func _hint_text() -> String:
 	if GameState.my_role() == GameTypes.Role.HUNTER:
-		return "Kéo nút PHI KIẾM để ngắm, thả tay là phóng kiếm. Đánh gục đệ tử, bấm TRÓI rồi kéo vào huyết trận!"
-	return "Đứng ở trận linh để giải, kim tới vùng sáng thì chạm màn hình (hoặc E). Giải hết trận linh thì lối ra mới mở!"
+		return "Kéo nút PHI KIẾM để ngắm, thả tay là phóng kiếm.\nĐánh gục đệ tử, bấm TRÓI rồi kéo vào huyết trận!"
+	return "Đi theo mũi tên xanh tới trận linh, đứng trong đó là tự giải.\nKim tới vùng sáng thì chạm màn hình (hoặc E). Giải đủ thì lối ra mở!"
 
 
 ## Dòng trạng thái của mình; chuỗi rỗng là không có gì đặc biệt (ẩn dải).
@@ -163,9 +167,14 @@ func _show_toast(text: String, color: Color, seconds := ALERT_TIME) -> void:
 
 ## Bảng kết quả: ẩn HUD trong trận, hiện bảng giữa màn hình.
 func _on_match_ended(res: Dictionary) -> void:
-	for c: Control in [_touch, _minimap, _status_panel, _toast_panel]:
+	for c: Control in [_touch, _minimap, _arrows, _status_panel, _toast_panel]:
 		c.visible = false
 	set_process(false)
+	var shade := ColorRect.new() # làm tối cảnh phía sau cho bảng dễ đọc
+	shade.color = Color(0, 0, 0, 0.45)
+	shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.add_child(shade)
 	var center := CenterContainer.new()
 	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_root.add_child(center)
@@ -257,6 +266,7 @@ func _build_banners() -> void:
 	_toast_panel.visible = false
 	_root.add_child(_toast_panel)
 	_toast = _label(_toast_panel, "", 22)
+	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 
 func _label(parent: Control, text: String, font_size: int) -> Label:
