@@ -12,6 +12,9 @@ extends Node
 ##   --bot                     bot tự điều khiển nhân vật của máy này (test)
 ##   --quit-after-match        thoát sau một trận (test)
 ##   --perf-log                in các khung hình bị giật lúc đầu trận (tools/frame_probe.gd)
+##   --config=duong/dan.tres   thông số trận (MatchConfig) cho server; mặc định Core/config/match_config.tres
+##   --log=duong/dan.log       ghi log ra file; server riêng mặc định user://logs/server_<giờ>.log
+##   --idle-hunter             (test) thợ săn đứng yên, để kiểm tra đường người trốn thoát qua cổng
 
 const MatchScript = preload("res://Core/match/match.gd")
 const RESULT_SCREEN_TIME := 4.0
@@ -30,6 +33,13 @@ func _ready() -> void:
 	match_time = str(args.get("time", "180")).to_float()
 	if args.has("name"):
 		Net.my_name = str(args["name"])
+	if args.has("config"):
+		Net.config_path = str(args["config"])
+	Net.idle_hunter = args.has("idle-hunter")
+	if args.has("log") or args.has("server"):
+		var stamp := Time.get_datetime_string_from_system().replace(":", "-")
+		var path := GameLog.open_file(str(args.get("log", "user://logs/server_%s.log" % stamp)))
+		print("Ghi log ra %s" % path)
 
 	menu = load(ModuleRegistry.MAIN_MENU).new()
 	menu.match_time = match_time
@@ -38,7 +48,7 @@ func _ready() -> void:
 	Net.match_started.connect(_on_match_started)
 	Net.players_changed.connect(_on_players_changed)
 	Net.disconnected.connect(_on_disconnected)
-	Net.status.connect(func(msg: String) -> void: print("[%d] %s" % [multiplayer.get_unique_id(), msg]))
+	Net.status.connect(GameLog.info)
 	EventBus.match_ended.connect(_on_match_ended)
 
 	var port := str(args.get("port", str(Net.PORT))).to_int()
@@ -82,14 +92,15 @@ func _on_match_ended(_result: Dictionary) -> void:
 	await get_tree().create_timer(RESULT_SCREEN_TIME).timeout
 	if ended != current_match:
 		return # trận này đã đóng (mất kết nối) và đã sang trận khác: đừng đóng nhầm trận mới
-	_close_match()
 	if args.has("quit-after-match"):
-		get_tree().quit()
+		get_tree().quit() # thoát luôn, khỏi để --auto-start mở trận mới ngay lúc đóng trận
+		return
+	_close_match()
 
 
 func _on_disconnected() -> void:
 	_close_match()
-	if args.has("quit-after-match"):
+	if args.has("quit-after-match") and not Net.is_reconnecting():
 		get_tree().quit()
 
 
@@ -99,7 +110,7 @@ func _close_match() -> void:
 		current_match.queue_free()
 		current_match = null
 	GameState.clear()
-	Net.in_match = false
+	Net.end_match()
 	if not Net.is_online():
 		Net.players.clear() # hết trận offline thì về menu
 	menu.visible = true

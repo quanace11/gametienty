@@ -4,15 +4,23 @@ extends Node
 ## Mô hình: server giữ bản gốc (MatchRules), module gọi lệnh server_*(),
 ## lệnh hợp lệ thì MatchRules đổi dữ liệu và đánh dấu người chơi bị đổi.
 ## Cuối mỗi physics frame, flush() gửi những trường đã đổi của những người đó
-## (PlayerRecord.diff, kênh reliable có thứ tự) xuống mọi máy, kể cả chính
-## server. Mỗi máy dựng lại bản đầy đủ, so bản cũ với bản mới để tự sinh sự
-## kiện EventBus. Vì gửi trạng thái chứ không gửi lệnh, client không bao giờ
+## (PlayerRecord.diff, kênh reliable có thứ tự) xuống từng máy, và áp luôn cho
+## chính server. Mỗi máy dựng lại bản đầy đủ, so bản cũ với bản mới để tự sinh
+## sự kiện EventBus. Vì gửi trạng thái chứ không gửi lệnh, client không bao giờ
 ## lệch dù gói tin bị gộp; offline đi đúng đường này.
+##
+## Ẩn thông tin: mỗi máy nhận một bản riêng (_views) đã lọc theo người ngồi
+## máy đó (_view_of). Phe kia không nhận bộ bài, tiền, vòng căn của mình; thẻ
+## dùng ở chỗ họ không thấy (trong bụi) thì họ không biết; vật đặt trong bụi
+## chỉ hiện khi họ thấy được chỗ đó. Máy chỉ được nhận dữ liệu sau khi báo đã
+## dựng xong trận (server_peer_ready), nhận nguyên phần đã đổi từ đầu trận,
+## nên máy vào lại giữa trận dùng chung đường này.
 ##
 ## Gọi server_*() trên client sẽ bị bỏ qua (trả về false), nên module cứ gọi.
 
 const TIME_SYNC_INTERVAL := 0.5
 const INPUT_SEND_HALF_INTERVAL := 1.0 / 60.0 ## client gửi input 30 lần/giây: trung bình trễ thêm nửa nhịp
+const PRESS_TIME_TOLERANCE := 0.04 ## giây: giờ bấm client ghi được lệch tối đa chừng này so với ước tính của server
 const HIT_PADDING := 0.3 ## mét, cộng vào bán kính đạn cho bằng thân người
 const SHOT_HEIGHT := 1.1 ## mét, đạn bay ngang tầm ngực
 const TELEPORT_CLEARANCE := 0.45 ## mét, bán kính khoảng trống cần có ở điểm dịch chuyển tới
@@ -22,53 +30,62 @@ const PROGRESS_SYNC_INTERVAL := 0.1 ## tiến độ cứu, máu trong tù chỉ 
 const _CONTINUOUS_KEYS := {"rescue_progress": true, "prison_time_left": true, "invulnerable_left": true, "attack_cooldown_left": true,
 	"stunned_left": true, "chest_work": true, "item_cooldowns": true, "speed_boost_left": true}
 
+## Trường của người khác phe mà máy mình không được nhận (luôn giữ giá trị đầu trận).
+const _ENEMY_PRIVATE := ["deck", "item_cooldowns", "coins", "coins_earned", "chest_work", "qte_chest", "qte_started", "qte_zone"]
+## Trường mô tả lần dùng thẻ gần nhất: phe kia chỉ nhận khi thấy người dùng hoặc thấy chỗ thẻ rơi.
+const _ITEM_KEYS := ["item_seq", "item_last_type", "item_target_id", "item_target_pos"]
+
 var rules: MatchRules = null
 
 var _time_sync_timer := 0.0
 var _progress_sync_timer := 0.0
 var _pending := {} # chỉ server: id -> true, người chơi có dữ liệu chưa gửi
-var _sent := {} # chỉ server: id -> dict đã gửi lần cuối
+var _cur := {} # chỉ server: id -> dict đã chốt lần cuối (bản gốc, chưa lọc)
 var _applied := {} # mọi máy: id -> dict đã áp dụng lần cuối (để sinh sự kiện)
+var _initial := {} # chỉ server: id -> dict lúc vào trận (máy mới nhận phần đổi so với bản này)
 var _world_pending := false # chỉ server
-var _world_sent := {} # chỉ server
+var _world_cur := {} # chỉ server
+var _world_initial := {} # chỉ server
 var _world_applied := {} # mọi máy
+var _views := {} # chỉ server: peer -> {"seat", "players": {id: dict}, "world": dict, "hidden_items": {id: seq}, "seen": {obj_id: true}}
 var _effects := {} # ItemType -> ItemEffect (chỉ server dùng)
-var _aim_points := {} # chỉ server: id -> Vector3, điểm người chơi chọn trên minimap
-var _footprints := {} # chỉ server: id người trốn -> [Vector3 (y = elapsed lúc ghi)]
 var _footprint_timer := 0.0
-var _bush_of := {} # chỉ server: id -> chỉ số bụi cây đang đứng trong, -1 nếu không
-var _shot_progress := {} # chỉ server: shot_id -> phần đường đạn (0..1) đã xét va chạm
 var _bushes: Array[Vector3] = [] # mọi máy: bụi cây của bản đồ (x, z, bán kính)
 var _bushes_loaded := false
 
 
 func _ready() -> void:
 	Net.player_left.connect(_on_player_left)
+	Net.player_returned.connect(_on_player_returned)
 
 
 func begin(info: Dictionary, total_safes: int, floor_coins: int = 0) -> void:
-	var cfg := MatchConfig.new()
+	var cfg := MatchConfig.from_array(info.get("config", []))
 	cfg.duration = info["time"]
 	rules = MatchRules.new(cfg, info["roles"], info["names"], total_safes, floor_coins)
+	if info.has("seed"):
+		rules.rng.seed = info["seed"]
 	_setup_items(info.get("decks", {}))
 	_time_sync_timer = 0.0
 	_progress_sync_timer = 0.0
 	_pending.clear()
-	_sent.clear()
+	_cur.clear()
 	_applied.clear()
+	_initial.clear()
+	_views.clear()
 	for id: int in rules.players:
 		_applied[id] = rules.players[id].to_dict()
-		_sent[id] = _applied[id]
+		_cur[id] = _applied[id]
+		_initial[id] = _applied[id]
 	_world_pending = false
-	_aim_points.clear()
-	_footprints.clear()
 	_footprint_timer = 0.0
-	_bush_of.clear()
-	_shot_progress.clear()
 	_bushes = [] # gán mới, không clear(): mảng bản đồ trả về có thể là hằng chỉ đọc
 	_bushes_loaded = false
 	_world_applied = rules.world_dict()
-	_world_sent = _world_applied
+	_world_cur = _world_applied
+	_world_initial = _world_applied
+	if multiplayer.is_server():
+		_log("Trận %s, hạt giống random %d, %d thông số" % [info.get("match_id", "-"), info.get("seed", 0), info.get("config", []).size()])
 	EventBus.match_state_changed.emit(rules.state)
 
 
@@ -94,7 +111,13 @@ func clear() -> void:
 func my_role() -> int:
 	if rules == null:
 		return -1
-	return rules.roles.get(multiplayer.get_unique_id(), -1)
+	return rules.roles.get(my_id(), -1)
+
+
+## Số ghế (id nhân vật) của người ngồi máy này. UI dùng hàm này, không dùng
+## multiplayer.get_unique_id(): vào lại giữa trận thì peer id đổi, ghế thì không.
+func my_id() -> int:
+	return Net.my_seat()
 
 
 ## Match gọi đầu mỗi physics frame trên mọi máy.
@@ -106,12 +129,50 @@ func tick(delta: float) -> void:
 	rules.tick(delta, server)
 	if rules.state != before:
 		EventBus.match_state_changed.emit(rules.state)
-	if not server or not rules.is_playing():
+		if server:
+			_log("Giai đoạn trận: %s" % GameTypes.MatchState.keys()[rules.state])
+	if not server or rules.state == GameTypes.MatchState.ENDED:
 		return
 	_time_sync_timer -= delta
 	if _time_sync_timer <= 0.0:
 		_time_sync_timer = TIME_SYNC_INTERVAL
-		_sync_time.rpc(rules.time_left)
+		for peer: int in _views:
+			_sync_clock.rpc_id(peer, rules.state, rules.countdown_left, rules.time_left)
+
+
+## Chỉ server (Match gọi): mọi máy đã dựng xong trận hoặc hết hạn chờ.
+func server_start_countdown() -> void:
+	if rules == null or not multiplayer.is_server() or rules.state != GameTypes.MatchState.LOADING:
+		return
+	rules.start_countdown()
+	EventBus.match_state_changed.emit(rules.state)
+	_log("Giai đoạn trận: COUNTDOWN")
+	for peer: int in _views:
+		_sync_clock_now.rpc_id(peer, rules.state, rules.countdown_left, rules.time_left)
+
+
+## Chỉ server (Match gọi): máy `peer` đã dựng xong trận, từ giờ được nhận dữ
+## liệu. Gửi ngay mọi thứ đã đổi từ đầu trận (máy vào lại cũng vậy), đã lọc.
+func server_peer_ready(peer: int) -> void:
+	if rules == null or not multiplayer.is_server() or _views.has(peer):
+		return
+	var view := {"seat": Net.seat_of(peer), "players": {}, "world": _world_initial, "hidden_items": {}, "seen": {}}
+	for id: int in _initial:
+		view["players"][id] = _initial[id]
+	_views[peer] = view
+	_sync_clock_now.rpc_id(peer, rules.state, rules.countdown_left, rules.time_left)
+	_send_players_to(peer, view, _cur.keys())
+	_send_world_to(peer, view)
+
+
+## Chỉ server: máy `peer` rời trận, thôi gửi.
+func server_peer_gone(peer: int) -> void:
+	_views.erase(peer)
+
+
+## Chỉ server: các máy đang nhận dữ liệu trận.
+func ready_peers() -> Array:
+	return _views.keys()
 
 
 ## Match gọi cuối mỗi physics frame trên server: gửi thay đổi rồi xét hết trận.
@@ -124,30 +185,93 @@ func flush(delta: float) -> void:
 	var send_continuous := _progress_sync_timer <= 0.0
 	if send_continuous:
 		_progress_sync_timer = PROGRESS_SYNC_INTERVAL
-	var batch := {}
+	var changed := []
 	for id: int in _pending.keys():
 		var d: Dictionary = rules.players[id].to_dict()
-		var old: Dictionary = _sent.get(id, {})
-		if send_continuous or _is_significant(old, d):
-			var changes := PlayerRecord.diff(old, d)
-			if not changes.is_empty():
-				batch[id] = changes
-			_sent[id] = d
-			_pending.erase(id)
-	if not batch.is_empty():
-		_sync_players.rpc(batch)
+		# Chỉ số đổi liên tục (hồi chiêu, tiến độ...) thì đợi nhịp 10 lần/giây.
+		if not send_continuous and not _is_significant(_cur[id], d):
+			continue
+		_pending.erase(id)
+		if d != _cur[id]:
+			_cur[id] = d
+			changed.append(id)
+	if not changed.is_empty():
+		var batch := {}
+		for id: int in changed:
+			batch[id] = PlayerRecord.diff(_applied[id], _cur[id])
+		_apply_players(batch)
+		for peer: int in _views:
+			_send_players_to(peer, _views[peer], changed)
 	if rules.take_world_dirty():
 		_world_pending = true
 	if _world_pending:
 		var w := rules.world_dict()
-		if send_continuous or _world_significant(_world_sent, w):
-			var changes := WorldRecord.diff(_world_sent, w)
-			_world_sent = w
+		if send_continuous or _world_significant(_world_cur, w):
+			_world_cur = w
 			_world_pending = false
-			if not changes.is_empty():
-				_sync_world.rpc(changes)
+			_apply_world(WorldRecord.diff(_world_applied, w))
+			for peer: int in _views:
+				_send_world_to(peer, _views[peer])
+	elif send_continuous:
+		for peer: int in _views: # vật đặt chưa thấy: xem giờ đã thấy chưa
+			if _views[peer]["world"]["placed"].size() < _world_cur["placed"].size():
+				_send_world_to(peer, _views[peer])
 	if rules.is_over():
 		_apply_match_end.rpc(rules.results())
+
+
+# ---------- Lọc theo người xem ----------
+
+## Bản PlayerRecord của `id` mà người ngồi ghế `viewer` được biết. `prev` là bản máy đó đang có.
+func _view_of(viewer: int, view: Dictionary, id: int, d: Dictionary, prev: Dictionary) -> Dictionary:
+	if viewer == id or rules.roles.get(viewer, -1) == rules.roles.get(id, -2):
+		return d # chính mình, đồng đội: biết hết
+	var v := d.duplicate() # nông: chỉ thay vài trường, không sửa mảng bên trong
+	for key: String in _ENEMY_PRIVATE:
+		v[key] = prev[key]
+	if d["item_seq"] != prev["item_seq"]:
+		var hidden: Dictionary = view["hidden_items"]
+		if hidden.get(id, -1) == d["item_seq"] or not (can_see(viewer, id) or can_see_point(viewer, d["item_target_pos"])):
+			hidden[id] = d["item_seq"] # lần dùng thẻ này máy đó không bao giờ biết
+			for key: String in _ITEM_KEYS:
+				v[key] = prev[key]
+	return v
+
+
+func _send_players_to(peer: int, view: Dictionary, ids: Array) -> void:
+	var batch := {}
+	var seen: Dictionary = view["players"]
+	for id: int in ids:
+		var v := _view_of(view["seat"], view, id, _cur[id], seen[id])
+		var changes := PlayerRecord.diff(seen[id], v)
+		if not changes.is_empty():
+			batch[id] = changes
+			seen[id] = v
+	if not batch.is_empty():
+		_sync_players.rpc_id(peer, batch)
+
+
+## Thế giới mà máy `peer` được biết: vật đặt của phe kia chỉ có khi đã thấy chỗ đặt.
+func _send_world_to(peer: int, view: Dictionary) -> void:
+	var w := _world_cur
+	var viewer: int = view["seat"]
+	var seen_objs: Dictionary = view["seen"]
+	var placed := {}
+	var filtered := false
+	for obj_id: int in w["placed"]:
+		var o: Dictionary = w["placed"][obj_id]
+		if seen_objs.has(obj_id) or rules.roles.get(o["owner"], -1) == rules.roles.get(viewer, -2) or can_see_point(viewer, o["pos"]):
+			seen_objs[obj_id] = true
+			placed[obj_id] = o
+		else:
+			filtered = true
+	if filtered:
+		w = w.duplicate()
+		w["placed"] = placed
+	var changes := WorldRecord.diff(view["world"], w)
+	if not changes.is_empty():
+		view["world"] = w
+		_sync_world.rpc_id(peer, changes)
 
 
 # ---------- API cho server (module gọi) ----------
@@ -196,7 +320,7 @@ func server_after_move(entities: Array) -> void:
 				e.global_position = rules.record(id).teleport_pos
 				e.velocity = Vector3.ZERO
 	for e: EntityBase in entities:
-		_bush_of[e.peer_id] = bush_at(e.global_position)
+		rules.bush_of[e.peer_id] = bush_at(e.global_position)
 	_footprint_timer -= get_physics_process_delta_time()
 	if _footprint_timer <= 0.0:
 		_footprint_timer = rules.config.footprint_interval
@@ -225,10 +349,17 @@ func bush_at(pos: Vector3) -> int:
 func can_see(viewer_id: int, target_id: int) -> bool:
 	if viewer_id == target_id or rules == null:
 		return true
-	var bush: int = _bush_of.get(target_id, -1)
+	var bush: int = rules.bush_of.get(target_id, -1)
 	if bush < 0 or rules.roles.get(viewer_id, -1) == rules.roles.get(target_id, -2):
 		return true
-	return _bush_of.get(viewer_id, -1) == bush
+	return rules.bush_of.get(viewer_id, -1) == bush
+
+
+## Chỉ server: người `viewer_id` có thấy điểm `pos` trên sàn không (trong bụi
+## cây thì chỉ người đứng cùng bụi mới thấy).
+func can_see_point(viewer_id: int, pos: Vector3) -> bool:
+	var bush := bush_at(pos)
+	return bush < 0 or rules.bush_of.get(viewer_id, -1) == bush
 
 
 ## Đạn bay thật: mỗi physics frame xét đoạn đạn vừa bay qua (theo mặt sàn),
@@ -242,7 +373,7 @@ func _land_shots(entities: Array) -> void:
 		var s: Dictionary = rules.shots[shot_id]
 		var span: float = s["lands"] - s["fired"]
 		var t_now := clampf((rules.elapsed - s["fired"]) / span, 0.0, 1.0) if span > 0.0 else 1.0
-		var t_prev: float = _shot_progress.get(shot_id, 0.0)
+		var t_prev: float = rules.shot_progress.get(shot_id, 0.0)
 		var from := Vector2(s["from"].x, s["from"].z)
 		var to := Vector2(s["to"].x, s["to"].z)
 		var a := from.lerp(to, t_prev)
@@ -259,10 +390,10 @@ func _land_shots(entities: Array) -> void:
 				first_d = a.distance_squared_to(q)
 				first_id = e.peer_id
 		if first_id != 0 or t_now >= 1.0:
-			_shot_progress.erase(shot_id)
+			rules.shot_progress.erase(shot_id)
 			rules.land_shot(shot_id, [first_id] if first_id != 0 else [])
 		else:
-			_shot_progress[shot_id] = t_now
+			rules.shot_progress[shot_id] = t_now
 
 
 func server_pick_up(hunter_id: int, target_id: int) -> bool:
@@ -354,13 +485,13 @@ func _near_prison(p: Vector2, prisons: PackedVector2Array) -> bool:
 
 ## Điểm người chơi `id` chọn trên minimap (null nếu chưa chọn). Chỉ server có.
 func aim_point(id: int) -> Variant:
-	return _aim_points.get(id)
+	return rules.aim_points.get(id)
 
 
 ## Máy người chơi gọi khi chạm minimap. Bot (trên server) gọi server_set_aim_point.
 func set_aim_point(point: Vector3) -> void:
 	if multiplayer.is_server():
-		server_set_aim_point(multiplayer.get_unique_id(), point)
+		server_set_aim_point(my_id(), point)
 	else:
 		_submit_aim_point.rpc_id(1, point)
 
@@ -370,12 +501,14 @@ func server_set_aim_point(id: int, point: Vector3) -> void:
 		return
 	var map := get_tree().get_first_node_in_group(GameTypes.GROUP_MAP) as MapBase
 	var b := map.get_bounds() if map else Rect2(-500, -500, 1000, 1000)
-	_aim_points[id] = Vector3(clampf(point.x, b.position.x, b.end.x), 0.0, clampf(point.z, b.position.y, b.end.y))
+	rules.aim_points[id] = Vector3(clampf(point.x, b.position.x, b.end.x), 0.0, clampf(point.z, b.position.y, b.end.y))
 
 
 @rpc("any_peer", "reliable")
 func _submit_aim_point(point: Vector3) -> void:
-	server_set_aim_point(multiplayer.get_remote_sender_id(), point) # chỉ đặt được cho chính mình
+	var peer := multiplayer.get_remote_sender_id()
+	if multiplayer.is_server() and Net.allow(peer, &"aim_point"):
+		server_set_aim_point(Net.seat_of(peer), point) # chỉ đặt được cho chính mình
 
 
 ## Radar của `viewer_id`: gửi dấu chân người trốn trong footprint_history giây
@@ -386,15 +519,16 @@ func server_reveal_footprints(viewer_id: int, seconds: float) -> bool:
 	if GameTypes.is_bot_id(viewer_id):
 		return true # bot vốn đọc được vị trí, không cần gửi
 	var points := PackedVector3Array()
-	for id: int in _footprints:
+	for id: int in rules.footprints:
 		if not GameTypes.is_active(rules.state_of(id)) and rules.state_of(id) != GameTypes.PlayerState.DOWNED:
 			continue
-		for f: Vector3 in _footprints[id]:
+		for f: Vector3 in rules.footprints[id]:
 			points.append(Vector3(f.x, rules.elapsed - f.y, f.z))
-	if viewer_id == multiplayer.get_unique_id():
+	var peer := Net.peer_of(viewer_id)
+	if peer == multiplayer.get_unique_id():
 		_reveal(points, seconds)
-	elif viewer_id in multiplayer.get_peers():
-		_reveal.rpc_id(viewer_id, points, seconds)
+	elif peer != 0 and _views.has(peer):
+		_reveal.rpc_id(peer, points, seconds)
 	return true
 
 
@@ -403,11 +537,11 @@ func _record_footprints(entities: Array) -> void:
 	for e: EntityBase in entities:
 		if e.is_hunter() or e.is_out():
 			continue
-		var trail: Array = _footprints.get(e.peer_id, [])
+		var trail: Array = rules.footprints.get(e.peer_id, [])
 		trail.append(Vector3(e.global_position.x, rules.elapsed, e.global_position.z))
 		if trail.size() > keep:
 			trail.pop_front()
-		_footprints[e.peer_id] = trail
+		rules.footprints[e.peer_id] = trail
 
 
 @rpc("authority", "reliable")
@@ -448,15 +582,21 @@ func server_channel_chest(id: int, safe_id: int, delta: float) -> bool:
 	return _can_mutate() and rules.channel_chest(id, safe_id, delta)
 
 
-## Người chơi bấm nút trong lúc vòng căn đang chạy.
-func server_resolve_qte(id: int) -> GameTypes.QteResult:
+## Người chơi bấm nút trong lúc vòng căn đang chạy. `press_time`: lúc bấm theo
+## đồng hồ trận của máy người chơi (EntityBase.press_time), < 0 nếu không có.
+func server_resolve_qte(id: int, press_time: float = -1.0) -> GameTypes.QteResult:
 	if not _can_mutate():
 		return GameTypes.QteResult.NONE
-	# Kim trên máy client vẽ chậm một chiều trễ (gói đồng bộ giờ đã cũ), rồi nút
-	# đi từ client lên mất thêm một chiều trễ + nửa nhịp gửi input. Luật kẹp tối đa qte_grace.
-	var lag := 2.0 * Net.latency_of(id)
+	# Đồng hồ trận trên client đã trừ trễ (_apply_clock) nên kim vẽ đúng giờ
+	# server; nút đi từ client lên mất một chiều trễ + nửa nhịp gửi input. Luật kẹp tối đa qte_grace.
+	var lag := Net.latency_of(id)
 	if lag > 0.0:
 		lag += INPUT_SEND_HALF_INTERVAL
+	# Có giờ bấm do client ghi thì chấm theo đó, nhưng chỉ tin trong khoảng
+	# PRESS_TIME_TOLERANCE quanh ước tính của server: gian lận "lùi giờ" tối đa chừng đó.
+	if press_time >= 0.0 and lag > 0.0:
+		var claimed := rules.elapsed - press_time
+		lag = clampf(claimed, lag - PRESS_TIME_TOLERANCE, lag + PRESS_TIME_TOLERANCE)
 	return rules.resolve_qte(id, lag)
 
 
@@ -495,19 +635,26 @@ func _world_significant(old: Dictionary, new: Dictionary) -> bool:
 	return false
 
 
+## Máy của ghế `id` rớt mạng: bot chơi thay (Match đổi nguồn lệnh), nhân vật giữ nguyên.
 func _on_player_left(id: int) -> void:
 	if not multiplayer.is_server() or rules == null or not rules.players.has(id):
 		return
-	if rules.state == GameTypes.MatchState.ENDED:
-		return
-	rules.remove_player(id)
-	flush(0.0) # thợ săn rời trận thì flush thấy is_over() và kết thúc
+	rules.set_away(id, true)
+
+
+func _on_player_returned(id: int) -> void:
+	if multiplayer.is_server() and rules != null and rules.players.has(id):
+		rules.set_away(id, false)
 
 
 # ---------- Server -> mọi máy ----------
 
-@rpc("authority", "call_local", "reliable")
+@rpc("authority", "reliable")
 func _sync_players(batch: Dictionary) -> void:
+	_apply_players(batch)
+
+
+func _apply_players(batch: Dictionary) -> void:
 	if rules == null:
 		return
 	var server := multiplayer.is_server()
@@ -525,8 +672,12 @@ func _sync_players(batch: Dictionary) -> void:
 				_log("%s: %s -> %s" % [rules.names.get(id, id), GameTypes.PlayerState.keys()[e["args"][1]], GameTypes.PlayerState.keys()[e["args"][2]]])
 
 
-@rpc("authority", "call_local", "reliable")
+@rpc("authority", "reliable")
 func _sync_world(changes: Dictionary) -> void:
+	_apply_world(changes)
+
+
+func _apply_world(changes: Dictionary) -> void:
 	if rules == null:
 		return
 	var w := WorldRecord.apply_diff(_world_applied, changes)
@@ -546,10 +697,35 @@ func _sync_world(changes: Dictionary) -> void:
 
 
 @rpc("authority", "unreliable_ordered")
-func _sync_time(t: float) -> void:
-	if rules:
-		rules.time_left = t
-		rules.elapsed = rules.config.duration - t
+func _sync_clock(state: int, countdown_left: float, time_left: float) -> void:
+	_apply_clock(state, countdown_left, time_left)
+
+
+## Lúc bắt đầu đếm ngược / máy vừa vào: gửi chắc chắn tới.
+@rpc("authority", "reliable")
+func _sync_clock_now(state: int, countdown_left: float, time_left: float) -> void:
+	_apply_clock(state, countdown_left, time_left)
+
+
+## Client: đặt đồng hồ theo server, trừ đi độ trễ một chiều (gói đã cũ chừng đó).
+## Mọi máy vào đếm ngược / vào trận cùng lúc với server, chênh nhau chỉ bằng sai số đo trễ.
+func _apply_clock(state: int, countdown_left: float, time_left: float) -> void:
+	if rules == null or multiplayer.is_server() or rules.state == GameTypes.MatchState.ENDED:
+		return
+	var lat := Net.server_latency()
+	var before := rules.state
+	if state == GameTypes.MatchState.COUNTDOWN and before == GameTypes.MatchState.LOADING:
+		rules.state = GameTypes.MatchState.COUNTDOWN
+	elif state == GameTypes.MatchState.PLAYING:
+		rules.state = GameTypes.MatchState.PLAYING
+	if rules.state == GameTypes.MatchState.COUNTDOWN:
+		rules.countdown_left = countdown_left - lat
+	elif rules.state == GameTypes.MatchState.PLAYING:
+		rules.countdown_left = 0.0
+		rules.time_left = maxf(0.0, time_left - lat)
+		rules.elapsed = rules.config.duration - rules.time_left
+	if rules.state != before:
+		EventBus.match_state_changed.emit(rules.state)
 
 
 @rpc("authority", "call_local", "reliable")
@@ -564,4 +740,4 @@ func _apply_match_end(res: Dictionary) -> void:
 
 
 func _log(msg: String) -> void:
-	print("[%d] %s" % [multiplayer.get_unique_id(), msg])
+	GameLog.info(msg)

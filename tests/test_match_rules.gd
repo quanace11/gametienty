@@ -113,6 +113,7 @@ func _rules() -> MatchRules:
 		GameTypes.ItemType.STUN_GRENADE: {"cost": 10, "cooldown": 12.0},
 	}
 	r.setup_items(items, {}, {GameTypes.Role.ESCAPEE: [GameTypes.ItemType.MEDKIT, GameTypes.ItemType.STUN_GRENADE, 999]})
+	r.start_countdown()
 	r.tick(0.001)
 	return r
 
@@ -163,7 +164,11 @@ func _imprison(r: MatchRules, id: int, prison: int = 0) -> void:
 func _test_countdown_then_playing() -> void:
 	var cfg := MatchConfig.new()
 	var r := MatchRules.new(cfg, {H: GameTypes.Role.HUNTER, A: GameTypes.Role.ESCAPEE}, {}, 1)
-	_check(r.state == GameTypes.MatchState.COUNTDOWN, "bắt đầu bằng đếm ngược")
+	_check(r.state == GameTypes.MatchState.LOADING, "bắt đầu bằng chờ tải bản đồ")
+	r.tick(cfg.countdown + 0.1)
+	_check(r.state == GameTypes.MatchState.LOADING, "chưa tải xong thì không tự đếm ngược")
+	r.start_countdown()
+	_check(r.state == GameTypes.MatchState.COUNTDOWN, "server cho bắt đầu đếm ngược")
 	_check(not r.attack(H, [A]), "không đánh được khi đang đếm ngược")
 	r.tick(cfg.countdown + 0.1)
 	_check(r.is_playing(), "hết đếm ngược thì vào trận")
@@ -284,6 +289,7 @@ func _test_gate_needs_all_safes() -> void:
 	var cfg := MatchConfig.new()
 	cfg.countdown = 0.0
 	var r := MatchRules.new(cfg, {H: GameTypes.Role.HUNTER, A: GameTypes.Role.ESCAPEE}, {}, 6, 2)
+	r.start_countdown()
 	r.tick(0.001)
 	_check(r.safes_required() == 6, "mặc định phải giải hết trận linh")
 	for i in 5:
@@ -298,6 +304,7 @@ func _test_gate_custom_safes_required() -> void:
 	cfg.countdown = 0.0
 	cfg.safes_required = 2
 	var r := MatchRules.new(cfg, {H: GameTypes.Role.HUNTER, A: GameTypes.Role.ESCAPEE}, {}, 6, 2)
+	r.start_countdown()
 	r.tick(0.001)
 	_open_chest(r, 0)
 	_open_chest(r, 1)
