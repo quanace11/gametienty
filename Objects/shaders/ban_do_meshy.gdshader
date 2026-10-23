@@ -1,39 +1,32 @@
 // Mô hình bản Meshy giữ nguyên màu gốc: ảnh màu đã vẽ sẵn sáng tối nên không tô thêm ánh sáng môi trường;
 // chỗ có nắng hiện đúng màu ảnh, chỗ bóng (bóng nhân vật, cây) tối và ngả lạnh.
-// Đồ họa Cao: ảnh gốc 2048 px, làm nét (unsharp 4 điểm) và thêm hạt chi tiết chỉ đổi độ sáng, không đổi màu.
+// Mặt sân (chỗ phẳng, sát đất) lấy màu từ ảnh nền liền một tấm đã làm mịn (nen_min.jpg, chiếu theo x, z):
+// không lộ đường nối giữa các mảnh ảnh Meshy, không lem màu khi thu nhỏ, không hạt nhiễu. Vách đá, lan can,
+// cổng vòng vẫn dùng ảnh Meshy theo UV.
 shader_type spatial;
 render_mode cull_disabled, ambient_light_disabled, specular_disabled;
 
 uniform sampler2D meshy_albedo : source_color, filter_linear_mipmap;
-uniform sampler2D detail : source_color, filter_linear_mipmap, repeat_enable; // ảnh vẽ tay xám lát theo mét
-uniform vec2 texel = vec2(0.0009765625); // 1 / 1024 px
-uniform float sharpen = 0.0; // 0: tắt (máy yếu)
-uniform float detail_amount = 0.0; // 0: tắt
+uniform sampler2D flat_albedo : source_color, filter_linear_mipmap, repeat_disable; // ảnh nền phủ đúng sân
+uniform bool use_flat = false; // chỉ mặt sân; pháp trận truyền tống dùng ảnh Meshy riêng
+uniform vec2 field_size = vec2(50.0, 45.0); // mét (x, z) mà flat_albedo phủ
 uniform vec3 shadow_tint : source_color = vec3(0.55, 0.6, 0.78);
 
 varying vec3 wp;
-varying vec3 wn;
+varying float up;
 
 void vertex() {
 	wp = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
-	wn = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
+	up = abs(normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz).y); // lưới gốc lật mặt lung tung
 }
 
 void fragment() {
-	vec3 c = texture(meshy_albedo, UV).rgb;
-	if (sharpen > 0.0) {
-		vec3 blur = (texture(meshy_albedo, UV + vec2(texel.x, 0.0)).rgb + texture(meshy_albedo, UV - vec2(texel.x, 0.0)).rgb
-			+ texture(meshy_albedo, UV + vec2(0.0, texel.y)).rgb + texture(meshy_albedo, UV - vec2(0.0, texel.y)).rgb) * 0.25;
-		c = max(c + (c - blur) * sharpen, vec3(0.0));
-	}
-	if (detail_amount > 0.0) {
-		vec3 w = pow(abs(wn), vec3(4.0));
-		w /= w.x + w.y + w.z;
-		float d = dot(texture(detail, wp.zy * 0.5).rgb, vec3(0.3, 0.59, 0.11)) * w.x
-			+ dot(texture(detail, wp.xz * 0.5).rgb, vec3(0.3, 0.59, 0.11)) * w.y
-			+ dot(texture(detail, wp.xy * 0.5).rgb, vec3(0.3, 0.59, 0.11)) * w.z;
-		float mean = dot(textureLod(detail, vec2(0.5), 12.0).rgb, vec3(0.3, 0.59, 0.11));
-		c *= mix(1.0, d / max(mean, 0.02), detail_amount);
+	vec2 f = wp.xz / field_size;
+	vec2 edge = min(f, 1.0 - f) * field_size; // mét tới mép sân
+	float w = !use_flat ? 0.0 : smoothstep(0.7, 0.85, up) * (1.0 - smoothstep(0.12, 0.3, wp.y)) * smoothstep(0.2, 0.6, min(edge.x, edge.y));
+	vec3 c = w > 0.0 ? texture(flat_albedo, f).rgb : vec3(0.0);
+	if (w < 1.0) {
+		c = mix(texture(meshy_albedo, UV).rgb, c, w);
 	}
 	ALBEDO = c;
 	ROUGHNESS = 1.0;
