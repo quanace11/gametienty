@@ -283,7 +283,7 @@ func interact_tick(users: Array[EntityBase], delta: float) -> void:
 		GameState.server_channel_chest(e.peer_id, interactable_id, delta)
 		var rec := rules.record(e.peer_id)
 		if rec and rec.qte_chest == interactable_id and e.just_pressed(&"interact"):
-			GameState.server_resolve_qte(e.peer_id)
+			GameState.server_resolve_qte(e.peer_id, e.press_time(&"interact"))
 
 
 func _process(delta: float) -> void:

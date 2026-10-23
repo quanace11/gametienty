@@ -57,7 +57,7 @@ func _ready() -> void:
 	_build_banners()
 	EventBus.match_ended.connect(_on_match_ended)
 	EventBus.teleport_started.connect(func(id: int, _t: Vector3, s: float) -> void:
-		if id != multiplayer.get_unique_id() and GameState.my_role() == GameTypes.Role.ESCAPEE:
+		if id != GameState.my_id() and GameState.my_role() == GameTypes.Role.ESCAPEE:
 			_show_toast("Ma tu huyết độn tới cột tím sau %.1f giây!" % s, UiTheme.RED))
 	EventBus.footprints_revealed.connect(func(_p: PackedVector3Array, _s: float) -> void:
 		_show_toast("Ma tu dò thần thức: dấu chân đỏ trên bản đồ", UiTheme.RED))
@@ -101,7 +101,7 @@ func _refresh(rules: MatchRules) -> void:
 	else:
 		_set_gate("Lối ra phong ấn", UiTheme.MUTED)
 	_team.update_from(rules)
-	var me := rules.record(multiplayer.get_unique_id())
+	var me := rules.record(GameState.my_id())
 	if me == null:
 		return
 	_hearts.set_hp(me.hp, me.max_hp)
@@ -171,7 +171,7 @@ func _on_match_ended(res: Dictionary) -> void:
 	_root.add_child(center)
 	var panel := ResultsScreen.new()
 	center.add_child(panel)
-	panel.show_result(res, multiplayer.get_unique_id())
+	panel.show_result(res, GameState.my_id())
 
 
 # ---------- Dựng giao diện ----------
@@ -346,7 +346,7 @@ class _TeamRow extends Control:
 		var key := ""
 		_states.clear()
 		_mine.clear()
-		var my_id := multiplayer.get_unique_id()
+		var my_id := GameState.my_id()
 		for id: int in rules.players:
 			var p: PlayerRecord = rules.players[id]
 			if p.is_hunter():
