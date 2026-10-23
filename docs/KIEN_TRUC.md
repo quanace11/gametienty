@@ -56,7 +56,7 @@ Bot luôn chạy trên server, giống hệt người chơi, chỉ khác nguồn
 | Timer/`await` trên client quyết định thắng thua | Client lệch giờ, có thể gian lận | Đếm trên server, client chỉ hiển thị |
 | `get_tree().paused` để dừng gameplay | Online không ai dừng được thế giới của người khác | Trạng thái trận trong `MatchRules` |
 | Biến toàn cục giữ trạng thái gameplay ngoài `GameState` | Không được đồng bộ | Thêm vào `MatchRules`, đề xuất với Lead |
-| Gọi `multiplayer.get_unique_id()` trong luật để tìm "người chơi chính" | Server riêng không có người chơi | Dùng `peer_id` của nhân vật |
+| Gọi `multiplayer.get_unique_id()` để tìm "người chơi chính" hay "nhân vật của mình" | Server riêng không có người chơi; vào lại giữa trận thì peer id đổi | Luật: `peer_id` của nhân vật (là số ghế). Hiển thị: `GameState.my_id()` |
 | Truyền node/Object qua RPC | Không gửi qua mạng được | Gửi id (`peer_id`, `interactable_id`) |
 
 ## 4. Ví dụ cho từng loại tính năng
@@ -78,12 +78,24 @@ Bot luôn chạy trên server, giống hệt người chơi, chỉ khác nguồn
 | 0. Offline (trận 1v4 với bot đã xong, đang hoàn thiện) | Gameplay, bot, bản đồ | Mọi module | |
 | 1. Host / LAN | Đã chạy được. Chỉ cần test thường xuyên | Không | Mọi module |
 | 2. Server riêng (VPS) | Export bản Linux "Dedicated Server", chạy `--server` | Cấu hình export | Mọi module |
-| 3. Chơi qua Internet mượt | Dự đoán phía client cho nhân vật của mình, bộ đệm nội suy (bù trễ cho vòng căn và bắn đã có) | `Core/match/`, `Player/` (phần client) | Objects, Items, AI, luật |
+| 3. Chơi qua Internet mượt | Dự đoán phía client cho nhân vật của mình (chờ test cảm giác trên máy thật). Đã có: bộ đệm nội suy, cú bấm có giờ, bù trễ vòng căn và bắn, rớt mạng vào lại | `Core/match/`, `Player/` (phần client) | Objects, Items, AI, luật |
 | 4. Nhiều phòng, nhiều người | Mỗi phòng một tiến trình server, dịch vụ ghép trận, tài khoản | Thêm dịch vụ mới bên ngoài game, `Core/network/` | Gameplay |
 
 Việc của từng tuần: mục Kế hoạch trong [README](../README.md#kế-hoạch). Online (các bước 2-4 dưới đây) để sang giai đoạn 2, sau khi xong bản offline.
 
 Tức là nếu giữ đúng năm luật vàng, lên online chỉ đụng tới `Core/` và phần hiển thị của `Player/`, không đụng tới két, vật phẩm, bot hay luật thắng thua.
+
+## 5b. Ghế, rớt mạng, vào lại
+
+- Mỗi người chơi giữ một **ghế** suốt trận: số ghế là peer id lúc vào phòng, bot là số âm. `peer_id` của nhân vật, khóa trong `MatchRules` đều là số ghế. `Net.seat_of(peer)` / `Net.peer_of(seat)` đổi qua lại.
+- Rớt mạng giữa trận (kể cả thợ săn): ghế giữ **tới hết trận**, bot chơi thay đúng nhân vật đó. Máy vào lại (mã vào lại cấp lúc vào phòng) tiếp quản trạng thái hiện tại: không hồi máu, không đặt lại hồi chiêu, không sống lại. Nhân vật đã bị loại thì chỉ xem.
+- Chủ phòng (host) tắt máy thì trận kết thúc, không tính kết quả: bot không thay được server.
+- Vào trận có pha **chờ tải** (`MatchState.LOADING`): server chờ mọi máy dựng xong (tối đa 20 giây, máy chậm thì bot đứng thay) rồi mới đếm ngược. Đồng hồ trận gửi 2 lần/giây, client trừ trễ đo được.
+- Server gửi cho từng máy **chỉ những gì máy đó được thấy**: vị trí người trong bụi phe kia, bộ bài / tiền / vòng căn của phe kia, vật đặt chưa lộ đều không gửi.
+- Cú bấm: client ghi mỗi lần bấm thành sự kiện có số thứ tự và giờ bấm, gửi lặp tới khi server xác nhận. Server chấm vòng căn theo giờ bấm nhưng chỉ tin trong ±40 ms quanh ước tính của mình.
+- Thông số trận: `Core/config/match_config.tres` (chỉnh trong Inspector), server đọc rồi gửi xuống client dạng mảng số.
+- Log: `GameLog.info()` in kèm giờ, mã trận, số ghế; server riêng ghi ra `user://logs/`. Mã trận và hạt giống random in lúc vào trận để dò lỗi.
+- Khác `Net.PROTOCOL_VERSION` thì không vào được phòng. Tăng số này mỗi khi đổi gói tin.
 
 ## 6. Hàng rào tự động
 
@@ -91,7 +103,10 @@ Tức là nếu giữ đúng năm luật vàng, lên online chỉ đụng tới 
 
 1. test luật thuần logic (`tests/`);
 2. một trận offline do bot chơi;
-3. **một trận online thật**: 1 server riêng + 2 client qua mạng + bot lấp chỗ, và kiểm tra mọi máy thấy cùng một kết quả.
+3. **một trận online thật**: 1 server riêng + 2 client qua mạng + bot lấp chỗ, và kiểm tra mọi máy thấy cùng một kết quả;
+4. trận online qua mạng xấu (`tools/udp_proxy.py`: ping 150 ms, mất 3% gói);
+5. thợ săn đứng yên (`--idle-hunter`): người trốn phải mở được cổng và thoát;
+6. một client rớt mạng 12 giây giữa trận: bot chơi thay rồi client vào lại đúng ghế.
 
 Bước 3 chạy ngay cả khi đội chỉ đang làm offline. Ai lỡ viết code chỉ chạy được offline thì CI đỏ ngay, không phải đợi tới lúc lên online mới biết.
 
