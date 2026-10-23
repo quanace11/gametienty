@@ -119,9 +119,10 @@ const MODEL := "res://Objects/models/ban_do_meshy/ban_do.glb"
 ## Pháp trận truyền tống Meshy quan gửi (4k tam giác, ngang 9 m, vòng phù văn bán kính ~1,6 m ở tâm, tường vòng
 ## cao ~1,4 m sau lưng): quay tường vòng ra phía tây, mở về phía sân.
 const TELEPORT_MODEL := "res://Objects/models/phap_tran/phap_tran.glb"
-const MESHY_ORIGINAL := "res://Objects/models/ban_do_meshy/mau_goc.jpg" # ảnh màu gốc 2048 px, chỉ đồ họa Cao
-const MESHY_SHARPEN := [0.0, 0.35, 0.6] # độ làm nét ảnh Meshy theo mức đồ họa
-const MESHY_DETAIL := 0.22 # hạt chi tiết đồ họa Cao (chỉ đổi độ sáng)
+const MESHY_ORIGINAL := "res://Objects/models/ban_do_meshy/mau_goc.jpg" # ảnh màu 2048 px (đã làm mịn), chỉ đồ họa Cao
+## Mặt sân Meshy chụp từ trên xuống thành một tấm, đã làm mịn (tools/ban_do_meshy/lam_min.py), phủ đúng sân SIZE.
+const MESHY_FLAT := "res://Objects/models/ban_do_meshy/nen_min.jpg"
+const MESHY_FLAT_WIDTH := [1024, 2048, 2048] # px theo mức đồ họa (Thấp thu nhỏ cho nhẹ bộ nhớ)
 const TREE_LEAVES := [["vo", "vo_cay.png", false], ["la", "la_cay_reu.png", true]]
 const SMALL_PLANT := [["la_hoa", "la_nho_reu.png", true]]
 const FLOWER := [["la_hoa", "la_nho_reu.png", true], ["hoa", "hoa.png", true]]
@@ -261,19 +262,21 @@ func _add_scenery() -> void:
 
 
 ## Mô hình bản Meshy quan gửi (mặt sân, lối đi, vách đá, lan can, cổng vòng), giữ nguyên màu gốc
-## (shaders/ban_do_meshy.gdshader). Đồ họa Cao dùng ảnh gốc 2048 px, làm nét và thêm hạt chi tiết.
+## (shaders/ban_do_meshy.gdshader). Mặt sân lấy màu từ ảnh liền đã làm mịn (MESHY_FLAT); đồ họa Cao
+## dùng ảnh gốc 2048 px cho vách đá, lan can.
 func _add_ground() -> void:
 	var map: Node3D = (load(MODEL) as PackedScene).instantiate()
-	_meshy_look(map, BushScript.mip_texture(MESHY_ORIGINAL) if _quality == 2 else null)
+	_meshy_look(map, BushScript.mip_texture(MESHY_ORIGINAL) if _quality == 2 else null, _flat_ground())
 	add_child(map)
 	_layout = (load(LAYOUT) as Texture2D).get_image()
 	if _layout.is_compressed():
 		_layout.decompress()
 
 
-## Tô mô hình Meshy bằng shaders/ban_do_meshy.gdshader (giữ đúng màu ảnh gốc, làm nét theo mức đồ họa).
+## Tô mô hình Meshy bằng shaders/ban_do_meshy.gdshader (giữ đúng màu ảnh gốc).
 ## `original`: ảnh màu độ phân giải cao thay ảnh trong GLB (null: dùng ảnh trong GLB).
-func _meshy_look(model: Node3D, original: Texture2D) -> void:
+## `flat`: ảnh mặt sân liền một tấm phủ SIZE (null: cả mô hình dùng ảnh theo UV).
+func _meshy_look(model: Node3D, original: Texture2D, flat: Texture2D = null) -> void:
 	var m := ShaderMaterial.new()
 	m.shader = load("res://Objects/shaders/ban_do_meshy.gdshader")
 	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
@@ -281,12 +284,24 @@ func _meshy_look(model: Node3D, original: Texture2D) -> void:
 			m.set_shader_parameter(&"meshy_albedo", (mi.mesh.surface_get_material(0) as StandardMaterial3D).albedo_texture)
 		mi.material_override = m
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF # ảnh gốc đã vẽ sẵn bóng
-	m.set_shader_parameter(&"sharpen", MESHY_SHARPEN[_quality])
 	if original != null:
 		m.set_shader_parameter(&"meshy_albedo", original)
-		m.set_shader_parameter(&"texel", Vector2.ONE / float(original.get_width()))
-		m.set_shader_parameter(&"detail", BushScript.mip_texture(GROUND + "da_tang.png"))
-		m.set_shader_parameter(&"detail_amount", MESHY_DETAIL)
+	if flat != null:
+		m.set_shader_parameter(&"use_flat", true)
+		m.set_shader_parameter(&"flat_albedo", flat)
+		m.set_shader_parameter(&"field_size", SIZE)
+
+
+## Ảnh mặt sân liền (MESHY_FLAT) thu theo mức đồ họa, có mipmap.
+func _flat_ground() -> Texture2D:
+	var img := (load(MESHY_FLAT) as Texture2D).get_image()
+	if img.is_compressed():
+		img.decompress()
+	var w: int = MESHY_FLAT_WIDTH[_quality]
+	if img.get_width() > w:
+		img.resize(w, roundi(img.get_height() * float(w) / img.get_width()), Image.INTERPOLATE_LANCZOS)
+	img.generate_mipmaps()
+	return ImageTexture.create_from_image(img)
 
 
 ## Lớp nền tại điểm p trên sân (R: đất, G: đá vỡ), đọc từ ảnh lớp Meshy.
