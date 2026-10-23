@@ -41,6 +41,18 @@ func get_aim() -> Vector2:
 	return Vector2.ZERO
 
 
+## Chỉ server: bit các nút client báo đã bấm (kể cả cú chạm quá ngắn mà
+## get_buttons() không kịp thấy), mỗi nút tối đa một lần mỗi frame. Gọi xong là
+## lấy đi. Bàn phím và bot không cần: cạnh lên của get_buttons() là đủ.
+func take_presses() -> int:
+	return 0
+
+
+## Giờ bấm (đồng hồ trận máy người chơi) của nút thứ `i` trong lần take_presses() vừa rồi; -1 nếu không có.
+func press_time(_i: int) -> float:
+	return -1.0
+
+
 func is_pressed(_action: StringName) -> bool:
 	return false
 

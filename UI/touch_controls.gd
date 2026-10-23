@@ -630,7 +630,7 @@ func _my_entity() -> Node3D:
 		return _me_entity
 	_me_entity = null
 	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
-		if (node as EntityBase).peer_id == multiplayer.get_unique_id():
+		if (node as EntityBase).peer_id == GameState.my_id():
 			_me_entity = node as Node3D
 	return _me_entity
 
@@ -683,7 +683,7 @@ func _aim_center() -> Vector2:
 
 
 func _me() -> PlayerRecord:
-	return GameState.rules.record(multiplayer.get_unique_id()) if GameState.rules else null
+	return GameState.rules.record(GameState.my_id()) if GameState.rules else null
 
 
 func _in_qte() -> bool:

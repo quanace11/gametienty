@@ -9,9 +9,17 @@ var display_name := ""
 var is_local := false ## nhân vật của người đang ngồi máy này
 var state: GameTypes.PlayerState = GameTypes.PlayerState.IDLE
 
+## Chỉ client: nhân vật người khác được vẽ chậm chừng này sau gói vị trí mới
+## nhất, để luôn có hai gói kẹp hai đầu mà nội suy (gói 20 lần/giây, chịu
+## được mất một gói hoặc lệch nhịp ~50 ms).
+const INTERP_DELAY := 0.1
+static var snapshot_time := 0.0 ## chỉ client: giờ server của gói vị trí đang được áp (Match đặt)
+static var render_time := 0.0 ## chỉ client: giờ server đang vẽ = giờ server ước lượng - INTERP_DELAY
+
 var _held_buttons := 0 # chỉ server: nút đang giữ (bit theo InputSource.ACTIONS)
 var _pressed_buttons := 0 # chỉ server: nút vừa bấm xuống trong frame này
 var _aim := Vector2.ZERO # chỉ server: hướng ngắm trên mặt sàn (x, z thế giới), dài 0..1
+var _press_times := PackedFloat32Array() # chỉ server: giờ bấm (đồng hồ trận máy người chơi) của nút vừa bấm, -1 = không rõ
 
 
 ## Lớp con override thì phải gọi super(...).
@@ -47,8 +55,17 @@ func facing() -> Vector3:
 ## Core gọi trên server mỗi physics frame, trước server_move().
 func server_read_input(input: InputSource) -> void:
 	var b := input.get_buttons()
-	_pressed_buttons = b & ~_held_buttons
+	# Cú bấm = nút vừa xuống giữa hai frame, cộng cú bấm client báo riêng (chạm
+	# quá ngắn hay gói input bị mất thì cạnh lên không tới server).
+	var presses := input.take_presses()
+	_pressed_buttons = (b & ~_held_buttons) | presses
 	_held_buttons = b
+	if _pressed_buttons != 0:
+		if _press_times.is_empty():
+			_press_times.resize(InputSource.ACTIONS.size())
+		for i in InputSource.ACTIONS.size():
+			if _pressed_buttons & (1 << i):
+				_press_times[i] = input.press_time(i) if presses & (1 << i) else -1.0
 	var aim := input.get_aim()
 	_aim = aim.limit_length(1.0).rotated(-input.get_aim_yaw()) if aim.is_finite() else Vector2.ZERO
 
@@ -70,18 +87,28 @@ func just_pressed(action: StringName) -> bool:
 	return _pressed_buttons & _action_bit(action) != 0
 
 
+## Chỉ server: giờ bấm `action` (đồng hồ trận trên máy người chơi) nếu nút vừa
+## được bấm trong frame này và client có báo giờ; -1 nếu không. Luật chỉ tin
+## trong một khoảng hẹp (GameState.server_resolve_qte).
+func press_time(action: StringName) -> float:
+	var i := InputSource.ACTIONS.find(action)
+	if i < 0 or _pressed_buttons & (1 << i) == 0 or _press_times.is_empty():
+		return -1.0
+	return _press_times[i]
+
+
 func _action_bit(action: StringName) -> int:
 	var i := InputSource.ACTIONS.find(action)
 	return 1 << i if i >= 0 else 0
 
 
-## Server gói trạng thái hiển thị gửi xuống client (vị trí, hướng, anim...).
-## Giữ gói nhỏ: gửi 20 lần/giây cho mỗi nhân vật.
+## Server gói trạng thái hiển thị gửi xuống client: [vị trí Vector3, góc quay
+## quanh Y]. Match nén thành 9 byte (cm, int16), gửi 20 lần/giây.
 func get_snapshot() -> Variant:
-	return position
+	return [position, rotation.y]
 
 
-## Client nhận gói từ get_snapshot().
+## Client nhận gói từ get_snapshot(); giờ server của gói ở EntityBase.snapshot_time.
 func apply_snapshot(_data: Variant) -> void:
 	pass
 

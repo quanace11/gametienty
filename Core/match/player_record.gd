@@ -48,6 +48,7 @@ var qte_zone := 0.0 ## tâm vùng sáng trên vòng (0..1)
 var qte_seq := 0 ## tăng mỗi lần một vòng căn kết thúc
 var qte_result: GameTypes.QteResult = GameTypes.QteResult.NONE ## kết quả vòng căn gần nhất
 var qte_result_chest := -1
+var away := false ## máy người này đang rớt mạng, bot chơi thay (ghế giữ tới hết trận)
 
 ## Chỉ server dùng, không gửi đi.
 var channel_left := 0.0 ## còn bao lâu thì hết trạng thái RESCUING nếu không cứu tiếp
@@ -62,7 +63,7 @@ const _SYNCED := [
 	"coins", "coins_earned", "chest_work", "rescues", "damage_dealt", "qte_perfect",
 	"qte_chest", "qte_started", "qte_zone", "qte_seq", "qte_result", "qte_result_chest",
 	"deck", "item_cooldowns", "item_seq", "item_last_type", "item_target_id", "item_target_pos",
-	"speed_boost_left", "speed_boost_factor", "teleport_left", "teleport_pos",
+	"speed_boost_left", "speed_boost_factor", "teleport_left", "teleport_pos", "away",
 ]
 
 

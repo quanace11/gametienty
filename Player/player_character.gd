@@ -33,6 +33,7 @@ const DRAG_DISTANCE := 1.1 # mét, người bị kéo nằm sau lưng thợ săn
 const GRAVITY := 20.0
 const TURN_SPEED := 12.0
 const LERP_SPEED := 15.0
+const INTERP_SLOTS := 8 # số gói vị trí giữ để nội suy (8 gói = 0,4 giây)
 const SNAP_DIST := 6.0 # mét, lệch hơn chừng này (dịch chuyển) thì đặt thẳng vị trí
 const AIM_MIN := 0.2 # độ dài hướng ngắm tối thiểu để bắn theo tay, ngắn hơn thì tự nhắm
 const BEAM_HEIGHT := 1.1 # ngang nòng súng (GameState.SHOT_HEIGHT), để raycast luồng ngắm
@@ -87,6 +88,12 @@ const THROW_FACE_TIME := 0.45 # giây hình quay mặt về chỗ ném (động 
 
 var _target_pos := Vector3.ZERO
 var _target_yaw := 0.0
+# Client, nhân vật người khác: các gói vị trí gần nhất (giờ server tăng dần) để
+# vẽ chậm INTERP_DELAY và nội suy giữa hai gói, không giật khi gói tới lệch nhịp.
+var _buf_t := PackedFloat64Array()
+var _buf_pos := PackedVector3Array()
+var _buf_yaw := PackedFloat32Array()
+var _buf_n := 0
 var _pose_node: Node3D # khung giữa _visual và _model: nghiêng, nhún, nằm
 var _model: Node3D
 var _skeleton: Skeleton3D # null nếu mô hình không có xương
@@ -722,21 +729,54 @@ func _nearest_entity(max_dist: float, filter: Callable) -> EntityBase:
 	return best
 
 
-func get_snapshot() -> Variant:
-	return [position, rotation.y]
-
-
 func apply_snapshot(data: Variant) -> void:
 	_target_pos = data[0]
 	_target_yaw = data[1]
-	if position.distance_squared_to(_target_pos) > SNAP_DIST * SNAP_DIST:
+	var jump := position.distance_squared_to(_target_pos) > SNAP_DIST * SNAP_DIST
+	if jump:
 		position = _target_pos # dịch chuyển: nhảy luôn, không trượt ngang bản đồ
+	if is_local:
+		return
+	var t := EntityBase.snapshot_time
+	if _buf_n > 0 and t <= _buf_t[_buf_n - 1]:
+		return # gói cũ / trùng
+	if jump or (_buf_n > 0 and _buf_pos[_buf_n - 1].distance_squared_to(_target_pos) > SNAP_DIST * SNAP_DIST):
+		_buf_n = 0
+	if _buf_t.is_empty():
+		_buf_t.resize(INTERP_SLOTS)
+		_buf_pos.resize(INTERP_SLOTS)
+		_buf_yaw.resize(INTERP_SLOTS)
+	if _buf_n == INTERP_SLOTS:
+		for i in INTERP_SLOTS - 1:
+			_buf_t[i] = _buf_t[i + 1]
+			_buf_pos[i] = _buf_pos[i + 1]
+			_buf_yaw[i] = _buf_yaw[i + 1]
+		_buf_n -= 1
+	_buf_t[_buf_n] = t
+	_buf_pos[_buf_n] = _target_pos
+	_buf_yaw[_buf_n] = _target_yaw
+	_buf_n += 1
 
 
 func client_update(delta: float) -> void:
-	var t := minf(1.0, delta * LERP_SPEED)
-	position = position.lerp(_target_pos, t)
-	rotation.y = lerp_angle(rotation.y, _target_yaw, t)
+	if is_local or _buf_n == 0:
+		# Nhân vật của mình: bám gói mới nhất cho đỡ trễ (chưa có đoán trước).
+		var t := minf(1.0, delta * LERP_SPEED)
+		position = position.lerp(_target_pos, t)
+		rotation.y = lerp_angle(rotation.y, _target_yaw, t)
+		return
+	var rt := EntityBase.render_time
+	var i := 0
+	while i < _buf_n - 1 and _buf_t[i + 1] <= rt:
+		i += 1
+	if i == _buf_n - 1 or rt <= _buf_t[i]:
+		# Hết gói mới (mất gói / mạng khựng) hoặc chưa tới gói đầu: đứng ở gói gần nhất, không đoán.
+		position = _buf_pos[i]
+		rotation.y = _buf_yaw[i]
+		return
+	var k := (rt - _buf_t[i]) / (_buf_t[i + 1] - _buf_t[i])
+	position = _buf_pos[i].lerp(_buf_pos[i + 1], k)
+	rotation.y = lerp_angle(_buf_yaw[i], _buf_yaw[i + 1], k)
 
 
 func _on_state_changed(_new_state: GameTypes.PlayerState) -> void:
@@ -747,6 +787,7 @@ func _on_state_changed(_new_state: GameTypes.PlayerState) -> void:
 func set_concealed(concealed: bool) -> void:
 	if concealed != _concealed:
 		_concealed = concealed
+		_buf_n = 0 # hiện lại thì đặt thẳng vào chỗ mới, không trượt từ chỗ cũ
 		_refresh_visible()
 
 

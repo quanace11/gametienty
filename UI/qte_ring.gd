@@ -35,7 +35,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_flash = maxf(0.0, _flash - delta)
-	var me := GameState.rules.record(multiplayer.get_unique_id()) if GameState.rules else null
+	var me := GameState.rules.record(GameState.my_id()) if GameState.rules else null
 	var ring := me != null and me.qte_chest >= 0
 	if ring and me.qte_started != _ring_for:
 		_ring_for = me.qte_started
@@ -64,7 +64,7 @@ func _draw() -> void:
 		var p := center + Vector2(-160, -ry - 104)
 		draw_string_outline(font, p, _flash_text, HORIZONTAL_ALIGNMENT_CENTER, 320, 28, 8, OUTLINE)
 		draw_string(font, p, _flash_text, HORIZONTAL_ALIGNMENT_CENTER, 320, 28, _flash_color)
-	var me := rules.record(multiplayer.get_unique_id())
+	var me := rules.record(GameState.my_id())
 	if me == null or me.qte_chest < 0 or rx <= 1.0:
 		return
 	var cfg := rules.config
@@ -115,7 +115,7 @@ func _angle(fraction: float) -> float:
 func _my_node() -> Node3D:
 	if is_instance_valid(_me_node):
 		return _me_node
-	var my_id := multiplayer.get_unique_id()
+	var my_id := GameState.my_id()
 	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
 		if (node as EntityBase).peer_id == my_id:
 			_me_node = node as Node3D
@@ -123,7 +123,7 @@ func _my_node() -> Node3D:
 
 
 func _on_resolved(id: int, _safe_id: int, result: GameTypes.QteResult) -> void:
-	if id != multiplayer.get_unique_id():
+	if id != GameState.my_id():
 		return
 	_flash = 1.0
 	match result:

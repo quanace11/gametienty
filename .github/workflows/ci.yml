@@ -7,7 +7,7 @@ on:
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     env:
       GODOT_VERSION: 4.6.2
     steps:
@@ -20,7 +20,7 @@ jobs:
           mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" "$RUNNER_TEMP/godot"
           chmod +x "$RUNNER_TEMP/godot"
 
-      - name: Test luật + trận offline + trận online
+      - name: Test luật + trận offline + online (thường, mạng xấu, thoát, rớt mạng vào lại)
         run: GODOT="$RUNNER_TEMP/godot" LOGS="$RUNNER_TEMP/logs" bash -c 'mkdir -p "$LOGS" && tools/smoke_test.sh'
 
       - name: Lưu log khi lỗi

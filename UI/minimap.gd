@@ -108,7 +108,7 @@ func _draw() -> void:
 		draw_circle(p, 6.0, Color(0.12, 0.1, 0.16))
 		draw_circle(p, 4.5, gate_color)
 
-	var my_id := multiplayer.get_unique_id()
+	var my_id := GameState.my_id()
 	var hunter := GameState.my_role() == GameTypes.Role.HUNTER
 	if hunter and _footprint_left > 0.0:
 		var fade := _footprint_left / _footprint_time

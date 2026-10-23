@@ -70,7 +70,7 @@ func _draw() -> void:
 	if rules == null or cam == null:
 		return
 	var my_role := GameState.my_role()
-	var me := multiplayer.get_unique_id()
+	var me := GameState.my_id()
 	var font := get_theme_default_font()
 	var frac := Engine.get_physics_interpolation_fraction()
 	for i in _entities.size():

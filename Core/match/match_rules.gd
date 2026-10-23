@@ -12,7 +12,7 @@ const CHEST_CHANNEL_GRACE := 0.25 ## rời rương chừng này giây thì vòng
 const CHEST_COIN_BASE := 10000 ## id cọc tiền văng từ rương: CHEST_COIN_BASE + rương * 100 + k
 
 var config: MatchConfig
-var state: GameTypes.MatchState = GameTypes.MatchState.COUNTDOWN
+var state: GameTypes.MatchState = GameTypes.MatchState.LOADING
 var countdown_left := 0.0
 var time_left := 0.0
 var roles := {} # id -> GameTypes.Role
@@ -32,6 +32,12 @@ var placed := {} # obj_id -> {"type": ItemType, "pos": Vector3, "yaw": float, "o
 var catalog := {} ## ItemType -> {"cost": int, "cooldown": float, "roles", "aim_range": float, "area": float}, Items khai báo (setup_items)
 ## Đạn đang bay: shot_id -> {"kind": ShotKind, "owner": id, "from": Vector3, "to": Vector3, "fired": elapsed, "lands": elapsed}
 var shots := {}
+
+## Chỉ server, không gửi đi (GameState dùng): trạng thái phụ trợ của luật.
+var bush_of := {} ## id -> chỉ số bụi cây đang đứng trong, -1 nếu không (tính sau khi di chuyển)
+var footprints := {} ## id người trốn -> [Vector3 (y = elapsed lúc ghi)], cho radar
+var aim_points := {} ## id -> Vector3, điểm người chơi chọn trên minimap
+var shot_progress := {} ## shot_id -> phần đường đạn (0..1) đã xét va chạm
 
 var _next_placed_id := 1
 var _next_shot_id := 1
@@ -58,6 +64,21 @@ func _init(cfg: MatchConfig, p_roles: Dictionary, p_names: Dictionary, total_saf
 		players[id].coins = cfg.start_coins
 	for i in total_safes:
 		safe_progress[i] = 0.0
+
+
+## Server: mọi máy đã dựng xong bản đồ (hoặc hết hạn chờ), bắt đầu đếm ngược.
+func start_countdown() -> void:
+	if state == GameTypes.MatchState.LOADING:
+		state = GameTypes.MatchState.COUNTDOWN
+
+
+## Server: máy của `id` rớt mạng (bot chơi thay) hoặc đã vào lại. Không đổi
+## gì khác của nhân vật: người vào lại tiếp quản đúng trạng thái hiện tại.
+func set_away(id: int, is_away: bool) -> void:
+	var p := record(id)
+	if p and p.away != is_away:
+		p.away = is_away
+		_mark(id)
 
 
 # ---------- Đọc ----------
@@ -720,7 +741,7 @@ func results() -> Dictionary:
 		var row := {
 			"name": names.get(id, str(id)), "role": p.role, "coins": p.coins_earned,
 			"rescues": p.rescues, "qte_perfect": p.qte_perfect, "chests": snappedf(p.chest_work, 0.01),
-			"damage": p.damage_dealt,
+			"damage": p.damage_dealt, "away": p.away,
 		}
 		if p.is_hunter():
 			row["result"] = hunter_result(caught, ids.size())

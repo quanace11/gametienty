@@ -76,3 +76,37 @@ extends Resource
 @export var score_per_coin := 1 # theo tổng tiền nhặt được
 @export var score_damage := 10 # mỗi máu bắn mất của thợ săn
 @export var score_hunter_catch := 100 # thợ săn: mỗi người bắt được
+
+
+## Thứ tự các trường @export (theo thứ tự khai báo trong file này), để gửi qua mạng.
+static var _fields: PackedStringArray = []
+
+
+static func _field_names() -> PackedStringArray:
+	if _fields.is_empty():
+		for p: Dictionary in MatchConfig.new().get_property_list():
+			if p["usage"] & PROPERTY_USAGE_SCRIPT_VARIABLE and p["usage"] & PROPERTY_USAGE_STORAGE:
+				_fields.append(p["name"])
+	return _fields
+
+
+## Gói gửi xuống client lúc vào trận: mảng số theo thứ tự _field_names()
+## (không gửi nguyên Resource, RPC không truyền Object). Cùng phiên bản giao
+## thức (Net.PROTOCOL_VERSION) nghĩa là cùng thứ tự trường.
+func to_array() -> Array:
+	var out := []
+	for f in _field_names():
+		out.append(get(f))
+	return out
+
+
+## Dựng lại từ to_array(). Mảng sai độ dài hay sai kiểu thì giữ giá trị mặc định của trường đó.
+static func from_array(values: Array) -> MatchConfig:
+	var cfg := MatchConfig.new()
+	var names := _field_names()
+	if values.size() != names.size():
+		return cfg
+	for i in names.size():
+		if typeof(values[i]) == typeof(cfg.get(names[i])):
+			cfg.set(names[i], values[i])
+	return cfg

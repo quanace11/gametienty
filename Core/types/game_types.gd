@@ -23,7 +23,9 @@ enum PlayerState {
 	ELIMINATED, # bị loại hẳn
 }
 
-enum MatchState { LOBBY, COUNTDOWN, PLAYING, ENDED }
+## LOADING: các máy đang dựng bản đồ; server đợi mọi máy báo xong (có hạn) rồi mới đếm ngược.
+## Thêm ở CUỐI để số của giá trị cũ không đổi.
+enum MatchState { LOBBY, COUNTDOWN, PLAYING, ENDED, LOADING }
 
 ## Kết quả của thợ săn khi hết trận, theo số người trốn bị bắt (không thoát được).
 ## Với 4 người trốn: 0-1 thua, 2-3 thắng một phần, 4 thắng tuyệt đối.

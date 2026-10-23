@@ -130,7 +130,7 @@ func _process(delta: float) -> void:
 func _my_node() -> Node3D:
 	if is_instance_valid(_me):
 		return _me
-	var my_id := multiplayer.get_unique_id()
+	var my_id := GameState.my_id()
 	for node in get_tree().get_nodes_in_group(GameTypes.GROUP_ENTITIES):
 		if (node as EntityBase).peer_id == my_id:
 			_me = node as Node3D

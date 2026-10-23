@@ -13,6 +13,9 @@ extends CanvasLayer
 ## Shader đã dịch Godot lưu ở user://shader_cache nên lần mở game sau nhanh hơn.
 ## Chỉ chạy trên máy có màn hình; server riêng không tạo node này.
 
+## Đã dịch xong shader, máy này sẵn sàng vào trận (Match báo server).
+signal warmed
+
 const WARM_FRAMES := 2 # khung hình vẽ mẫu (lần đầu dịch, lần sau dịch nốt biến thể đèn / bóng)
 const FADE_TIME := 0.25
 const MAX_SAMPLES := 160
@@ -105,6 +108,7 @@ func _process(delta: float) -> void:
 		for t in _texts:
 			t.queue_free()
 		_texts.clear()
+		warmed.emit()
 	_fade += delta / FADE_TIME
 	_cover.modulate.a = 1.0 - _fade
 	if _fade >= 1.0:
