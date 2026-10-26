@@ -120,9 +120,10 @@ const MODEL := "res://Objects/models/ban_do_meshy/ban_do.glb"
 ## cao ~1,4 m sau lưng): quay tường vòng ra phía tây, mở về phía sân.
 const TELEPORT_MODEL := "res://Objects/models/phap_tran/phap_tran.glb"
 const MESHY_ORIGINAL := "res://Objects/models/ban_do_meshy/mau_goc.jpg" # ảnh màu 2048 px (đã làm mịn), chỉ đồ họa Cao
-## Mặt sân Meshy chụp từ trên xuống thành một tấm, đã làm mịn (tools/ban_do_meshy/lam_min.py), phủ đúng sân SIZE.
-const MESHY_FLAT := "res://Objects/models/ban_do_meshy/nen_min.jpg"
-const MESHY_FLAT_WIDTH := [1024, 2048, 2048] # px theo mức đồ họa (Thấp thu nhỏ cho nhẹ bộ nhớ)
+## Mặt sân vẽ lại cho sắc nét (tools/ban_do_meshy/nen_sac.py), phủ đúng sân SIZE: ảnh khoảng cách tới mép
+## cỏ / đá + bóng vẽ sẵn, sắc màu cỏ, đất, màu vùng đá; vân vẽ tay lát theo mét.
+const FIELD := "res://Objects/models/ban_do_meshy/"
+const FIELD_DETAIL := [0.3, 0.4, 0.4] # độ đậm vân vẽ tay theo mức đồ họa
 const TREE_LEAVES := [["vo", "vo_cay.png", false], ["la", "la_cay_reu.png", true]]
 const SMALL_PLANT := [["la_hoa", "la_nho_reu.png", true]]
 const FLOWER := [["la_hoa", "la_nho_reu.png", true], ["hoa", "hoa.png", true]]
@@ -262,11 +263,11 @@ func _add_scenery() -> void:
 
 
 ## Mô hình bản Meshy quan gửi (mặt sân, lối đi, vách đá, lan can, cổng vòng), giữ nguyên màu gốc
-## (shaders/ban_do_meshy.gdshader). Mặt sân lấy màu từ ảnh liền đã làm mịn (MESHY_FLAT); đồ họa Cao
+## (shaders/ban_do_meshy.gdshader). Mặt sân vẽ lại sắc nét (FIELD); đồ họa Cao
 ## dùng ảnh gốc 2048 px cho vách đá, lan can.
 func _add_ground() -> void:
 	var map: Node3D = (load(MODEL) as PackedScene).instantiate()
-	_meshy_look(map, BushScript.mip_texture(MESHY_ORIGINAL) if _quality == 2 else null, _flat_ground())
+	_meshy_look(map, BushScript.mip_texture(MESHY_ORIGINAL) if _quality == 2 else null, true)
 	add_child(map)
 	_layout = (load(LAYOUT) as Texture2D).get_image()
 	if _layout.is_compressed():
@@ -275,8 +276,8 @@ func _add_ground() -> void:
 
 ## Tô mô hình Meshy bằng shaders/ban_do_meshy.gdshader (giữ đúng màu ảnh gốc).
 ## `original`: ảnh màu độ phân giải cao thay ảnh trong GLB (null: dùng ảnh trong GLB).
-## `flat`: ảnh mặt sân liền một tấm phủ SIZE (null: cả mô hình dùng ảnh theo UV).
-func _meshy_look(model: Node3D, original: Texture2D, flat: Texture2D = null) -> void:
+## `flat`: mặt sân vẽ lại sắc nét phủ SIZE (false: cả mô hình dùng ảnh theo UV).
+func _meshy_look(model: Node3D, original: Texture2D, flat := false) -> void:
 	var m := ShaderMaterial.new()
 	m.shader = load("res://Objects/shaders/ban_do_meshy.gdshader")
 	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
@@ -286,22 +287,16 @@ func _meshy_look(model: Node3D, original: Texture2D, flat: Texture2D = null) -> 
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF # ảnh gốc đã vẽ sẵn bóng
 	if original != null:
 		m.set_shader_parameter(&"meshy_albedo", original)
-	if flat != null:
+	if flat:
 		m.set_shader_parameter(&"use_flat", true)
-		m.set_shader_parameter(&"flat_albedo", flat)
 		m.set_shader_parameter(&"field_size", SIZE)
-
-
-## Ảnh mặt sân liền (MESHY_FLAT) thu theo mức đồ họa, có mipmap.
-func _flat_ground() -> Texture2D:
-	var img := (load(MESHY_FLAT) as Texture2D).get_image()
-	if img.is_compressed():
-		img.decompress()
-	var w: int = MESHY_FLAT_WIDTH[_quality]
-	if img.get_width() > w:
-		img.resize(w, roundi(img.get_height() * float(w) / img.get_width()), Image.INTERPOLATE_LANCZOS)
-	img.generate_mipmaps()
-	return ImageTexture.create_from_image(img)
+		m.set_shader_parameter(&"layers", BushScript.mip_texture(FIELD + "nen_lop.png"))
+		m.set_shader_parameter(&"grass_tint", load(FIELD + "nen_co.png"))
+		m.set_shader_parameter(&"dirt_tint", load(FIELD + "nen_dat.png"))
+		m.set_shader_parameter(&"stone_albedo", BushScript.mip_texture(FIELD + "nen_da.png"))
+		m.set_shader_parameter(&"detail", BushScript.mip_texture(FIELD + "van_nen.png"))
+		m.set_shader_parameter(&"detail_amount", FIELD_DETAIL[_quality])
+		m.set_shader_parameter(&"detail_two_layers", _quality > 0)
 
 
 ## Lớp nền tại điểm p trên sân (R: đất, G: đá vỡ), đọc từ ảnh lớp Meshy.

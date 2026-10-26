@@ -11,6 +11,7 @@ Chạy: python3 -I build_ban_do.py map_meshy.glb ../../models/ban_do_meshy/ban_d
 5. Phá bờ kè tây giữa 2 cánh pháp trận truyền tống: bỏ tam giác vách đá, lan can chạm vào khung CUT
    (giữ mặt đất), mũi 2 cánh nối vào 2 đầu bờ kè. Đổi chỗ pháp trận (TELEPORT trong maps/test_map.gd) thì sửa CUT.
 6. Chạy xong thì chạy lam_min.py (làm mịn ảnh màu, chụp lại mặt sân liền một tấm nen_min.jpg).
+7. Rồi nen_sac.py (vẽ lại mặt sân sắc nét từ nen_min.jpg: nen_lop, nen_co, nen_dat, nen_da, van_nen).
 """
 
 import io
