@@ -22,8 +22,6 @@ jobs:
   apk:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    permissions:
-      contents: write
     env:
       GODOT_VERSION: 4.6.2
       # Khóa debug cố định (commit sẵn) để bản mới cài đè lên bản cũ, không phải gỡ.
@@ -82,15 +80,65 @@ jobs:
           test -s export/gametienty.apk
           ls -lh export/gametienty.apk
 
+      - name: Kiểm tra gói (chữ ký, manifest)
+        run: |
+          bt=$(ls -d "${ANDROID_SDK_ROOT:-$ANDROID_HOME}"/build-tools/* | sort -V | tail -1)
+          "$bt/apksigner" verify --verbose --print-certs export/gametienty.apk
+          "$bt/zipalign" -c -P 16 4 export/gametienty.apk && echo "zipalign: đạt"
+          "$bt/aapt2" dump badging export/gametienty.apk > badging.txt
+          head -20 badging.txt
+
       - uses: actions/upload-artifact@v4
         with:
           name: gametienty-apk
           path: export/gametienty.apk
 
+  # Cài thử lên máy ảo Android 15 (x86_64 có dịch lệnh ARM) để chắc gói cài được trước khi phát hành.
+  cai-thu:
+    needs: apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: gametienty-apk
+
+      - name: Bật KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          script: |
+            adb install gametienty.apk
+            adb shell pm list packages | grep com.quanace11.gametienty
+            adb shell am start -W -n com.quanace11.gametienty/com.godot.game.GodotAppLauncher
+            sleep 20
+            adb logcat -d | grep -iE "godot|AndroidRuntime|FATAL" | tail -60 || true
+            adb shell pidof com.quanace11.gametienty
+
+  phat-hanh:
+    needs: [apk, cai-thu]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: gametienty-apk
+          path: export
+
       - name: Cập nhật Release "apk-moi-nhat"
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
           gh release delete apk-moi-nhat --cleanup-tag --yes || true
           gh release create apk-moi-nhat export/gametienty.apk \
