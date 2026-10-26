@@ -119,7 +119,7 @@ const MODEL := "res://Objects/models/ban_do_meshy/ban_do.glb"
 ## Pháp trận truyền tống Meshy quan gửi (4k tam giác, ngang 9 m, vòng phù văn bán kính ~1,6 m ở tâm, tường vòng
 ## cao ~1,4 m sau lưng): quay tường vòng ra phía tây, mở về phía sân.
 const TELEPORT_MODEL := "res://Objects/models/phap_tran/phap_tran.glb"
-const MESHY_ORIGINAL := "res://Objects/models/ban_do_meshy/mau_goc.jpg" # ảnh màu 2048 px (đã làm mịn), chỉ đồ họa Cao
+const MESHY_ORIGINAL := "res://Objects/models/ban_do_meshy/mau_goc.jpg" # ảnh màu 2048 px (đã làm mịn), mọi mức đồ họa
 ## Mặt sân vẽ lại cho sắc nét (tools/ban_do_meshy/nen_sac.py), phủ đúng sân SIZE: ảnh khoảng cách tới mép
 ## cỏ / đá + bóng vẽ sẵn, sắc màu cỏ, đất, màu vùng đá; vân vẽ tay lát theo mét.
 const FIELD := "res://Objects/models/ban_do_meshy/"
@@ -263,11 +263,11 @@ func _add_scenery() -> void:
 
 
 ## Mô hình bản Meshy quan gửi (mặt sân, lối đi, vách đá, lan can, cổng vòng), giữ nguyên màu gốc
-## (shaders/ban_do_meshy.gdshader). Mặt sân vẽ lại sắc nét (FIELD); đồ họa Cao
+## (shaders/ban_do_meshy.gdshader). Mặt sân vẽ lại sắc nét (FIELD); mọi mức đồ họa
 ## dùng ảnh gốc 2048 px cho vách đá, lan can.
 func _add_ground() -> void:
 	var map: Node3D = (load(MODEL) as PackedScene).instantiate()
-	_meshy_look(map, BushScript.mip_texture(MESHY_ORIGINAL) if _quality == 2 else null, true)
+	_meshy_look(map, BushScript.mip_texture(MESHY_ORIGINAL), true)
 	add_child(map)
 	_layout = (load(LAYOUT) as Texture2D).get_image()
 	if _layout.is_compressed():
@@ -294,6 +294,7 @@ func _meshy_look(model: Node3D, original: Texture2D, flat := false) -> void:
 		m.set_shader_parameter(&"grass_tint", load(FIELD + "nen_co.png"))
 		m.set_shader_parameter(&"dirt_tint", load(FIELD + "nen_dat.png"))
 		m.set_shader_parameter(&"stone_albedo", BushScript.mip_texture(FIELD + "nen_da.png"))
+		m.set_shader_parameter(&"stone_detail", BushScript.mip_texture(FIELD + "van_da.png"))
 		m.set_shader_parameter(&"detail", BushScript.mip_texture(FIELD + "van_nen.png"))
 		m.set_shader_parameter(&"detail_amount", FIELD_DETAIL[_quality])
 		m.set_shader_parameter(&"detail_two_layers", _quality > 0)

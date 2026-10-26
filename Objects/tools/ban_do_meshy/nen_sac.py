@@ -7,7 +7,9 @@ nên mép cỏ, mép lối đất nhòe như phim mờ. Thay vì phóng to ảnh
   thưa để trộn 2 lớp vân cho không lộ ô lặp. Shader làm nét mép theo khoảng cách nên mép sắc ở mọi độ phóng
   (kiểu chữ SDF).
 - nen_co.png, nen_dat.png (512 px): sắc màu cỏ, đất theo từng chỗ, loang tràn qua mép cho shader chọn bên.
-- nen_da.png (1024 px): màu gốc vùng đá lát, phù văn, phiến đá (giữ nguyên hình vẽ Meshy), loang tràn qua mép.
+- nen_da.png (1024 px, RGBA): màu vùng đá lát, phù văn, phiến đá, loang tràn qua mép; lối gạch và phiến đá xám
+  chỉ giữ màu loang, phù văn giữ nguyên hình vẽ Meshy. A = lối gạch (STONE_PATHS).
+- van_da.png (512 px, lát theo mét): R trống, G = phiến đá nứt (san_da.png), B = gạch cuội (da.png).
 - van_nen.png (512 px, lát theo mét): R = vân cỏ (co_1.png + co_2.png), G = vân đất (dat.png + chút vết nứt san_da.png),
   B = vân lá cỏ ở mép (co_2.png), độ sáng chuẩn hóa quanh 0,5; chỉ đổi độ sáng nên giữ đúng tông màu.
 Ảnh vân: nen_ve_tay/ (CC0, xem LICENSE.txt ở đó).
@@ -96,6 +98,28 @@ def shadows(shape, px_per_m, source):
 	return 1.0 - 0.42 * acc
 
 
+def cobble_mask(shape, px_per_m, source):
+	"""Vùng lối gạch (STONE_PATHS trong test_map.gd): 1 trong lối, rộng PATH_WIDTH + 0,4 m."""
+	block = re.search(r"const STONE_PATHS[^=]*=\s*\[(.*?)\n\]", source, re.S).group(1)
+	width = float(re.search(r"const PATH_WIDTH := ([0-9.]+)", source).group(1))
+	acc = np.zeros(shape, np.float32)
+	for path in re.findall(r"\[(.*?)\]", re.sub(r"#[^\n]*", "", block), re.S):
+		pts = np.array([[float(v) for v in m.split(",")] for m in re.findall(r"Vector2\(([^)]*)\)", path)])
+		cv2.polylines(acc, [(pts * px_per_m).astype(np.int32)], False, 1.0, int((width + 0.4) * px_per_m), cv2.LINE_AA)
+	return acc
+
+
+def stone_detail(textures):
+	"""van_da.png: G = phiến đá nứt (san_da.png), B = gạch cuội (da.png), độ sáng chuẩn hóa quanh 0,5."""
+	def lum(name, contrast):
+		g = cv2.cvtColor(cv2.imread(os.path.join(textures, name)), cv2.COLOR_BGR2GRAY).astype(np.float32) / 255.0
+		g = cv2.resize(g, (512, 512), interpolation=cv2.INTER_AREA)
+		g = g - g.mean()
+		return np.clip(0.5 + g / (4.0 * g.std() + 1e-4) * contrast, 0.0, 1.0)
+
+	return np.stack([lum("da.png", 1.1), lum("san_da.png", 1.0), np.full((512, 512), 0.5, np.float32)], -1) # BGR cho cv2
+
+
 def detail(textures):
 	def lum(name):
 		img = cv2.imread(os.path.join(textures, name)).astype(np.float32) / 255.0
@@ -143,7 +167,16 @@ def main():
 	m = cv2.resize(cv2.erode(other, np.ones((5, 5), np.uint8)), (half.shape[1], half.shape[0]), interpolation=cv2.INTER_AREA)
 	m = (m > 0.99).astype(np.float32)
 	col = np.where(m[..., None] > 0, half, spread(half, m, 2.0))
-	cv2.imwrite(os.path.join(out, "nen_da.png"), (np.clip(col, 0, 1) * 255 + 0.5).astype(np.uint8))
+	# Lối gạch, phiến đá xám: chỉ giữ màu loang (vân sắc do van_da.png lo), phù văn tím xanh giữ nguyên hình vẽ.
+	hsv = cv2.cvtColor(col.astype(np.float32), cv2.COLOR_BGR2HSV)
+	grey = 1.0 - np.clip((hsv[..., 1] - 0.18) / 0.15, 0.0, 1.0)
+	cob = cv2.resize(cobble_mask((h, w), px_per_m, source), (half.shape[1], half.shape[0]), interpolation=cv2.INTER_AREA)
+	cob = cv2.GaussianBlur(cob, (0, 0), 1.0)
+	flat = np.maximum(grey, cob)[..., None]
+	col = col * (1.0 - flat) + cv2.GaussianBlur(col, (0, 0), 5.0) * flat
+	bgra = np.concatenate([col, (0.1 + 0.9 * np.clip(cob, 0, 1))[..., None]], -1) # alpha: lối gạch (không để 0)
+	cv2.imwrite(os.path.join(out, "nen_da.png"), (np.clip(bgra, 0, 1) * 255 + 0.5).astype(np.uint8))
+	cv2.imwrite(os.path.join(out, "van_da.png"), (stone_detail(textures) * 255 + 0.5).astype(np.uint8))
 	cv2.imwrite(os.path.join(out, "van_nen.png"), (detail(textures) * 255 + 0.5).astype(np.uint8))
 
 

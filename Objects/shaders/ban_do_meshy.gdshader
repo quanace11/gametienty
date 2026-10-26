@@ -3,7 +3,8 @@
 // Mặt sân (chỗ phẳng, sát đất) vẽ lại cho sắc nét ở mọi độ phóng (tools/ban_do_meshy/nen_sac.py):
 // mép cỏ / đất / đá lấy từ ảnh khoảng cách (nen_lop, kiểu chữ SDF) nên luôn sắc, có viền tối kiểu nét cọ;
 // màu cỏ, đất theo từng chỗ lấy từ ảnh sắc màu nhỏ (giữ tông màu bản Meshy); vân vẽ tay lát theo mét chỉ đổi
-// độ sáng; bóng đổ dưới cây, đá, bụi vẽ sẵn. Vách đá, lan can, cổng vòng vẫn dùng ảnh Meshy theo UV.
+// độ sáng (cỏ, đất, lối gạch cuội, phiến đá nứt); bóng đổ dưới cây, đá, bụi vẽ sẵn.
+// Vách đá, lan can, cổng vòng vẫn dùng ảnh Meshy theo UV.
 shader_type spatial;
 render_mode cull_disabled, ambient_light_disabled, specular_disabled;
 
@@ -13,7 +14,9 @@ uniform vec2 field_size = vec2(50.0, 45.0); // mét (x, z) mà các ảnh nền 
 uniform sampler2D layers : filter_linear_mipmap, repeat_disable; // R mép cỏ, G mép đá, B bóng vẽ sẵn, A nhiễu
 uniform sampler2D grass_tint : source_color, filter_linear, repeat_disable;
 uniform sampler2D dirt_tint : source_color, filter_linear, repeat_disable;
-uniform sampler2D stone_albedo : source_color, filter_linear_mipmap, repeat_disable; // đá lát, phù văn, phiến đá
+uniform sampler2D stone_albedo : source_color, filter_linear_mipmap, repeat_disable; // đá lát, phù văn, phiến đá; A lối gạch
+uniform sampler2D stone_detail : filter_linear_mipmap, repeat_enable; // G phiến đá nứt, B gạch cuội
+uniform float stone_tile = 0.3; // số lần lặp vân gạch cuội / phiến đá trên 1 m
 uniform sampler2D detail : filter_linear_mipmap, repeat_enable; // R vân cỏ, G vân đất, B lá cỏ ở mép
 uniform float detail_tile = 0.35; // số lần lặp ảnh vân trên 1 m
 uniform float detail_amount = 0.4; // độ đậm vân (0: tắt)
@@ -51,7 +54,13 @@ vec3 ground(vec2 f) {
 	dc *= 1.0 - rim_dark * smoothstep(0.32, 0.5, g); // bóng cỏ phủ xuống mép đất
 	vec3 c = mix(dc, gc, grass);
 	float stone = edge(lay.g);
-	vec3 sc = texture(stone_albedo, f).rgb * (1.0 - 0.25 * (1.0 - smoothstep(0.5, 0.58, lay.g))); // viền tối mép đá
+	vec4 so = texture(stone_albedo, f);
+	float cobble = smoothstep(0.45, 0.65, so.a);
+	float grey = 1.0 - smoothstep(0.1, 0.25, max(so.r, max(so.g, so.b)) - min(so.r, min(so.g, so.b))); // phù văn tím xanh giữ nguyên
+	vec2 sv = texture(stone_detail, wp.xz * stone_tile).gb;
+	float sd = mix(sv.x, sv.y, cobble);
+	vec3 sc = so.rgb * (1.0 + (sd - 0.5) * 2.0 * mix(0.45 * grey, 0.65, cobble));
+	sc *= 1.0 - 0.25 * (1.0 - smoothstep(0.5, 0.58, lay.g)); // viền tối mép đá
 	c = mix(c * (1.0 - 0.25 * smoothstep(0.38, 0.5, lay.g)), sc, stone);
 	return c * lay.b;
 }
