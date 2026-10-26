@@ -8,7 +8,9 @@ Chỉ đọc `GameState.rules`, nghe `EventBus` và gọi API của `Net`. Khôn
 - `lobby_stage.gd`: sân khấu 3D ở sảnh (đài đá, nhân vật phát động tác Idle, vuốt để xoay); menu ẩn thì ngừng vẽ
 - `hud.gd`: thanh trên (đồng hồ, chìa, cổng), hàng đầu người trốn, tim máu + tiền, bộ bài có hồi chiêu hình quạt, thông báo nổi (rương nổ, thợ săn dịch chuyển, radar)
 - `health_bars.gd`: thanh máu nổi trên đầu mọi nhân vật đang thấy (mỗi ô một máu: đệ tử 2, ma tu 6; mình vàng, cùng phe xanh, phe kia đỏ); vừa mất máu thì ô đó chớp trắng và hiện "-1" bay lên
-- `touch_controls.gd`: cần analog trái, nút tương tác, cần PHI KIẾM của ma tu (luồng tím + nút Hủy), nút TRÓI của ma tu (sáng khi có đệ tử gục trong tầm, chạm là trói kéo đi), thẻ kéo-thả chọn chỗ ném, nút đổi người xem; trong lúc vòng căn chạy thì chạm bất kỳ đâu là căn
+- `touch_controls.gd`: cần analog trái, nút hành động của đệ tử đổi theo tình huống (mờ khi không có gì để làm, xanh "ĐỠ DẬY" kèm vòng tiến độ khi đồng môn gục trong tầm, vàng "CĂN!" khi vòng căn chạy), thẻ phù bảo có biểu tượng + giá ở góc (đỏ khi thiếu linh thạch, viền vàng khi dùng được), cần PHI KIẾM của ma tu (luồng tím + nút Hủy), nút TRÓI của ma tu (sáng khi có đệ tử gục trong tầm, chạm là trói kéo đi), thẻ kéo-thả chọn chỗ ném, nút đổi người xem; trong lúc vòng căn chạy thì chạm bất kỳ đâu là căn
+- `item_icons.gd`: biểu tượng từng loại thẻ vẽ bằng code (chữ thập, tia sét, kiếm, mắt...), mỗi loại một màu
+- `objective_arrows.gd`: mũi tên ở mép màn hình chỉ mục tiêu ngoài khung nhìn kèm số mét: trận linh chưa giải gần nhất, lối ra khi đã mở, đồng môn gục / bị nhốt; ma tu đang kéo người thì chỉ huyết trận
 - `minimap.gd`: bản đồ góc phải (tường, rương, cổng, nhà tù, đồng đội); thợ săn thấy dấu chân radar và chạm để chọn điểm dịch chuyển
 - `qte_ring.gd`: vòng căn bung ra quanh chân khi cạy rương (vùng đậm, vùng mờ, kim, chữ "Được! +tiền" / "Trượt! Mở lại từ đầu")
 - `results_screen.gd`: bảng kết quả cuối trận xếp theo điểm
