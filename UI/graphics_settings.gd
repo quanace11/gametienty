@@ -3,7 +3,8 @@ extends RefCounted
 ## apply() lúc mở game và mỗi lần đổi: ghi mức vào ProjectSettings
 ## "game/graphics_quality" (0, 1, 2) để module khác đọc khi dựng hình (mô hình
 ## nhân vật, bóng đổ của bản đồ), rồi chỉnh viewport.
-## Thấp: ma tu ~6k tam giác, không bóng, vẽ 3D ở 75% độ phân giải, LOD gắt.
+## Thấp: ma tu ~6k tam giác, không bóng, LOD gắt. Mọi mức vẽ 3D đủ 100% độ phân giải: vẽ thấp hơn rồi
+## phóng lên làm cả trận nhòe như phim mờ (nền sân, chữ trên đầu), máy yếu bớt tải bằng bóng, LOD, vân nền.
 ## Vừa: ma tu ~20k tam giác, có bóng, 100%. Cao: ma tu ~60k tam giác, có bóng,
 ## khử răng cưa MSAA 2x.
 ## Mặc định: điện thoại Thấp, máy tính Vừa. Dòng lệnh --quality=0|1|2 ghi đè.
@@ -13,7 +14,7 @@ extends RefCounted
 const SETTING := "game/graphics_quality"
 const FILE := "user://cai_dat.cfg"
 const NAMES := ["Thấp", "Vừa", "Cao"]
-const RENDER_SCALE := [0.75, 1.0, 1.0]
+const RENDER_SCALE := [1.0, 1.0, 1.0]
 const LOD_THRESHOLD := [4.0, 1.0, 1.0] # pixel lỗi cho phép khi Godot tự hạ LOD mesh
 const MSAA := [Viewport.MSAA_DISABLED, Viewport.MSAA_DISABLED, Viewport.MSAA_2X]
 const FPS_CHOICES := [30, 60, 0] # 0 = không khóa
