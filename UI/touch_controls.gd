@@ -47,8 +47,6 @@ const BIND_OFFSET := Vector2(-20, -178) # nút Trói so với tâm cần ngắm
 const BIND_RANGE := 1.5 # mét, khớp tầm túm người gục của nhân vật (PICKUP_RANGE)
 const WALK_STOP := 0.3 # mét: đi bằng chuột, tới gần con trỏ chừng này thì đứng lại
 const CARD_KEYS: Array[StringName] = [&"card_1", &"card_2", &"card_3", &"card_4", &"card_5"] # phím ô thẻ (LocalInputSource)
-const ARC_STEPS := 14
-const THROW_START := 1.2 # mét: độ cao vật ném rời tay, khớp Items/item_visuals.gd
 
 const MOUSE_FINGER := -1
 const INK := Color(0.12, 0.1, 0.16)
@@ -77,7 +75,6 @@ var _bind_ready := false # có đệ tử đang gục trong tầm trói (tính 1
 var _rescue_id := 0 # đệ tử: đồng môn đang gục trong tầm đỡ (0 = không ai, tính 10 lần/giây)
 var _card_key := false # thẻ đang ngắm bằng phím 1..5 theo con trỏ chuột (không phải kéo thẻ)
 var _walking := false # đang giữ chuột trái ở chỗ trống: đi tới con trỏ
-var _arc_points := PackedVector2Array()
 
 static var _card_ready: StyleBoxFlat
 static var _card_idle: StyleBoxFlat
@@ -532,8 +529,6 @@ func _draw_card_aim(me: PlayerRecord, font: Font) -> void:
 			draw_colored_polygon(_ring_points, Color(0.45, 0.8, 1.0, 0.1))
 			draw_polyline(_ring_points, Color(0.6, 0.9, 1.0, 0.85), 3.0, true)
 		var tint := Color(1.0, 0.3, 0.25) if _card_cancel else Color(1.0, 0.75, 0.25)
-		if aim != Vector2.ZERO and _throw_arc(cam, feet, spot):
-			draw_polyline(_arc_points, Color(tint, 0.8), 4.0, true)
 		if _ground_ring(cam, spot, area):
 			draw_colored_polygon(_ring_points, Color(tint, 0.3))
 			draw_polyline(_ring_points, tint, 3.0, true)
@@ -547,22 +542,6 @@ func _draw_card_aim(me: PlayerRecord, font: Font) -> void:
 	draw_circle(_card_center + _card_aim * CARD_DRAG_R, 22, INK)
 	draw_circle(_card_center + _card_aim * CARD_DRAG_R, 19, Color(1.0, 0.6, 0.2))
 	_cancel_button(font, _card_cancel)
-
-
-## Đường vòng vật ném sẽ bay (cùng công thức với hình bay ở Items/item_visuals.gd)
-## từ tay tới chỗ rơi, vào _arc_points (dùng lại một mảng). false nếu ra sau camera.
-func _throw_arc(cam: Camera3D, from: Vector3, to: Vector3) -> bool:
-	var start := from + Vector3(0, THROW_START, 0)
-	var end := to + Vector3(0, 0.25, 0)
-	var height := 1.2 + 0.2 * Vector2(to.x - from.x, to.z - from.z).length()
-	_arc_points.resize(ARC_STEPS + 1)
-	for k in ARC_STEPS + 1:
-		var t := float(k) / ARC_STEPS
-		var p := start.lerp(end, t) + Vector3(0, sin(t * PI) * height, 0)
-		if cam.is_position_behind(p):
-			return false
-		_arc_points[k] = cam.unproject_position(p)
-	return true
 
 
 ## Điểm màn hình của vòng tròn bán kính `radius` mét trên mặt sàn quanh `center`
