@@ -6,7 +6,7 @@ extends RefCounted
 const ENTITY := "res://Player/player_character.gd" # extends EntityBase
 const LOCAL_INPUT := "res://Player/local_input_source.gd" # extends InputSource
 const BOT_INPUT := "res://AI/bot_input_source.gd" # extends InputSource
-const MAP := "res://Objects/maps/san_gach.gd" # extends MapBase
+const MAP := "res://Objects/maps/test_map.gd" # extends MapBase
 const HUD := "res://UI/hud.gd"
 const MAIN_MENU := "res://UI/main_menu.gd"
 const ITEM_CATALOG := "res://Items/item_catalog.gd" # static all() -> Dictionary, default_deck(role) -> Array
