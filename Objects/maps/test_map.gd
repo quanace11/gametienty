@@ -2,9 +2,9 @@ extends MapBase
 ## Bản đồ "Động phủ Linh Đài" 50 x 45 m dựng bằng code, xếp theo bố cục bản Meshy quan gửi:
 ## pháp trận truyền tống ở bờ tây (đệ tử xuất hiện trên vòng phù văn, mô hình Meshy quan gửi), động phủ
 ## sàn đá góc đông bắc với linh đài, 5 cột cao và 2 cửa phong ấn cam (2 lối ra), huyết trận ở giữa, 6 trận
-## linh quanh sân, tảng đá to có cây mọc ở phía bắc, cột đá đổ, bụi cỏ cao để nấp. Mặt sân và viền
-## (vách đá, lan can, cổng vòng 2 góc bắc) là mô hình bản Meshy thứ hai (ban_do_meshy/ban_do.glb), giữ
-## nguyên màu gốc bằng shaders/ban_do_meshy.gdshader.
+## linh quanh sân, tảng đá to có cây mọc ở phía bắc, cột đá đổ, bụi cỏ cao để nấp. Mặt sân vẽ bằng phép
+## tính (shaders/nen_dong_phu.gdshader) theo hình lối đất / đá vỡ của bản Meshy thứ hai, giữ tông màu mà sắc
+## mịn ở mọi độ phóng; vách đá viền sân là khối vát cạnh bằng đá vẽ tay.
 ## Cây, đá, cỏ, hoa kiểu tranh vẽ dùng Quaternius Stylized Nature MegaKit (CC0);
 ## tường, cột dùng KayKit Dungeon Remastered (CC0, Kay Lousberg). Đá, tường dùng ảnh vẽ tay CC0
 ## (rubberduck, MELLE; shaders/da_ve_tay), nắng ấm bóng xanh tím, phù văn phát sáng (phu_van).
@@ -114,16 +114,17 @@ const NATURE := "res://Objects/models/quaternius_nature/" # cây, đá, cỏ, ho
 const GROUND := "res://Objects/models/nen_ve_tay/" # ảnh vẽ tay CC0: nền, đá, tường, phù văn
 ## Ảnh lớp nền tách từ bản Meshy quan gửi (R: lối đất, G: nền đá vỡ), phủ đúng sân SIZE.
 const LAYOUT := "res://Objects/models/ban_do_meshy/lop_nen.png"
-## Mô hình bản Meshy đã đưa về tọa độ trận (tools/ban_do_meshy/build_ban_do.py).
-const MODEL := "res://Objects/models/ban_do_meshy/ban_do.glb"
 ## Pháp trận truyền tống Meshy quan gửi (4k tam giác, ngang 9 m, vòng phù văn bán kính ~1,6 m ở tâm, tường vòng
 ## cao ~1,4 m sau lưng): quay tường vòng ra phía tây, mở về phía sân.
 const TELEPORT_MODEL := "res://Objects/models/phap_tran/phap_tran.glb"
-const MESHY_ORIGINAL := "res://Objects/models/ban_do_meshy/mau_goc.jpg" # ảnh màu 2048 px (đã làm mịn), mọi mức đồ họa
-## Mặt sân vẽ lại cho sắc nét (tools/ban_do_meshy/nen_sac.py), phủ đúng sân SIZE: ảnh khoảng cách tới mép
-## cỏ / đá + bóng vẽ sẵn, sắc màu cỏ, đất, màu vùng đá; vân vẽ tay lát theo mét.
-const FIELD := "res://Objects/models/ban_do_meshy/"
-const FIELD_DETAIL := [0.3, 0.4, 0.4] # độ đậm vân vẽ tay theo mức đồ họa
+const FIELD_RECT := Rect2(-14, -4, 72, 53) # mặt sân vẽ bằng shader, phủ cả pháp trận ngoài bờ tây
+const BAKE_PX := 6 # điểm ảnh trên 1 m của ảnh bóng tiếp xúc + lối gạch cuội
+const CLIFF_OUT := 1.5 # mét vách đá chìa ra ngoài khung va chạm
+const CLIFF_MOSS := Color(0.47, 0.56, 0.3) # mặt trên vách: rêu
+const CLIFF_RIM := Color(0.66, 0.66, 0.62) # cạnh vát bắt nắng
+const CLIFF_SIDE := Color(0.5, 0.5, 0.5)
+const CLIFF_FOOT := Color(0.3, 0.31, 0.33)
+const OUTSIDE_COLOR := Color(0.12, 0.18, 0.13)
 const TREE_LEAVES := [["vo", "vo_cay.png", false], ["la", "la_cay_reu.png", true]]
 const SMALL_PLANT := [["la_hoa", "la_nho_reu.png", true]]
 const FLOWER := [["la_hoa", "la_nho_reu.png", true], ["hoa", "hoa.png", true]]
@@ -243,16 +244,6 @@ func _add_scenery() -> void:
 	_add_ground()
 	_add_teleport()
 	_add_cave_mansion()
-	for p: Vector3 in PRISONS: # nền đá đỏ thẫm, viền đỏ sáng quanh huyết trận
-		_add_mesh(p + Vector3(0, 0.015, 0), Vector3(6.4, 0.02, 6.4), BLOOD_STONE)
-		var corners: Array[Vector2] = [Vector2(-3.2, -3.2), Vector2(3.2, -3.2), Vector2(3.2, 3.2), Vector2(-3.2, 3.2)]
-		for k in 4:
-			var a := Vector2(p.x, p.z) + corners[k]
-			var b := Vector2(p.x, p.z) + corners[(k + 1) % 4]
-			_add_strip(a, b, 0.12, 0.03, _glow(BLOOD_GLOW))
-			var tip := Vector2(p.x, p.z) + (corners[k] + corners[(k + 1) % 4]) * 0.72 # mũi nhọn 4 phía như ảnh
-			_add_strip(a.lerp(b, 0.3), tip, 0.1, 0.03, _glow(BLOOD_GLOW))
-			_add_strip(a.lerp(b, 0.7), tip, 0.1, 0.03, _glow(BLOOD_GLOW))
 	for rock in ROCKS:
 		_add_rock(Vector3(rock.x, 0, rock.y), rock.z)
 	for tree in TREES:
@@ -262,42 +253,178 @@ func _add_scenery() -> void:
 	_add_ground_cover()
 
 
-## Mô hình bản Meshy quan gửi (mặt sân, lối đi, vách đá, lan can, cổng vòng), giữ nguyên màu gốc
-## (shaders/ban_do_meshy.gdshader). Mặt sân vẽ lại sắc nét (FIELD); mọi mức đồ họa
-## dùng ảnh gốc 2048 px cho vách đá, lan can.
+## Mặt sân vẽ bằng phép tính (shaders/nen_dong_phu.gdshader): cỏ, lối đất, mảng đá vỡ theo ảnh lớp Meshy
+## 512 px, lối gạch cuội và bóng tiếp xúc trong ảnh nhỏ dựng lúc vào trận. Vách đá viền sân là khối vát cạnh.
 func _add_ground() -> void:
-	var map: Node3D = (load(MODEL) as PackedScene).instantiate()
-	_meshy_look(map, BushScript.mip_texture(MESHY_ORIGINAL), true)
-	add_child(map)
 	_layout = (load(LAYOUT) as Texture2D).get_image()
 	if _layout.is_compressed():
 		_layout.decompress()
+	var m := ShaderMaterial.new()
+	m.shader = load("res://Objects/shaders/nen_dong_phu.gdshader")
+	m.set_shader_parameter(&"field_size", SIZE)
+	m.set_shader_parameter(&"layout_map", load(LAYOUT))
+	m.set_shader_parameter(&"baked", ImageTexture.create_from_image(_baked_image()))
+	m.set_shader_parameter(&"detail", float(_quality))
+	var plane := PlaneMesh.new()
+	plane.size = FIELD_RECT.size
+	var mi := MeshInstance3D.new()
+	mi.mesh = plane
+	mi.material_override = m
+	mi.position = Vector3(FIELD_RECT.get_center().x, 0, FIELD_RECT.get_center().y)
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
+	var outside := PlaneMesh.new() # ngoài vách đá: rừng tối
+	outside.size = Vector2(200, 200)
+	var out_mi := MeshInstance3D.new()
+	out_mi.mesh = outside
+	out_mi.material_override = _glow(OUTSIDE_COLOR)
+	out_mi.position = Vector3(SIZE.x / 2, -0.03, SIZE.y / 2)
+	add_child(out_mi)
+	_add_cliffs()
 
 
-## Tô mô hình Meshy bằng shaders/ban_do_meshy.gdshader (giữ đúng màu ảnh gốc).
-## `original`: ảnh màu độ phân giải cao thay ảnh trong GLB (null: dùng ảnh trong GLB).
-## `flat`: mặt sân vẽ lại sắc nét phủ SIZE (false: cả mô hình dùng ảnh theo UV).
-func _meshy_look(model: Node3D, original: Texture2D, flat := false) -> void:
+## Ảnh phủ sân SIZE (BAKE_PX điểm trên 1 m): R bóng tiếp xúc (1 sáng), G lối gạch cuội (0,5 đúng mép lối).
+## Chỉ tô quanh từng vật nên dựng nhanh.
+func _baked_image() -> Image:
+	var img := Image.create(int(SIZE.x) * BAKE_PX, int(SIZE.y) * BAKE_PX, false, Image.FORMAT_RG8)
+	img.fill(Color(1, 0, 0))
+	for r: Rect2 in WALLS + RUINS:
+		_shade_rect(img, r, 1.0, 0.35)
+	for rock in ROCKS:
+		_shade_disc(img, Vector2(rock.x, rock.y), rock.z * 0.6, rock.z + 0.8, 0.5)
+	for tree in TREES:
+		_shade_disc(img, Vector2(tree.x, tree.y), 0.3, 1.8 * tree.z, 0.55)
+	for b in BUSHES:
+		_shade_disc(img, Vector2(b.x, b.y), b.z * 0.5, b.z + 0.3, 0.6)
+	for sf: Vector3 in SAFES:
+		_shade_disc(img, Vector2(sf.x, sf.z), 0.9, 2.0, 0.65)
+	var half := PATH_WIDTH / 2
+	for path: Array in STONE_PATHS:
+		for k in path.size() - 1:
+			var a: Vector2 = path[k]
+			var b: Vector2 = path[k + 1]
+			var box := _pixel_box(Rect2(a, Vector2.ZERO).expand(b).grow(half + 0.4), img)
+			for y in range(box.position.y, box.end.y):
+				for x in range(box.position.x, box.end.x):
+					var v := clampf(0.5 + (half - _segment_distance(_pixel_to_world(x, y), a, b)) / 0.5, 0.0, 1.0)
+					var c := img.get_pixel(x, y)
+					if v > c.g:
+						img.set_pixel(x, y, Color(c.r, v, 0))
+	return img
+
+
+## Tối dần trong `reach` mét quanh hình chữ nhật, sát mép còn `darkest`.
+func _shade_rect(img: Image, r: Rect2, reach: float, darkest: float) -> void:
+	var box := _pixel_box(r.grow(reach), img)
+	for y in range(box.position.y, box.end.y):
+		for x in range(box.position.x, box.end.x):
+			var p := _pixel_to_world(x, y)
+			var d := Vector2(maxf(maxf(r.position.x - p.x, p.x - r.end.x), 0.0), maxf(maxf(r.position.y - p.y, p.y - r.end.y), 0.0)).length()
+			_darken(img, x, y, lerpf(darkest, 1.0, smoothstep(0.0, reach, d)))
+
+
+## Bóng tròn mềm: tối nhất trong bán kính `inner`, hết tối ở `outer`.
+func _shade_disc(img: Image, c: Vector2, inner: float, outer: float, darkest: float) -> void:
+	var box := _pixel_box(Rect2(c - Vector2(outer, outer), Vector2(outer, outer) * 2), img)
+	for y in range(box.position.y, box.end.y):
+		for x in range(box.position.x, box.end.x):
+			_darken(img, x, y, lerpf(darkest, 1.0, smoothstep(inner, outer, _pixel_to_world(x, y).distance_to(c))))
+
+
+func _pixel_box(r: Rect2, img: Image) -> Rect2i:
+	var a := Vector2i((r.position * BAKE_PX).floor()).clamp(Vector2i.ZERO, img.get_size())
+	var b := Vector2i((r.end * BAKE_PX).ceil()).clamp(Vector2i.ZERO, img.get_size())
+	return Rect2i(a, b - a)
+
+
+func _pixel_to_world(x: int, y: int) -> Vector2:
+	return (Vector2(x, y) + Vector2(0.5, 0.5)) / BAKE_PX
+
+
+func _darken(img: Image, x: int, y: int, v: float) -> void:
+	var c := img.get_pixel(x, y)
+	if v < c.r:
+		img.set_pixel(x, y, Color(v, c.g, 0))
+
+
+## Vách đá viền sân (khối va chạm dựng trong _ready): khối vát cạnh chìa ra ngoài sân, mặt trên phủ rêu,
+## dùng chung đá vẽ tay với tảng đá (rêu mặt trên). Một mesh.
+func _add_cliffs() -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in BORDER_WALLS:
+		var r: Rect2 = WALLS[i]
+		var grown := r
+		if r.position.x <= 0.0 and r.size.x < 1.0: # bờ tây chìa ra phía tây
+			grown = Rect2(r.position.x - CLIFF_OUT, r.position.y, r.size.x + CLIFF_OUT, r.size.y)
+		elif r.position.x >= SIZE.x - 1.0:
+			grown = Rect2(r.position.x, r.position.y, r.size.x + CLIFF_OUT, r.size.y)
+		elif r.position.y <= 0.0:
+			grown = Rect2(r.position.x - CLIFF_OUT, r.position.y - CLIFF_OUT, r.size.x + CLIFF_OUT * 2, r.size.y + CLIFF_OUT)
+		else:
+			grown = Rect2(r.position.x - CLIFF_OUT, r.position.y, r.size.x + CLIFF_OUT * 2, r.size.y + CLIFF_OUT)
+		_cliff_blocks(st, grown)
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = _stone("da_tang.png", ROCK_TINT, 0.3, 0.32) # cùng đá vẽ tay với tảng đá, rêu mặt trên
+	add_child(mi)
+
+
+## Chia vách dài thành các khối 2 - 3,5 m cao thấp lệch nhau cho giống vách đá xếp.
+func _cliff_blocks(st: SurfaceTool, r: Rect2) -> void:
+	var along_x := r.size.x >= r.size.y
+	var length := maxf(r.size.x, r.size.y)
+	var t := 0.0
+	while t < length - 0.01:
+		var seg := minf(_rng.randf_range(2.0, 3.5), length - t)
+		var piece := Rect2(r.position.x + t, r.position.y, seg, r.size.y) if along_x else Rect2(r.position.x, r.position.y + t, r.size.x, seg)
+		_block(st, piece, WALL_HEIGHT + _rng.randf_range(-0.3, 0.3), 0.18)
+		t += seg
+
+
+## Khối vát cạnh trên (màu theo đỉnh để sau này đổi material khác vẫn có khối).
+func _block(st: SurfaceTool, r: Rect2, height: float, bevel: float) -> void:
+	var x0 := r.position.x
+	var x1 := r.end.x
+	var z0 := r.position.y
+	var z1 := r.end.y
+	var hb := height - bevel
+	_quad(st, [Vector3(x0 + bevel, height, z0 + bevel), Vector3(x1 - bevel, height, z0 + bevel),
+		Vector3(x1 - bevel, height, z1 - bevel), Vector3(x0 + bevel, height, z1 - bevel)], Vector3.UP,
+		[CLIFF_MOSS, CLIFF_MOSS, CLIFF_MOSS, CLIFF_MOSS])
+	var outs: Array[Vector3] = [Vector3(0, 0, -1), Vector3(1, 0, 0), Vector3(0, 0, 1), Vector3(-1, 0, 0)]
+	var lo: Array[Vector3] = [Vector3(x0, 0, z0), Vector3(x1, 0, z0), Vector3(x1, 0, z1), Vector3(x0, 0, z1)]
+	var inset: Array[Vector3] = [Vector3(bevel, 0, bevel), Vector3(-bevel, 0, bevel), Vector3(-bevel, 0, -bevel), Vector3(bevel, 0, -bevel)]
+	for k in 4:
+		var a := lo[k]
+		var b := lo[(k + 1) % 4]
+		var n := outs[k]
+		var up := Vector3(0, hb, 0)
+		_quad(st, [a, b, b + up, a + up], n, [CLIFF_FOOT, CLIFF_FOOT, CLIFF_SIDE, CLIFF_SIDE])
+		var ta := a + inset[k] + Vector3(0, height, 0)
+		var tb := b + inset[(k + 1) % 4] + Vector3(0, height, 0)
+		_quad(st, [a + up, b + up, tb, ta], (n + Vector3.UP).normalized(), [CLIFF_RIM, CLIFF_RIM, CLIFF_RIM, CLIFF_RIM])
+
+
+## Tứ giác phẳng 4 đỉnh theo vòng, tự đảo thứ tự cho mặt trước quay về `n`.
+func _quad(st: SurfaceTool, p: Array[Vector3], n: Vector3, c: Array[Color]) -> void:
+	var order := [0, 1, 2, 0, 2, 3]
+	if (p[1] - p[0]).cross(p[2] - p[0]).dot(n) > 0.0:
+		order = [0, 2, 1, 0, 3, 2]
+	for i: int in order:
+		st.set_normal(n)
+		st.set_color(c[i])
+		st.add_vertex(p[i])
+
+
+## Tô mô hình Meshy (pháp trận truyền tống) bằng shaders/ban_do_meshy.gdshader, giữ đúng màu ảnh trong GLB.
+func _meshy_look(model: Node3D) -> void:
 	var m := ShaderMaterial.new()
 	m.shader = load("res://Objects/shaders/ban_do_meshy.gdshader")
 	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
-		if original == null:
-			m.set_shader_parameter(&"meshy_albedo", (mi.mesh.surface_get_material(0) as StandardMaterial3D).albedo_texture)
+		m.set_shader_parameter(&"meshy_albedo", (mi.mesh.surface_get_material(0) as StandardMaterial3D).albedo_texture)
 		mi.material_override = m
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF # ảnh gốc đã vẽ sẵn bóng
-	if original != null:
-		m.set_shader_parameter(&"meshy_albedo", original)
-	if flat:
-		m.set_shader_parameter(&"use_flat", true)
-		m.set_shader_parameter(&"field_size", SIZE)
-		m.set_shader_parameter(&"layers", BushScript.mip_texture(FIELD + "nen_lop.png"))
-		m.set_shader_parameter(&"grass_tint", load(FIELD + "nen_co.png"))
-		m.set_shader_parameter(&"dirt_tint", load(FIELD + "nen_dat.png"))
-		m.set_shader_parameter(&"stone_albedo", BushScript.mip_texture(FIELD + "nen_da.png"))
-		m.set_shader_parameter(&"stone_detail", BushScript.mip_texture(FIELD + "van_da.png"))
-		m.set_shader_parameter(&"detail", BushScript.mip_texture(FIELD + "van_nen.png"))
-		m.set_shader_parameter(&"detail_amount", FIELD_DETAIL[_quality])
-		m.set_shader_parameter(&"detail_two_layers", _quality > 0)
 
 
 ## Lớp nền tại điểm p trên sân (R: đất, G: đá vỡ), đọc từ ảnh lớp Meshy.
@@ -396,7 +523,7 @@ func _add_teleport() -> void:
 	var tp: Node3D = (load(TELEPORT_MODEL) as PackedScene).instantiate()
 	tp.position = TELEPORT
 	tp.rotation.y = PI / 2 + deg_to_rad(TELEPORT_YAW) # mặt sau (-z) của mô hình quay về phía tây
-	_meshy_look(tp, null)
+	_meshy_look(tp)
 	add_child(tp)
 
 

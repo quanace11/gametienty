@@ -6,8 +6,9 @@ extends Interactable
 ## hết thì chết; chỉ trận bàn hồi phục ném qua kết giới cứu được. Được cứu thì
 ## vẫn kẹt trong trận (không bị tế nữa), phải bước lên trận truyền tống nhỏ trong
 ## trận (đệm lò xo) để bật ra ngoài, hoặc tự đặt đệm lò xo của mình.
-## Hình: kết giới đỏ trong suốt, 4 cột đá đầu đỏ ở góc, trận văn đỏ (2 vòng + sao
-## năm cánh) dưới sàn, quay nhanh hơn khi có người đang bị tế.
+## Hình: cùng mô hình pháp trận truyền tống (models/phap_tran) thu nhỏ, nhuộm đỏ máu
+## (shaders/phap_tran_huyet), tường vòng quay lưng về phía đệm lò xo; kết giới đỏ trong suốt,
+## trận văn đỏ (2 vòng + sao năm cánh) quay nhanh hơn khi có người đang bị tế.
 
 const INNER := 4.2 # mét, cạnh trong của khu tường (nửa cạnh ngoài 2,4 m < GameState.PRISON_KEEP_OUT 2,8 m)
 const WALL_HEIGHT := 3.0 # cao hơn tường thường, chỉ đệm lò xo bay qua được
@@ -18,6 +19,8 @@ const PAD_OFFSET := 0.9 # tâm đệm cách giữa tù, về phía exit_side
 const LAUNCH_UP := 11.0 # m/s, giống đệm lò xo trong bộ bài: đỉnh ~3 m
 const LAUNCH_OUT := 4.5 # m/s, rơi xuống cách tường ~3 m
 const REUSE_TIME := 0.6
+const MODEL_PATH := "res://Objects/models/phap_tran/phap_tran.glb" # cùng mô hình pháp trận truyền tống
+const MODEL_SCALE := 0.7 # mô hình ngang 9 m -> ~6,3 m, tường vòng (bán kính ~2,2 m) sát trong kết giới
 
 ## Hướng đệm lò xo bắn người ra (bản đồ đặt trước add_child, nên hướng về giữa bản đồ).
 var exit_side := Vector3(0, 0, 1)
@@ -32,7 +35,8 @@ var _has_inmates := false
 static var _wall_material: StandardMaterial3D
 static var _pad_mesh: CylinderMesh
 static var _seal_mesh: ArrayMesh # trận văn dưới sàn
-static var _post_mesh: ArrayMesh # cột đá góc + đầu đỏ
+static var _model: PackedScene
+static var _model_material: ShaderMaterial
 static var _wall_meshes := {} # kích thước (Vector3) -> BoxMesh, mọi nhà tù chỉ có 2 cỡ tường
 
 
@@ -79,12 +83,13 @@ func _ready() -> void:
 	seal.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(seal)
 	_seal = seal
-	for sx: float in [-half, half]:
-		for sz: float in [-half, half]:
-			var post := MeshInstance3D.new()
-			post.mesh = _post_mesh
-			post.position = Vector3(sx, 0, sz)
-			add_child(post)
+	var model: Node3D = _model.instantiate()
+	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
+		mi.material_override = _model_material
+		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF # ảnh gốc đã vẽ sẵn bóng
+	model.scale = Vector3.ONE * MODEL_SCALE
+	model.rotation.y = atan2(exit_side.x, exit_side.z) # mặt mở (+z của mô hình) quay về phía đệm lò xo
+	add_child(model)
 	_label = Label3D.new()
 	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_label.position.y = WALL_HEIGHT + 0.5
@@ -119,7 +124,7 @@ static func _build_shared() -> void:
 	if _wall_material:
 		return
 	_wall_material = StandardMaterial3D.new()
-	_wall_material.albedo_color = Color(0.85, 0.1, 0.15, 0.35) # kết giới đỏ trong suốt, camera trên cao vẫn thấy người bên trong
+	_wall_material.albedo_color = Color(0.85, 0.1, 0.15, 0.16) # kết giới đỏ mờ nhạt cho thấy pháp trận và người bên trong, camera trên cao vẫn thấy người bên trong
 	_wall_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_wall_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	var pad_mat := StandardMaterial3D.new() # trận truyền tống: ngọc trắng xanh
@@ -157,30 +162,13 @@ static func _build_shared() -> void:
 		st.append_from(line, 0, Transform3D(basis, (p1 + p2) / 2))
 	st.set_material(blood)
 	_seal_mesh = st.commit()
-	var stone := StandardMaterial3D.new()
-	stone.albedo_color = Color(0.22, 0.18, 0.2)
-	var post := BoxMesh.new()
-	post.size = Vector3(0.5, WALL_HEIGHT + 0.3, 0.5)
-	var cap := SphereMesh.new()
-	cap.radius = 0.2
-	cap.height = 0.4
-	cap.radial_segments = 8
-	cap.rings = 4
-	_post_mesh = ArrayMesh.new()
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	st.append_from(post, 0, Transform3D(Basis(), Vector3(0, post.size.y / 2, 0)))
-	st.set_material(stone)
-	st.commit(_post_mesh)
-	var glow := StandardMaterial3D.new()
-	glow.albedo_color = Color(1.0, 0.15, 0.2)
-	glow.emission_enabled = true
-	glow.emission = Color(0.9, 0.05, 0.1)
-	st = SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	st.append_from(cap, 0, Transform3D(Basis(), Vector3(0, post.size.y + 0.15, 0)))
-	st.set_material(glow)
-	st.commit(_post_mesh)
+	_model = load(MODEL_PATH)
+	var probe: Node3D = _model.instantiate()
+	var first := probe.find_children("*", "MeshInstance3D", true, false)[0] as MeshInstance3D
+	_model_material = ShaderMaterial.new()
+	_model_material.shader = load("res://Objects/shaders/phap_tran_huyet.gdshader")
+	_model_material.set_shader_parameter(&"albedo", (first.mesh.surface_get_material(0) as StandardMaterial3D).albedo_texture)
+	probe.free()
 
 
 func _process(delta: float) -> void:
