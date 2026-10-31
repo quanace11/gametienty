@@ -244,16 +244,6 @@ func _add_scenery() -> void:
 	_add_ground()
 	_add_teleport()
 	_add_cave_mansion()
-	for p: Vector3 in PRISONS: # nền đá đỏ thẫm, viền đỏ sáng quanh huyết trận
-		_add_mesh(p + Vector3(0, 0.015, 0), Vector3(6.4, 0.02, 6.4), BLOOD_STONE)
-		var corners: Array[Vector2] = [Vector2(-3.2, -3.2), Vector2(3.2, -3.2), Vector2(3.2, 3.2), Vector2(-3.2, 3.2)]
-		for k in 4:
-			var a := Vector2(p.x, p.z) + corners[k]
-			var b := Vector2(p.x, p.z) + corners[(k + 1) % 4]
-			_add_strip(a, b, 0.12, 0.03, _glow(BLOOD_GLOW))
-			var tip := Vector2(p.x, p.z) + (corners[k] + corners[(k + 1) % 4]) * 0.72 # mũi nhọn 4 phía như ảnh
-			_add_strip(a.lerp(b, 0.3), tip, 0.1, 0.03, _glow(BLOOD_GLOW))
-			_add_strip(a.lerp(b, 0.7), tip, 0.1, 0.03, _glow(BLOOD_GLOW))
 	for rock in ROCKS:
 		_add_rock(Vector3(rock.x, 0, rock.y), rock.z)
 	for tree in TREES:
