@@ -6,8 +6,9 @@ extends Interactable
 ## hết thì chết; chỉ trận bàn hồi phục ném qua kết giới cứu được. Được cứu thì
 ## vẫn kẹt trong trận (không bị tế nữa), phải bước lên trận truyền tống nhỏ trong
 ## trận (đệm lò xo) để bật ra ngoài, hoặc tự đặt đệm lò xo của mình.
-## Hình: kết giới đỏ trong suốt, 4 cột đá đầu đỏ ở góc, trận văn đỏ (2 vòng + sao
-## năm cánh) dưới sàn, quay nhanh hơn khi có người đang bị tế.
+## Hình: dựng bằng chính đá của bản đồ: bệ đá tròn vẽ tay (shaders/da_ve_tay, ảnh nen_ve_tay/da_tang.png),
+## 4 cột đá KayKit nhuộm đỏ thẫm đầu ngọc đỏ ở góc, kết giới đỏ mờ, trận văn đỏ (2 vòng + sao năm cánh)
+## trên bệ, quay nhanh hơn khi có người đang bị tế.
 
 const INNER := 4.2 # mét, cạnh trong của khu tường (nửa cạnh ngoài 2,4 m < GameState.PRISON_KEEP_OUT 2,8 m)
 const WALL_HEIGHT := 3.0 # cao hơn tường thường, chỉ đệm lò xo bay qua được
@@ -18,6 +19,12 @@ const PAD_OFFSET := 0.9 # tâm đệm cách giữa tù, về phía exit_side
 const LAUNCH_UP := 11.0 # m/s, giống đệm lò xo trong bộ bài: đỉnh ~3 m
 const LAUNCH_OUT := 4.5 # m/s, rơi xuống cách tường ~3 m
 const REUSE_TIME := 0.6
+const BushScript = preload("res://Objects/bush.gd") # mip_texture: ảnh có mipmap dùng chung
+const DAIS_HEIGHT := 0.2 # bệ đá dưới trận văn
+const STONE_TEXTURE := "res://Objects/models/nen_ve_tay/da_tang.png" # cùng ảnh đá tảng của bản đồ
+const MOSS_TEXTURE := "res://Objects/models/nen_ve_tay/co_1.png"
+const PILLAR_MODEL := "res://Objects/models/kaykit_dungeon/pillar_decorated.obj" # cùng cột động phủ
+const PILLAR_TEXTURE := "res://Objects/models/kaykit_dungeon/dungeon_texture.png"
 
 ## Hướng đệm lò xo bắn người ra (bản đồ đặt trước add_child, nên hướng về giữa bản đồ).
 var exit_side := Vector3(0, 0, 1)
@@ -32,7 +39,8 @@ var _has_inmates := false
 static var _wall_material: StandardMaterial3D
 static var _pad_mesh: CylinderMesh
 static var _seal_mesh: ArrayMesh # trận văn dưới sàn
-static var _post_mesh: ArrayMesh # cột đá góc + đầu đỏ
+static var _dais_mesh: CylinderMesh
+static var _post_mesh: ArrayMesh # cột đá góc + đầu ngọc đỏ
 static var _wall_meshes := {} # kích thước (Vector3) -> BoxMesh, mọi nhà tù chỉ có 2 cỡ tường
 
 
@@ -75,10 +83,14 @@ func _ready() -> void:
 		return
 	var seal := MeshInstance3D.new()
 	seal.mesh = _seal_mesh
-	seal.position.y = 0.03
+	seal.position.y = DAIS_HEIGHT + 0.02
 	seal.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(seal)
 	_seal = seal
+	var dais := MeshInstance3D.new()
+	dais.mesh = _dais_mesh
+	dais.position.y = DAIS_HEIGHT / 2
+	add_child(dais)
 	for sx: float in [-half, half]:
 		for sz: float in [-half, half]:
 			var post := MeshInstance3D.new()
@@ -119,7 +131,7 @@ static func _build_shared() -> void:
 	if _wall_material:
 		return
 	_wall_material = StandardMaterial3D.new()
-	_wall_material.albedo_color = Color(0.85, 0.1, 0.15, 0.35) # kết giới đỏ trong suốt, camera trên cao vẫn thấy người bên trong
+	_wall_material.albedo_color = Color(0.85, 0.1, 0.15, 0.16) # kết giới đỏ mờ nhạt cho thấy pháp trận và người bên trong, camera trên cao vẫn thấy người bên trong
 	_wall_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	_wall_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	var pad_mat := StandardMaterial3D.new() # trận truyền tống: ngọc trắng xanh
@@ -157,10 +169,25 @@ static func _build_shared() -> void:
 		st.append_from(line, 0, Transform3D(basis, (p1 + p2) / 2))
 	st.set_material(blood)
 	_seal_mesh = st.commit()
-	var stone := StandardMaterial3D.new()
-	stone.albedo_color = Color(0.22, 0.18, 0.2)
-	var post := BoxMesh.new()
-	post.size = Vector3(0.5, WALL_HEIGHT + 0.3, 0.5)
+	var stone := ShaderMaterial.new() # đá vẽ tay chiếu 3 phía như tảng đá bản đồ
+	stone.shader = load("res://Objects/shaders/da_ve_tay.gdshader")
+	stone.set_shader_parameter(&"albedo", BushScript.mip_texture(STONE_TEXTURE))
+	stone.set_shader_parameter(&"moss", BushScript.mip_texture(MOSS_TEXTURE))
+	stone.set_shader_parameter(&"tint", Color(0.72, 0.6, 0.6)) # đá ngả đỏ thẫm
+	stone.set_shader_parameter(&"tile", 0.32)
+	_dais_mesh = CylinderMesh.new()
+	_dais_mesh.top_radius = INNER / 2 + WALL_THICK
+	_dais_mesh.bottom_radius = INNER / 2 + WALL_THICK + 0.1
+	_dais_mesh.height = DAIS_HEIGHT
+	_dais_mesh.radial_segments = 16
+	_dais_mesh.rings = 1
+	_dais_mesh.material = stone
+	var pillar_mat := StandardMaterial3D.new()
+	pillar_mat.albedo_texture = BushScript.mip_texture(PILLAR_TEXTURE)
+	pillar_mat.albedo_color = Color(0.7, 0.42, 0.42) # cột động phủ nhuộm đỏ thẫm
+	pillar_mat.roughness = 1.0
+	var pillar: Mesh = load(PILLAR_MODEL) # khuôn cao 4 m
+	var h := (WALL_HEIGHT + 0.2) / 4.0
 	var cap := SphereMesh.new()
 	cap.radius = 0.2
 	cap.height = 0.4
@@ -169,8 +196,8 @@ static func _build_shared() -> void:
 	_post_mesh = ArrayMesh.new()
 	st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	st.append_from(post, 0, Transform3D(Basis(), Vector3(0, post.size.y / 2, 0)))
-	st.set_material(stone)
+	st.append_from(pillar, 0, Transform3D(Basis.from_scale(Vector3(0.38, h, 0.38)), Vector3.ZERO))
+	st.set_material(pillar_mat)
 	st.commit(_post_mesh)
 	var glow := StandardMaterial3D.new()
 	glow.albedo_color = Color(1.0, 0.15, 0.2)
@@ -178,7 +205,7 @@ static func _build_shared() -> void:
 	glow.emission = Color(0.9, 0.05, 0.1)
 	st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	st.append_from(cap, 0, Transform3D(Basis(), Vector3(0, post.size.y + 0.15, 0)))
+	st.append_from(cap, 0, Transform3D(Basis(), Vector3(0, WALL_HEIGHT + 0.4, 0)))
 	st.set_material(glow)
 	st.commit(_post_mesh)
 
