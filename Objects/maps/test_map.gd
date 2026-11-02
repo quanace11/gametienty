@@ -114,9 +114,6 @@ const NATURE := "res://Objects/models/quaternius_nature/" # cây, đá, cỏ, ho
 const GROUND := "res://Objects/models/nen_ve_tay/" # ảnh vẽ tay CC0: nền, đá, tường, phù văn
 ## Ảnh lớp nền tách từ bản Meshy quan gửi (R: lối đất, G: nền đá vỡ), phủ đúng sân SIZE.
 const LAYOUT := "res://Objects/models/ban_do_meshy/lop_nen.png"
-## Pháp trận truyền tống Meshy quan gửi (4k tam giác, ngang 9 m, vòng phù văn bán kính ~1,6 m ở tâm, tường vòng
-## cao ~1,4 m sau lưng): quay tường vòng ra phía tây, mở về phía sân.
-const TELEPORT_MODEL := "res://Objects/models/phap_tran/phap_tran.glb"
 const FIELD_RECT := Rect2(-14, -4, 72, 53) # mặt sân vẽ bằng shader, phủ cả pháp trận ngoài bờ tây
 const BAKE_PX := 6 # điểm ảnh trên 1 m của ảnh bóng tiếp xúc + lối gạch cuội
 const CLIFF_OUT := 1.5 # mét vách đá chìa ra ngoài khung va chạm
@@ -417,16 +414,6 @@ func _quad(st: SurfaceTool, p: Array[Vector3], n: Vector3, c: Array[Color]) -> v
 		st.add_vertex(p[i])
 
 
-## Tô mô hình Meshy (pháp trận truyền tống) bằng shaders/ban_do_meshy.gdshader, giữ đúng màu ảnh trong GLB.
-func _meshy_look(model: Node3D) -> void:
-	var m := ShaderMaterial.new()
-	m.shader = load("res://Objects/shaders/ban_do_meshy.gdshader")
-	for mi: MeshInstance3D in model.find_children("*", "MeshInstance3D", true, false):
-		m.set_shader_parameter(&"meshy_albedo", (mi.mesh.surface_get_material(0) as StandardMaterial3D).albedo_texture)
-		mi.material_override = m
-		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF # ảnh gốc đã vẽ sẵn bóng
-
-
 ## Lớp nền tại điểm p trên sân (R: đất, G: đá vỡ), đọc từ ảnh lớp Meshy.
 func _layout_at(p: Vector2) -> Color:
 	var x := clampi(int(p.x / SIZE.x * _layout.get_width()), 0, _layout.get_width() - 1)
@@ -518,13 +505,41 @@ func _segment_distance(p: Vector2, a: Vector2, b: Vector2) -> float:
 	return p.distance_to(Geometry2D.get_closest_point_to_segment(p, a, b))
 
 
-## Pháp trận truyền tống Meshy, tường vòng quay ra bờ tây.
+## Pháp trận truyền tống dựng bằng chính đá của bản đồ: bệ đá lát tròn 2 tầng, vòng phù văn xanh quay chậm,
+## tường vòng đá vẽ tay (cùng đá vách viền) sau lưng phía tây, 2 cánh tường nối ra bờ kè, cột đá KayKit ở
+## 2 mũi cánh. Hình khớp khối va chạm của _teleport_walls().
 func _add_teleport() -> void:
-	var tp: Node3D = (load(TELEPORT_MODEL) as PackedScene).instantiate()
-	tp.position = TELEPORT
-	tp.rotation.y = PI / 2 + deg_to_rad(TELEPORT_YAW) # mặt sau (-z) của mô hình quay về phía tây
-	_meshy_look(tp)
-	add_child(tp)
+	var yaw := deg_to_rad(TELEPORT_YAW)
+	var paving := _stone("san_da.png", PAVING_LIGHT, 0.12, 0.25)
+	var rock := _stone("da_tang.png", ROCK_TINT, 0.3, 0.32)
+	_batch(_cylinder(&"dais", 1.0, 1.1, 1.0, 16), Transform3D(Basis.from_scale(Vector3(3.7, 0.16, 3.7)), TELEPORT + Vector3(0, 0.08, 0)), paving)
+	_batch(_cylinder(&"dais", 1.0, 1.1, 1.0, 16), Transform3D(Basis.from_scale(Vector3(2.3, 0.14, 2.3)), TELEPORT + Vector3(0, 0.23, 0)), paving)
+	_add_rune(TELEPORT + Vector3(0, 0.26, 0), 2.1, BLUE_GLOW, 0.08)
+	var box := _shape(&"box") as BoxMesh
+	if box == null:
+		box = BoxMesh.new()
+		_shapes[&"box"] = box
+	for k in 13: # tường vòng: mỗi khối quay theo tiếp tuyến
+		var a := deg_to_rad(-90.0 + 15.0 * k)
+		var local := Vector2(-cos(a), sin(a)) * TELEPORT_WALL_RADIUS
+		var h := 1.5 + 0.15 * float(k % 2)
+		var basis := Basis(Vector3.UP, yaw + atan2(local.x, local.y)) * Basis.from_scale(Vector3(0.95, h, 0.7))
+		_batch(box, Transform3D(basis, _teleport_point(local) + Vector3(0, h / 2, 0)), rock)
+	var w := TELEPORT_WING + 0.25
+	for side: float in [-1.0, 1.0]:
+		var reach := 0.95 - TELEPORT.x # mũi cánh tới bờ kè
+		var mid := Vector2(reach / 2, side * w)
+		_batch(box, Transform3D(Basis(Vector3.UP, yaw) * Basis.from_scale(Vector3(reach + 0.8, 1.3, 0.75)),
+			_teleport_point(mid) + Vector3(0, 0.65, 0)), rock)
+		_batch(box, Transform3D(Basis(Vector3.UP, yaw) * Basis.from_scale(Vector3(0.75, 1.3, w - TELEPORT_WALL_RADIUS + 0.4)),
+			_teleport_point(Vector2(0, side * (TELEPORT_WALL_RADIUS + w) / 2)) + Vector3(0, 0.65, 0)), rock)
+		_add_model(DUNGEON + "pillar_decorated.obj", _teleport_point(Vector2(0, side * w)), yaw, Vector3(0.38, 0.55, 0.38), DUNGEON + "dungeon_texture.png")
+
+
+## Điểm `local` (x đông, y nam, tính quanh tâm pháp trận) xoay theo TELEPORT_YAW, ra tọa độ trận.
+func _teleport_point(local: Vector2) -> Vector3:
+	var yaw := deg_to_rad(TELEPORT_YAW)
+	return Vector3(TELEPORT.x + local.x * cos(yaw) + local.y * sin(yaw), 0, TELEPORT.z + local.y * cos(yaw) - local.x * sin(yaw))
 
 
 ## Khối va chạm: 13 khối dọc tường vòng pháp trận (nửa vòng phía tây), chuỗi khối theo 2 cánh nối tới bờ kè.
